@@ -231,15 +231,15 @@
     }
     return `
       <div class="afinity-modal-row">
-        <label for="afinity-method">Method</label>
-        <select id="afinity-method">
+        <label for="afinity-method" class="afinity-modal-select-label">Method</label>
+        <select id="afinity-method" class="afinity-modal-select-label">
           <option value="Delivery" ${method === 'Delivery' ? 'selected' : ''}>Delivery</option>
           <option value="Pickup" ${method === 'Pickup' ? 'selected' : ''}>Pickup</option>
         </select>
       </div>
       ${method === 'Pickup' ? pickupListHtml : `
         <div class="afinity-modal-row">
-          <label for="afinity-address">Address</label>
+          <label for="afinity-address" class="afinity-modal-select-label">Address</label>
           <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${modalChanges.address1 || address1}" />
         </div>
         <div class="afinity-modal-row afinity-modal-address-row">
@@ -376,11 +376,11 @@
         <div class="afinity-modal-card">
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
-            <label for="afinity-date">Date</label>
+            <label for="afinity-date" class="afinity-modal-select-label">Date</label>
             <input id="afinity-date" type="date" value="${currentDeliveryDate}" />
           </div>
           <div class="afinity-modal-row">
-            <label for="afinity-time">Time</label>
+            <label for="afinity-time" class="afinity-modal-select-label">Time</label>
             <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
@@ -417,13 +417,15 @@
       </div>
       <div class="afinity-modal-card afinity-meals-header-card">
         <button class="afinity-modal-back">< Back</button>
-        <div class="afinity-meals-title-group">
-          <h2 class="afinity-meals-title">Update Subscription Meals</h2>
-          <div class="afinity-meals-date-select">
-            <label>Delivery Date</label>
-            <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" />
+        <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
+          <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
+            <h2 class="afinity-meals-title">Update Subscription Meals</h2>
+            <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
           </div>
-          <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
+          <div class="afinity-meals-date-select" style="min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
+            <label style="font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:500;color:#234;letter-spacing:0.01em;margin-bottom:4px;">Delivery Date</label>
+            <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
+          </div>
         </div>
       </div>
       <div class="afinity-meals-layout">
