@@ -11,10 +11,19 @@
     document.head.appendChild(link);
   }
 
-  function createModal() {
+  function createModal(subscriptionData = null) {
     // Remove any existing modal
     const old = document.getElementById('afinity-modal-overlay');
     if (old) old.remove();
+
+    // Use subscription data if available, otherwise use defaults
+    const date = subscriptionData ? new Date(subscriptionData.next_charge_scheduled_at).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    }) : 'Sun, June 29, 2025';
+    const price = subscriptionData ? `$${(subscriptionData.price / 100).toFixed(2)}` : '$3.99';
 
     // Modal HTML
     const overlay = document.createElement('div');
@@ -23,8 +32,7 @@
     overlay.innerHTML = `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date">Sun, June 29, 2025 $3.99</span>
-        <span class="afinity-modal-desc">1 x Pollo Asado with Seasoned Rice</span>
+        <span class="afinity-modal-date">${date} ${price}</span>
       </div>
       <div class="afinity-modal-content">
         <div class="afinity-modal-card-frequency">
@@ -102,6 +110,7 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
+    console.log("event", event);
     createModal();
   });
 })(); 

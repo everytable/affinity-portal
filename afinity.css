@@ -6,7 +6,6 @@
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   align-items: stretch;
   animation: afinity-fadein 0.2s;
 }
@@ -82,7 +81,7 @@
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   width: 100%;
-  max-width: 700px;
+  max-width: 1000px;
   margin: 32px auto 0 auto;
   padding: 24px 24px 16px 24px;
   display: flex;
@@ -111,7 +110,7 @@
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   width: 100%;
-  max-width: 700px;
+  max-width: 1000px;
   margin: 32px auto 0 auto;
   padding: 24px 24px 16px 24px;
   display: flex;
