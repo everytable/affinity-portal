@@ -108,7 +108,7 @@
 .afinity-modal-card {
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   width: 100%;
   max-width: 1000px;
   margin: 32px auto 0 auto;
@@ -129,7 +129,7 @@
 }
 .afinity-modal-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 8px;
 }
@@ -153,6 +153,8 @@
   background: #fafbfc;
 }
 .afinity-modal-address-row {
+  display: flex;
+  flex-direction: row;
   gap: 0;
 }
 .afinity-modal-cart-list {
@@ -221,18 +223,24 @@
   background: #0056b3;
 }
 .afinity-modal-add-extra {
+  display: inline-block;
   background: none;
   border: none;
-  color: #007bff;
-  font-size: 1.1rem;
-  font-weight: 500;
+  color: #005a57;
+  font-weight: 600;
+  font-size: 18px;
+  text-decoration: none;
   cursor: pointer;
-  margin: 32px auto 0 auto;
-  display: block;
-  text-align: left;
+  padding: 0;
+  margin: 0;
+  transition: color 0.2s, text-decoration 0.2s;
 }
 .afinity-modal-add-extra:hover {
-  text-decoration: underline;
+  color: #003f3d;
+  text-decoration: none;
+}
+.afinity-modal-add-extra span {
+  vertical-align: middle;
 }
 .afinity-modal-row-frequency {
   display: flex;
@@ -349,4 +357,289 @@
   .afinity-modal-update-meals {
     min-width: 110px;
   }
+}
+
+/* Modal Footer Styles */
+.afinity-modal-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: #fafaf6;
+  border-radius: 0 0 8px 8px;
+  padding: 1.5rem 2rem 1.5rem 2rem;
+  margin-top: 2rem;
+  box-shadow: 0 -1px 0 #ececec;
+}
+
+.afinity-cancel-subscription {
+  color: #006d6a;
+  text-decoration: none;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  transition: color 0.2s;
+  margin-bottom: 0.5rem;
+}
+.afinity-cancel-subscription:hover {
+  color: #004f4d;
+  text-decoration: underline;
+}
+
+.afinity-modal-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.afinity-modal-cancel-btn {
+  background: none;
+  border: none;
+  color: #006d6a;
+  font-weight: 500;
+  font-size: 1rem;
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.afinity-modal-cancel-btn:hover {
+  background: #e6f2f2;
+  color: #004f4d;
+}
+
+.afinity-modal-save-btn {
+  background: #005a57;
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  padding: 0.5rem 1.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.afinity-modal-save-btn:hover {
+  background: #003f3d;
+}
+
+.afinity-modal-footer-card {
+  margin-bottom: 0;
+  box-shadow: none;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  padding-bottom: 2rem;
+}
+
+/* Meal Selection Modal Styles */
+.afinity-meals-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: #fafaf6;
+  border-radius: 8px 8px 0 0;
+  padding: 1.5rem 2rem 1rem 2rem;
+  margin-bottom: 0;
+}
+.afinity-meals-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.afinity-meals-title {
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #005a57;
+  margin: 0 0 0.5rem 0;
+}
+.afinity-meals-date-select {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  color: #222;
+}
+.afinity-meals-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 2rem;
+  background: #fafaf6;
+  border-radius: 0 0 8px 8px;
+  padding: 2rem;
+  max-width: 90vw;
+}
+.afinity-meals-main {
+  min-width: 0;
+}
+.afinity-meals-section-title {
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: #222;
+}
+.afinity-meals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+.afinity-meal-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1rem;
+  gap: 0.5rem;
+  transition: box-shadow 0.2s, border 0.2s;
+  border: 2px solid transparent;
+}
+.afinity-meal-card.selected {
+  border: 2px solid #005a57;
+  box-shadow: 0 4px 16px rgba(0,90,87,0.08);
+}
+.afinity-meal-card img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+.afinity-meal-title {
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 0.25rem;
+}
+.afinity-meal-price {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #005a57;
+  margin-bottom: 0.5rem;
+}
+.afinity-meal-toggle-btn {
+  background: #005a57;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 0.4rem 1.2rem;
+  cursor: pointer;
+  margin-top: auto;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.afinity-meal-toggle-btn:hover {
+  background: #003f3d;
+}
+.afinity-meals-sidebar {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  min-width: 0;
+}
+.afinity-meals-sidebar h3 {
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #005a57;
+  margin-bottom: 0.5rem;
+}
+.afinity-meals-sidebar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.afinity-meals-sidebar-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  color: #222;
+}
+.afinity-meals-sidebar-list img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.afinity-meals-swap-btn {
+  background: #005a57;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  border: none;
+  border-radius: 4px;
+  padding: 0.7rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.afinity-meals-swap-btn:hover {
+  background: #003f3d;
+}
+@media (max-width: 900px) {
+  .afinity-meals-layout {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+  .afinity-meals-sidebar {
+    margin-top: 2rem;
+  }
+}
+
+.afinity-meals-header-card {
+  background: #fff;
+  border-radius: 8px 8px 8px 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  padding: 1.5rem 2rem 1rem 2rem;
+  max-width: 90vw;
+}
+.afinity-meals-desc {
+  font-size: 1rem;
+  color: #005a57;
+  margin-top: 0.5rem;
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-weight: 400;
+}
+.afinity-meals-sidebar-title {
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #005a57;
+  margin: 1.5rem 0 0.5rem 0;
+}
+.afinity-meals-swap-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.afinity-meals-swap-count {
+  background: #e6f2f2;
+  color: #005a57;
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 0.1rem 0.8rem;
+  margin-left: 0.5rem;
+  display: inline-block;
 } 
