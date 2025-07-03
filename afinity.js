@@ -1,5 +1,7 @@
 // affinity.js - Standalone modal widget
 (function() {
+
+  const API_URL = "https://shoapenglee.jp.ngrok.io/api"
   // Dynamically load afinity.css if not already present
   var cssId = 'afinity-css';
   if (!document.getElementById(cssId)) {
@@ -111,6 +113,32 @@
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
     console.log("event", event);
-    createModal();
+    
+    // Extract subscription ID from the event
+    const subscriptionId = event.detail?.payload.subscriptionId;
+    
+    if (subscriptionId) {
+      // Fetch subscription data from API
+      fetch(`${API_URL}/subscription/${subscriptionId}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(subscriptionData => {
+          console.log('Subscription data:', subscriptionData);
+          createModal(subscriptionData);
+        })
+        .catch(error => {
+          console.error('Error fetching subscription data:', error);
+          // Fallback to creating modal without data
+          createModal();
+        });
+    } else {
+      // No subscription ID found, create modal with default data
+      console.warn('No subscription ID found in event');
+      createModal();
+    }
   });
 })(); 
