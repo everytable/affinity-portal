@@ -72,7 +72,7 @@
   height: 70px;
 }
 .afinity-modal-date {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 500;
   color: #222;
 }
@@ -174,7 +174,7 @@
   padding: 8px 10px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 16px;
   background: #fafbfc;
 }
 .afinity-modal-address-row {
@@ -267,7 +267,7 @@
   border: none;
   border-radius: 4px;
   padding: 8px 18px;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
   align-self: flex-end;
@@ -448,7 +448,7 @@
   font-weight: 500;
   display: flex;
   align-items: center;
-  font-size: 1rem;
+  font-size: 16px;
   transition: color 0.2s;
   margin-bottom: 0.5rem;
 }
@@ -460,7 +460,7 @@
 .afinity-modal-footer-actions {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .afinity-modal-cancel-btn {
@@ -509,7 +509,7 @@
   justify-content: space-between;
   background: #fafaf6;
   border-radius: 8px 8px 0 0;
-  padding: 1.5rem 2rem 1rem 2rem;
+  padding: 1.5rem 2rem 16px 2rem;
   margin-bottom: 0;
 }
 .afinity-meals-title-group {
@@ -528,7 +528,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1rem;
+  font-size: 16px;
   color: #222;
 }
 .afinity-meals-layout {   
@@ -538,7 +538,7 @@
   display: flex;
   align-items: flex-start;
   gap: 2rem;
-  padding: 1.5rem 2rem 1rem 2rem;
+  padding: 1.5rem 2rem 16px 2rem;
   max-width: 1264px;
   margin: auto;
 }
@@ -565,7 +565,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 1rem;
+  padding: 16px;
   gap: 0.5rem;
   transition: box-shadow 0.2s, border 0.2s;
   border: 2px solid transparent;
@@ -583,13 +583,13 @@
 }
 .afinity-meal-title {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 1.1rem;
+  font-size: 1.16px;
   font-weight: 700;
   color: #222;
   margin-bottom: 0.25rem;
 }
 .afinity-meal-price {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 600;
   color: #005a57;
   margin-bottom: 0.5rem;
@@ -599,7 +599,7 @@
   color: #fff;
   border: none;
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 16px;
   font-family: inherit;
   font-weight: 600;
   padding: 0.4rem 1.2rem;
@@ -630,7 +630,7 @@
 }
 .afinity-meals-sidebar h3 {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 1.1rem;
+  font-size: 1.16px;
   font-weight: 700;
   color: #005a57;
   margin-bottom: 0.5rem;
@@ -638,7 +638,7 @@
 .afinity-meals-sidebar-list {
   list-style: none;
   padding: 0;
-  margin: 0 0 1rem 0;
+  margin: 0 0 16px 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -647,7 +647,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1rem;
+  font-size: 16px;
   color: #222;
 }
 .afinity-meals-sidebar-list img {
@@ -660,7 +660,7 @@
   background: #005a57;
   color: #fff;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 16px;
   border: none;
   border-radius: 4px;
   padding: 0.7rem 1.5rem;
@@ -691,7 +691,7 @@
   display: flex;
   align-items: flex-start;
   gap: 2rem;
-  padding: 1.5rem 2rem 1rem 2rem;
+  padding: 1.5rem 2rem 16px 2rem;
   max-width: 1264px
 ;
 }
@@ -718,10 +718,10 @@
   background: #e6f2f2;
   color: #005a57;
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 700;
   border-radius: 6px;
-  padding: 0.1rem 0.8rem;
+  padding: 0.16px 0.8rem;
   margin-left: 0.5rem;
   display: inline-block;
 }
@@ -839,7 +839,7 @@
 .afinity-r-meals-sidebar__item {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 16px;
   padding: 0.5rem;
   border-radius: 4px;
   background: #f8f8f8;
@@ -897,7 +897,7 @@
   padding: 16px 20px;
   border-bottom: 1px solid #f2f2f2;
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 1rem;
+  font-size: 16px;
   cursor: pointer;
   background: #fff;
   transition: background 0.2s;
