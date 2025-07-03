@@ -167,7 +167,7 @@
 .afinity-modal-row label {
   min-width: 90px;
   color: #444;
-  font-size: 0.98rem;
+  font-size: 16px;
 }
 .afinity-modal-row input, .afinity-modal-row select {
   flex: 1;
@@ -329,10 +329,10 @@
 @media (max-width: 765px) {
   .afinity-modal-header {
     padding: 16px 10px 6px 10px;
-    font-size: 0.98rem;
+    font-size: 16px;
   }
   .afinity-modal-date {
-    font-size: 0.98rem;
+    font-size: 16px;
   }
   .afinity-modal-desc {
     font-size: 0.92rem;
@@ -347,7 +347,7 @@
     margin: 27px auto 0 auto;
     padding: 20px;
     border-radius: 6px;
-    font-size: 0.98rem;
+    font-size: 16px;
   }
 
   .afinity-modal-card-frequency{
@@ -355,7 +355,7 @@
     margin: 27px auto 0 auto;
     padding: 20px;
     border-radius: 6px;
-    font-size: 0.98rem;
+    font-size: 16px;
   }
   .afinity-modal-card-title {
     color: #434A4A;
