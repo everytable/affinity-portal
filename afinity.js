@@ -450,31 +450,24 @@
       <div class="afinity-modal-header">
         <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
       </div>
-
-        <div class="afinity-modal-content">
-          <div class="afinity-modal-card afinity-meals-header-card">
+      <div class="afinity-modal-content">
+        <div class="afinity-modal-card afinity-meals-header-card">
           <button class="afinity-modal-back">< Back</button>
-            <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
-              <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
-                <h2 class="afinity-meals-title">Update Subscription Meals</h2>
-                <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
-              </div>
-              <div class="afinity-meals-date-select" style="min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
-                <label class="afinity-modal-select-label">Delivery Date</label>
-                <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
-              </div>
+          <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
+            <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
+              <h2 class="afinity-meals-title">Update Subscription Meals</h2>
+              <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
+            </div>
+            <div class="afinity-meals-date-select" style="min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
+              <label class="afinity-modal-select-label">Delivery Date</label>
+              <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
             </div>
           </div>
-          <div class="afinity-meals-layout">
+        </div>
+        <div class="afinity-meals-layout">
           <div class="afinity-meals-main">
-            <h2 class="afinity-meals-section-title">Hot Meals</h2>
-            <ul class="afinity-meals-grid">
-              ${catalogVariants.slice(0, 3).map(variant => renderMealCard(variant)).join('')}
-            </ul>
-            <h2 class="afinity-meals-section-title" style="margin-top:2rem;">Cold Meals</h2>
-            <ul class="afinity-meals-grid">
-              ${catalogVariants.slice(3, 6).map(variant => renderMealCard(variant)).join('')}
-            </ul>
+            <h2 class="afinity-meals-section-title">All Meals</h2>
+            <ul class="afinity-meals-grid">${renderMealsGrid()}</ul>
           </div>
           <div class="afinity-modal-card afinity-meals-sidebar">
             <h3>Current Meals in Subscription</h3>
@@ -530,32 +523,36 @@
     `;
   }
 
-  // Add helper to get image for a variant
-  function getVariantImageByCatalog(variant, catalogId) {
-    console.log("🔍 [getVariantImageByCatalog] variant:", variant);
-    console.log("🔍 [getVariantImageByCatalog] catalogId:", catalogId);
-    if (variant.metafield && String(variant.metafield.value) === String(catalogId)) {
-      return (
-        variant.product?.featuredMedia?.preview?.image?.url ||
-        variant.product?.featuredMedia?.preview?.url ||
-        variant.image?.url ||
-        MEAL_IMAGE
-      );
+  function renderMealsGrid() {
+    const catalogVariants = getCatalogVariants();
+    if (!catalogVariants.length) {
+      return '<div class="afinity-meals-grid-loading">Loading meals…</div>';
     }
-    return MEAL_IMAGE;
+    return catalogVariants.map(variant => renderMealCard(variant)).join('');
+  }
+
+  // Add helper to get image for a variant
+  function getVariantImageByCatalog(variant) {
+    // Robust image selection for meals grid
+    return (
+      variant?.product?.featuredMedia?.preview?.image?.url ||
+      variant?.product?.featuredMedia?.preview?.url ||
+      variant?.image?.url ||
+      MEAL_IMAGE
+    );
   }
 
   // Helper to get all catalog variants for the current catalog
   function getCatalogVariants() {
     if (!currentCatalogVariants || !currentCatalogVariants.variants || !currentCatalogPayload) return [];
     return currentCatalogVariants.variants.filter(
-      v => v.metafield && String(v.metafield.value) === String(currentCatalogPayload.catalogId)
+      v => v.metafield && String(v.metafield.value) === String(currentCatalogPayload.catalogId.toString().split('gid://shopify/MarketCatalog/')[1])
     );
   }
 
   // Update renderMealCard to use variant data
   function renderMealCard(variant) {
-    const img = getVariantImageByCatalog(variant, currentCatalogPayload.catalogId);
+    const img = getVariantImageByCatalog(variant);
     const title = variant.product?.title || variant.sku || 'Meal';
     const price = variant.price?.amount ? parseFloat(variant.price.amount) : 0;
     return `
