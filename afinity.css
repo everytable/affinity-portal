@@ -917,4 +917,37 @@
   margin-left: 16px;
   min-width: 3.5em;
   text-align: right;
+}
+
+/* Modal loading overlay */
+.afinity-modal-loading {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.85);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+.afinity-modal-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid #e0e0e0;
+  border-top: 5px solid #005a57;
+  border-radius: 50%;
+  animation: afinity-spin 1s linear infinite;
+  margin-bottom: 18px;
+}
+@keyframes afinity-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.afinity-modal-loading-text {
+  font-size: 1.2rem;
+  color: #005a57;
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 } 

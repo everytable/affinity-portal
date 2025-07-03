@@ -16,6 +16,9 @@
   let currentPage = 'main';
   let modalOverlay = null;
   let currentSubscription = null;
+  let modalLoading = false;
+  let lastFetchedZip = null;
+  let zip = '';
 
   // Example static meal data for demo
   const MEALS = [
@@ -32,27 +35,6 @@
       price: 6.7,
       img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
       qty: 1
-    },
-    {
-      id: 3,
-      title: 'Backyard BBQ Chicken Salad',
-      price: 6.7,
-      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
-      qty: 0
-    },
-    {
-      id: 3,
-      title: 'Backyard BBQ Chicken Salad',
-      price: 6.7,
-      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
-      qty: 0
-    },
-    {
-      id: 3,
-      title: 'Backyard BBQ Chicken Salad',
-      price: 6.7,
-      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
-      qty: 0
     },
     {
       id: 3,
@@ -134,10 +116,8 @@
   let address1 = '';
   let city = '';
   let state = '';
-  let zip = '';
   
   // Fulfillment state
-  let fulfillmentDate = '';
   let fulfillmentTime = '';
   let fulfillmentMethod = '';
   let deliveryDate = '';
@@ -169,7 +149,158 @@
       distance: 5.3
     }
   ];
-  let selectedPickupLocationId = PICKUP_LOCATIONS[0].id;
+  let selectedPickupLocationId = null;
+
+  let pickupLocations = [];
+  let pickupLocationsLoading = false;
+
+  // Global object to store all requested changes
+  let modalChanges = {};
+  
+  // Helper function to update modalChanges with logging
+  function updateModalChanges(key, value) {
+    modalChanges[key] = value;
+    console.log('modalChanges updated:', key, '=', value);
+    console.log('Current modalChanges:', JSON.parse(JSON.stringify(modalChanges)));
+  }
+
+  function showModalLoading() {
+    if (!modalOverlay) return;
+    let loading = modalOverlay.querySelector('.afinity-modal-loading');
+    if (!loading) {
+      loading = document.createElement('div');
+      loading.className = 'afinity-modal-loading';
+      loading.innerHTML = '<div class="afinity-modal-loading-spinner"></div><div class="afinity-modal-loading-text">Loading…</div>';
+      modalOverlay.appendChild(loading);
+    }
+    loading.style.display = '';
+  }
+  function hideModalLoading() {
+    if (!modalOverlay) return;
+    const loading = modalOverlay.querySelector('.afinity-modal-loading');
+    if (loading) loading.style.display = 'none';
+  }
+
+  async function fetchSubscriptionAndPickup(subscriptionId, zip) {
+    modalLoading = true;
+    showModalLoading();
+    try {
+      await Promise.all([
+        // Subscription fetch is already happening elsewhere, so just fetch pickup locations here
+        fetchPickupLocations(zip)
+      ]);
+    } finally {
+      modalLoading = false;
+      hideModalLoading();
+    }
+  }
+
+  async function fetchPickupLocations(zip) {
+    if (!zip) return [];
+    pickupLocationsLoading = true;
+    renderPickupLocationsSection();
+    try {
+      const resp = await fetch(`${"https://admin-app.everytable-sh.com" || API_URL }/api/search/availability/${encodeURIComponent(zip)}`);
+      const data = await resp.json();
+      // Use the API's pickupLocations array, include distance
+      pickupLocations = (data.pickupLocations || []).map(loc => ({
+        id: loc.location_id,
+        name: loc.name,
+        address: loc.shopifyLocation && loc.shopifyLocation.address
+          ? `${loc.shopifyLocation.address.address1 || ''}${loc.shopifyLocation.address.city ? ', ' + loc.shopifyLocation.address.city : ''}${loc.shopifyLocation.address.zip ? ', ' + loc.shopifyLocation.address.zip : ''}`
+          : '',
+        distance: typeof loc.distance_from_entered_zip_code === 'number' ? loc.distance_from_entered_zip_code : null
+      }));
+      console.log("PICKUP LOCATIONS", pickupLocations);
+      // Don't preselect any location - let user choose
+      selectedPickupLocationId = null;
+    } catch (e) {
+      pickupLocations = [];
+    }
+    pickupLocationsLoading = false;
+    renderPickupLocationsSection();
+  }
+
+  function renderPickupLocationsSection() {
+    const section = modalOverlay && modalOverlay.querySelector('#afinity-method-section');
+    if (section) {
+      section.innerHTML = renderMethodSection();
+      // Always set the select value to the current fulfillmentMethod
+      const methodSelect = section.querySelector('#afinity-method');
+      if (methodSelect) {
+        methodSelect.value = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
+        methodSelect.addEventListener('change', async (e) => {
+          updateModalChanges('fulfillmentMethod', e.target.value);
+          fulfillmentMethod = e.target.value;
+          if (fulfillmentMethod === 'Pickup') {
+            if (zip && (zip !== lastFetchedZip || pickupLocations.length === 0)) {
+              pickupLocationsLoading = true;
+              renderPickupLocationsSection();
+              await fetchPickupLocations(zip);
+              lastFetchedZip = zip;
+            } else {
+              renderPickupLocationsSection();
+            }
+          } else {
+            renderPickupLocationsSection();
+          }
+        });
+      }
+      attachMethodSectionEvents();
+    }
+  }
+
+  function renderMethodSection() {
+    let method = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
+    let pickupListHtml = '';
+    if (method === 'Pickup') {
+      if (pickupLocationsLoading) {
+        pickupListHtml = '<div class="afinity-modal-pickup-list">Loading locations...</div>';
+      } else if (pickupLocations.length === 0) {
+        pickupListHtml = '<div class="afinity-modal-pickup-list">No pickup locations found.</div>';
+      } else {
+        pickupListHtml = `<div class="afinity-modal-pickup-list">
+          ${pickupLocations.map(loc => `
+            <label class="afinity-modal-pickup-item">
+              <div class="afinity-modal-pickup-meta">
+                <div class="afinity-modal-pickup-label">RETAIL LOCATION</div>
+                <div class="afinity-modal-pickup-name">${loc.name}${loc.address ? ' – ' + loc.address : ''}</div>
+              </div>
+              <div class="afinity-modal-pickup-distance-container">
+                ${loc.distance !== null ? `<div class="afinity-modal-pickup-distance">${loc.distance.toFixed(1)} mi</div>` : ''}
+                <input type="radio" name="pickup-location" value="${loc.id}" ${(modalChanges.selectedPickupLocationId || selectedPickupLocationId) == loc.id ? 'checked' : ''} />
+              </div>
+            </label>
+          `).join('')}
+        </div>`;
+      }
+    }
+    return `
+      <div class="afinity-modal-row">
+        <label for="afinity-method">Method</label>
+        <select id="afinity-method">
+          <option value="Delivery" ${method === 'Delivery' ? 'selected' : ''}>Delivery</option>
+          <option value="Pickup" ${method === 'Pickup' ? 'selected' : ''}>Pickup</option>
+        </select>
+      </div>
+      ${method === 'Pickup' ? pickupListHtml : `
+        <div class="afinity-modal-row">
+          <label for="afinity-address">Address</label>
+          <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${modalChanges.address1 || address1}" />
+        </div>
+        <div class="afinity-modal-row afinity-modal-address-row">
+          <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${modalChanges.city || city}" />
+          <select id="afinity-state" style="flex:1; margin-right:8px;">
+            ${US_STATES.map(s => `<option value="${s.code}" ${(modalChanges.state || state) === s.code || (modalChanges.state || state) === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
+          </select>
+          <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${modalChanges.zip || zip}" />
+        </div>
+      `}
+      <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+        <button id="afinity-save-method-btn" class="afinity-modal-save-btn" type="button">Save</button>
+      </div>
+    `;
+  }
 
   // Helper to format delivery date
   function formatDeliveryDate(dateStr) {
@@ -221,48 +352,6 @@
   // Optionally, set a price variable if you want to show price
   let price = '3.99'; // Replace with real price if available
 
-  function renderMethodSection() {
-    // Determine method
-    let method = fulfillmentMethod || 'Delivery';
-    return `
-      <div class="afinity-modal-row">
-        <label for="afinity-method">Method</label>
-        <select id="afinity-method">
-          <option value="Delivery" ${method === 'Delivery' ? 'selected' : ''}>Delivery</option>
-          <option value="Pickup" ${method === 'Pickup' ? 'selected' : ''}>Pickup</option>
-        </select>
-      </div>
-      ${method === 'Pickup' ? `
-        <div class="afinity-modal-pickup-list">
-          ${PICKUP_LOCATIONS.map(loc => `
-            <label class="afinity-modal-pickup-item">
-              <div class="afinity-modal-pickup-meta">
-                <div class="afinity-modal-pickup-label">RETAIL LOCATION</div>
-                <div class="afinity-modal-pickup-name">${loc.name} ${loc.address}</div>
-              </div>
-              <div class="afinity-modal-pickup-distance-container">
-                <div class="afinity-modal-pickup-distance">${loc.distance} mi</div>
-                <input type="radio" name="pickup-location" value="${loc.id}" ${selectedPickupLocationId === loc.id ? 'checked' : ''} />
-              </div>
-            </label>
-          `).join('')}
-        </div>
-      ` : `
-        <div class="afinity-modal-row">
-          <label for="afinity-address">Address</label>
-          <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${address1}" />
-        </div>
-        <div class="afinity-modal-row afinity-modal-address-row">
-          <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${city}" />
-          <select id="afinity-state" style="flex:1; margin-right:8px;">
-            ${US_STATES.map(s => `<option value="${s.code}" ${state === s.code || state === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
-          </select>
-          <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${zip}" />
-        </div>
-      `}
-    `;
-  }
-
   function renderModal() {
     // Create overlay if not present
     if (!modalOverlay) {
@@ -277,6 +366,7 @@
     contentRoot.innerHTML = renderModalContent();
     attachModalEvents();
     attachMethodSectionEvents();
+    if (modalLoading) showModalLoading(); else hideModalLoading();
   }
 
   function renderModalContent() {
@@ -338,6 +428,9 @@
           <div class="afinity-modal-row">
             <label for="afinity-time">Time</label>
             <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+            <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button">Save</button>
           </div>
         </div>
         <div class="afinity-modal-card">
@@ -456,6 +549,7 @@
   }
 
   function attachModalEvents() {
+    if (modalLoading) return;
     // Close modal
     modalOverlay.querySelector('.afinity-modal-close').onclick = () => modalOverlay.style.display = 'none';
     // Back button
@@ -486,6 +580,7 @@
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
     if (saveBtn) saveBtn.onclick = () => {
       // TODO: Save logic
+      console.log('Saving changes:', modalChanges);
       modalOverlay.style.display = 'none';
     };
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
@@ -501,6 +596,7 @@
         const idx = selectedMeals.findIndex(m => m.id === mealId);
         if (idx !== -1) {
           selectedMeals[idx].qty = 0;
+          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
         }
         renderModal();
       };
@@ -514,41 +610,124 @@
     // Date input on main page
     const mainDateInput = modalOverlay.querySelector('#afinity-date');
     if (mainDateInput) mainDateInput.onchange = (e) => {
+      updateModalChanges('deliveryDate', e.target.value);
       deliveryDate = e.target.value;
     };
     // Date input on meals page
     const mealsDateInput = modalOverlay.querySelector('#afinity-meals-date');
     if (mealsDateInput) mealsDateInput.onchange = (e) => {
+      updateModalChanges('deliveryDate', e.target.value);
       deliveryDate = e.target.value;
+    };
+    // Time input
+    const mainTimeInput = modalOverlay.querySelector('#afinity-time');
+    if (mainTimeInput) mainTimeInput.onchange = (e) => {
+      updateModalChanges('fulfillmentTime', e.target.value);
+      fulfillmentTime = e.target.value;
+    };
+    // Address inputs - ensure they update modalChanges
+    const addressInput = modalOverlay.querySelector('#afinity-address');
+    console.log('Found address input:', addressInput);
+    if (addressInput) {
+      addressInput.oninput = (e) => { 
+        console.log('Address input changed:', e.target.value);
+        updateModalChanges('address1', e.target.value); 
+        address1 = e.target.value; 
+      };
+    }
+    const cityInput = modalOverlay.querySelector('#afinity-city');
+    console.log('Found city input:', cityInput);
+    if (cityInput) {
+      cityInput.oninput = (e) => { 
+        console.log('City input changed:', e.target.value);
+        updateModalChanges('city', e.target.value); 
+        city = e.target.value; 
+      };
+    }
+    const stateInput = modalOverlay.querySelector('#afinity-state');
+    console.log('Found state input:', stateInput);
+    if (stateInput) {
+      stateInput.onchange = (e) => { 
+        console.log('State input changed:', e.target.value);
+        updateModalChanges('state', e.target.value); 
+        state = e.target.value; 
+      };
+    }
+    const zipInput = modalOverlay.querySelector('#afinity-zip');
+    console.log('Found zip input:', zipInput);
+    if (zipInput) {
+      zipInput.oninput = (e) => { 
+        console.log('Zip input changed:', e.target.value);
+        updateModalChanges('zip', e.target.value); 
+        zip = e.target.value; 
+      };
+    }
+    // Save button for Delivery/Pickup/Address section
+    const saveMethodBtn = modalOverlay.querySelector('#afinity-save-method-btn');
+    if (saveMethodBtn) saveMethodBtn.onclick = () => {
+      const methodAndAddress = {
+        fulfillmentMethod: modalChanges.fulfillmentMethod,
+        address1: modalChanges.address1,
+        city: modalChanges.city,
+        state: modalChanges.state,
+        zip: modalChanges.zip,
+        selectedPickupLocationId: modalChanges.selectedPickupLocationId
+      };
+      console.log('Save (Delivery/Pickup/Address):', methodAndAddress);
+      // TODO: Call API or further logic here
+    };
+    // Save button for Date section
+    const saveDateBtn = modalOverlay.querySelector('#afinity-save-date-btn');
+    if (saveDateBtn) saveDateBtn.onclick = () => {
+      const dateFields = {
+        deliveryDate: modalChanges.deliveryDate,
+        fulfillmentTime: modalChanges.fulfillmentTime
+      };
+      console.log('Save (Date):', dateFields);
+      // TODO: Call API or further logic here
     };
   }
 
   function attachMethodSectionEvents() {
-    const methodSelect = modalOverlay.querySelector('#afinity-method');
-    if (methodSelect) {
-      methodSelect.onchange = (e) => {
-        fulfillmentMethod = e.target.value;
-        // Only re-render the method section
-        const section = modalOverlay.querySelector('#afinity-method-section');
-        if (section) {
-          section.innerHTML = renderMethodSection();
-          attachMethodSectionEvents();
-        }
-      };
-    }
+    if (modalLoading) return;
     // Listen for pickup location change
     const pickupRadios = modalOverlay.querySelectorAll('input[name="pickup-location"]');
     pickupRadios.forEach(radio => {
       radio.onchange = (e) => {
+        updateModalChanges('selectedPickupLocationId', parseInt(e.target.value));
         selectedPickupLocationId = parseInt(e.target.value);
-        // Only re-render the method section
-        const section = modalOverlay.querySelector('#afinity-method-section');
-        if (section) {
-          section.innerHTML = renderMethodSection();
-          attachMethodSectionEvents();
-        }
+        renderPickupLocationsSection();
       };
     });
+    // Listen for address, city, state, zip changes
+    const addressInput = modalOverlay.querySelector('#afinity-address');
+    console.log('attachMethodSectionEvents - Found address input:', addressInput);
+    if (addressInput) addressInput.oninput = (e) => { 
+      console.log('attachMethodSectionEvents - Address input changed:', e.target.value);
+      updateModalChanges('address1', e.target.value); 
+      address1 = e.target.value; 
+    };
+    const cityInput = modalOverlay.querySelector('#afinity-city');
+    console.log('attachMethodSectionEvents - Found city input:', cityInput);
+    if (cityInput) cityInput.oninput = (e) => { 
+      console.log('attachMethodSectionEvents - City input changed:', e.target.value);
+      updateModalChanges('city', e.target.value); 
+      city = e.target.value; 
+    };
+    const stateInput = modalOverlay.querySelector('#afinity-state');
+    console.log('attachMethodSectionEvents - Found state input:', stateInput);
+    if (stateInput) stateInput.onchange = (e) => { 
+      console.log('attachMethodSectionEvents - State input changed:', e.target.value);
+      updateModalChanges('state', e.target.value); 
+      state = e.target.value; 
+    };
+    const zipInput = modalOverlay.querySelector('#afinity-zip');
+    console.log('attachMethodSectionEvents - Found zip input:', zipInput);
+    if (zipInput) zipInput.oninput = (e) => { 
+      console.log('attachMethodSectionEvents - Zip input changed:', e.target.value);
+      updateModalChanges('zip', e.target.value); 
+      zip = e.target.value; 
+    };
   }
 
   // Listen for the event on document
@@ -593,11 +772,11 @@
               }
             }
             
-            const fulfillmentMethodAttr = payload.include.address.order_attributes.find(attr => 
-              attr.name === 'Fulfillment Type'
-            );
-            if (fulfillmentMethodAttr) {
-              fulfillmentMethod = fulfillmentMethodAttr.value;
+            const fulfillmentTypeAttr = payload.include.address.order_attributes.find(attr => attr.name.toLowerCase() === 'fulfillment type');
+            if (fulfillmentTypeAttr && fulfillmentTypeAttr.value) {
+              fulfillmentMethod = fulfillmentTypeAttr.value.trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
+            } else {
+              fulfillmentMethod = 'Delivery';
             }
           }
           
@@ -613,6 +792,21 @@
             modalOverlay.style.display = '';
           }
           renderModal();
+          fetchSubscriptionAndPickup(subscriptionId, zip);
+          // Initialize modalChanges from subscription data
+          modalChanges = {};
+          updateModalChanges('address1', address1);
+          updateModalChanges('city', city);
+          updateModalChanges('state', state);
+          updateModalChanges('zip', zip);
+          updateModalChanges('fulfillmentMethod', fulfillmentMethod);
+          updateModalChanges('deliveryDate', deliveryDate);
+          updateModalChanges('fulfillmentTime', fulfillmentTime);
+          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+          // Only add selectedPickupLocationId if it's not null
+          if (selectedPickupLocationId !== null) {
+            updateModalChanges('selectedPickupLocationId', selectedPickupLocationId);
+          }
         })
         .catch(error => {
           console.error('Error fetching subscription data:', error);
