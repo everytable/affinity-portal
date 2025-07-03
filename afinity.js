@@ -15,6 +15,7 @@
 
   let currentPage = 'main';
   let modalOverlay = null;
+  let deliveryDate = '2025-12-12'; // default, will be set from order attributes if available
 
   // Example static meal data for demo
   const MEALS = [
@@ -29,14 +30,14 @@
       id: 2,
       title: "Monica's Breakfast Burrito",
       price: 6.7,
-      img: 'https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=facearea&w=400&h=400',
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
       qty: 1
     },
     {
       id: 3,
       title: 'Backyard BBQ Chicken Salad',
       price: 6.7,
-      img: 'https://images.unsplash.com/photo-1464306076886-debca5e8a6b0?auto=format&fit=facearea&w=400&h=400',
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
       qty: 0
     }
   ];
@@ -124,7 +125,7 @@
               </div>
             </div>
             <div class="afinity-modal-cart-item">
-              <img src="https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=facearea&w=64&h=64" alt="Monica's Breakfast Burrito" />
+              <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=64&h=64" alt="Monica's Breakfast Burrito" />
               <div>
                 <div class="afinity-modal-cart-title">Monica's Breakfast Burrito</div>
                 <div class="afinity-modal-cart-qty">x 1</div>
@@ -206,7 +207,7 @@
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date">Date</label>
-            <input id="afinity-date" type="date" value="${fulfillmentDate}" />
+            <input id="afinity-date" type="date" value="${deliveryDate}" />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time">Time</label>
@@ -334,7 +335,7 @@
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date">Date</label>
-            <input id="afinity-date" type="date" value="2025-12-12" />
+            <input id="afinity-date" type="date" value="${deliveryDate}" />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time">Time</label>
@@ -370,7 +371,7 @@
           <h2 class="afinity-meals-title">Update Subscription Meals</h2>
           <div class="afinity-meals-date-select">
             <label>Delivery Date</label>
-            <input type="date" value="2025-12-12" />
+            <input id="afinity-meals-date" type="date" value="${deliveryDate}" />
           </div>
           <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
         </div>
@@ -378,18 +379,64 @@
       <div class="afinity-meals-layout">
         <div class="afinity-meals-main">
           <h2 class="afinity-meals-section-title">Hot Meals</h2>
-          <div class="afinity-meals-grid">
+          <ul class="afinity-meals-grid">
             ${MEALS.map(meal => `
-              <div class="afinity-meal-card${selectedMeals.find(m=>m.id===meal.id&&m.qty>0)?' selected':''}" data-meal-id="${meal.id}">
-                <img src="${meal.img}" alt="${meal.title}" />
-                <div class="afinity-meal-title">${meal.title}</div>
-                <div class="afinity-meal-price">$${meal.price.toFixed(2)}</div>
-                <button class="afinity-meal-toggle-btn" data-meal-id="${meal.id}">
-                  ${selectedMeals.find(m=>m.id===meal.id&&m.qty>0)?'<span>&#128465;</span> Remove':'<span>&#8853;</span> Add'}
-                </button>
-              </div>
+              <li class="recharge-meals-grid__item" style="display: block;"
+                data-product-start-date="2025-01-01"
+                data-product-end-date="2025-12-31"
+                data-is-first-variant="true"
+              >
+                <div class="recharge-card" 
+                  data-variant-id="${meal.id}"
+                  data-collection-id="1"
+                  data-product-id="${meal.id}"
+                  data-catalog-id="demo-catalog-id"
+                  data-selling-plan-groups="[]">
+                  <div class="recharge-card__container">
+                    <div class="recharge-card__image-link">
+                      <img
+                        src="${meal.img}"
+                        alt="${meal.title}"
+                        class="recharge-card__image"
+                        loading="lazy"
+                        width="220"
+                        height="200"
+                      >
+                    </div>
+                    <div class="recharge-card__details">
+                      <h3 class="recharge-card__title">
+                        <span class="recharge-card__title-link">
+                          ${meal.title}
+                        </span>
+                      </h3>
+                      <div class="recharge-card__footer">
+                        <div class="price__container price-block" data-variant-id="${meal.id}">
+                          <span class="recharge-card__price--discount price-item--regular" data-variant-id="${meal.id}">
+                            $${meal.price.toFixed(2)}
+                          </span>
+                        </div>
+                        <div class="price-action-wrapper" data-variant-id="${meal.id}">
+                          ${selectedMeals.find(m=>m.id===meal.id&&m.qty>0) ? `
+                            <button class="recharge-card__add-btn recharge-card__add-btn--smart recharge-card__remove-btn" type="button" data-meal-id="${meal.id}" style="background:#c0392b;">
+                              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
+                              </svg>
+                            </button>
+                          ` : `
+                            <button class="recharge-card__add-btn recharge-card__add-btn--smart" type="button" data-meal-id="${meal.id}">
+                              <svg width="20" height="20" class="icon icon-add-to-cart" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10 0C15.5228 0 20 4.47715 20 10C20 15.5228 15.5228 20 10 20C4.47715 20 0 15.5228 0 10C0 4.47715 4.47715 0 10 0ZM10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 5C10.5523 5 11 5.44772 11 6V9H14C14.5523 9 15 9.44772 15 10C15 10.5523 14.5523 11 14 11H11V14C11 14.5523 10.5523 15 10 15C9.44772 15 9 14.5523 9 14V11H6C5.44772 11 5 10.5523 5 10C5 9.44772 5.44772 9 6 9H9V6C9 5.44772 9.44772 5 10 5Z" fill="white"/>
+                              </svg>
+                            </button>
+                          `}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </li>
             `).join('')}
-          </div>
+          </ul>
         </div>
         <div class="afinity-modal-card afinity-meals-sidebar">
           <h3>Current Meals in Subscription</h3>
@@ -445,16 +492,12 @@
       alert('Cancel subscription clicked');
     };
     // Meal add/remove
-    modalOverlay.querySelectorAll('.afinity-meal-toggle-btn').forEach(btn => {
+    modalOverlay.querySelectorAll('.recharge-card__remove-btn').forEach(btn => {
       btn.onclick = (e) => {
         const mealId = parseInt(btn.getAttribute('data-meal-id'));
         const idx = selectedMeals.findIndex(m => m.id === mealId);
         if (idx !== -1) {
-          if (selectedMeals[idx].qty > 0) {
-            selectedMeals[idx].qty = 0;
-          } else {
-            selectedMeals[idx].qty = 1;
-          }
+          selectedMeals[idx].qty = 0;
         }
         renderModal();
       };
@@ -464,6 +507,16 @@
     if (swapBtn) swapBtn.onclick = () => {
       // TODO: Implement swap logic
       alert('Swap Items clicked');
+    };
+    // Date input on main page
+    const mainDateInput = modalOverlay.querySelector('#afinity-date');
+    if (mainDateInput) mainDateInput.onchange = (e) => {
+      deliveryDate = e.target.value;
+    };
+    // Date input on meals page
+    const mealsDateInput = modalOverlay.querySelector('#afinity-meals-date');
+    if (mealsDateInput) mealsDateInput.onchange = (e) => {
+      deliveryDate = e.target.value;
     };
   }
 
