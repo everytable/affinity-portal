@@ -973,4 +973,169 @@
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
   font-weight: 600;
   letter-spacing: 0.04em;
+}
+
+/* Sidebar quantity controls */
+.afinity-meals-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.afinity-meals-sidebar-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.afinity-meals-sidebar-item img {
+  width: 56px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f4f4f4;
+  flex-shrink: 0;
+}
+
+.afinity-meals-sidebar-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.afinity-meals-sidebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+.afinity-meals-sidebar-price {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+}
+
+.afinity-meals-sidebar-qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 1rem;
+  background: #fff;
+  border-radius: 999px;
+  overflow: hidden;
+  height: 32px;
+  min-width: 90px;
+  border: 1px solid #ddd;
+}
+
+.afinity-meals-sidebar-qty-btn {
+  background: rgb(10,61,63);
+  color: #fff;
+  border: none;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  font-weight: 700;
+  outline: none;
+}
+
+.afinity-meals-sidebar-qty-btn:hover {
+  background: rgb(8,50,52);
+}
+
+.afinity-meals-sidebar-qty {
+  font-size: 14px;
+  min-width: 26px;
+  text-align: center;
+  display: inline-block;
+  font-weight: 600;
+  background: #fff;
+  color: #111;
+  height: 32px;
+  line-height: 32px;
+  border: none;
+}
+
+.afinity-meals-sidebar-empty {
+  color: #888;
+  font-size: 14px;
+  padding: 1rem 0;
+  text-align: center;
+  font-style: italic;
+}
+
+.afinity-meals-sidebar-footer {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #eee;
+}
+
+.afinity-meals-sidebar-total {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  font-size: 16px;
+  color: #0d3c3a;
+}
+
+.afinity-meals-sidebar-total-price {
+  color: #0d5e4c;
+}
+
+.afinity-meals-swap-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #0d3c3a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.afinity-meals-swap-btn:hover:not(:disabled) {
+  background: #0d5e4c;
+}
+
+.afinity-meals-swap-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  color: #888;
+}
+
+.afinity-meals-swap-count {
+  background: #d2f2d2;
+  color: #111;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Add after .afinity-meals-sidebar-item */
+.afinity-meals-sidebar-removed {
+  opacity: 0.5;
+  background: #f8f8f8;
+}
+.afinity-meals-sidebar-removed .afinity-meals-sidebar-title {
+  text-decoration: line-through;
+  color: #888;
 } 

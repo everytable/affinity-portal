@@ -40,6 +40,8 @@
     { id: 15, title: 'Fruit & Nut Parfait', price: 6.8, img: MEAL_IMAGE, qty: 0 },
   ];
   let selectedMeals = [...MEALS];
+  let originalSubscriptionMeals = [];
+  let currentCatalogPayload = null;
 
   // Add a new catalog for Cold Meals (use a subset or different items)
   const COLD_MEALS = [
@@ -109,6 +111,9 @@
   let pickupLocations = [];
   let pickupLocationsLoading = false;
 
+  // Add at the top, after let pickupLocations = [];
+  let pickupLocationsPromise = null;
+
   // Global object to store all requested changes
   let modalChanges = {};
   
@@ -150,30 +155,37 @@
     }
   }
 
+  // Refactor fetchPickupLocations to cache by zip
   async function fetchPickupLocations(zip) {
     if (!zip) return [];
+    if (pickupLocationsPromise && lastFetchedZip === zip) {
+      return pickupLocationsPromise;
+    }
     pickupLocationsLoading = true;
     renderPickupLocationsSection();
-    try {
-      const resp = await fetch(`${"https://admin-app.everytable-sh.com" || API_URL }/api/search/availability/${encodeURIComponent(zip)}`);
-      const data = await resp.json();
-      // Use the API's pickupLocations array, include distance
-      pickupLocations = (data.pickupLocations || []).map(loc => ({
-        id: loc.location_id,
-        name: loc.name,
-        address: loc.shopifyLocation && loc.shopifyLocation.address
-          ? `${loc.shopifyLocation.address.address1 || ''}${loc.shopifyLocation.address.city ? ', ' + loc.shopifyLocation.address.city : ''}${loc.shopifyLocation.address.zip ? ', ' + loc.shopifyLocation.address.zip : ''}`
-          : '',
-        distance: typeof loc.distance_from_entered_zip_code === 'number' ? loc.distance_from_entered_zip_code : null
-      }));
-      console.log("PICKUP LOCATIONS", pickupLocations);
-      // Don't preselect any location - let user choose
-      selectedPickupLocationId = null;
-    } catch (e) {
-      pickupLocations = [];
-    }
-    pickupLocationsLoading = false;
-    renderPickupLocationsSection();
+    lastFetchedZip = zip;
+    pickupLocationsPromise = fetch(`${API_URL}/search/availability/${encodeURIComponent(zip)}`)
+      .then(resp => resp.json())
+      .then(data => {
+        pickupLocations = (data.pickupLocations || []).map(loc => ({
+          id: loc.location_id,
+          name: loc.name,
+          address: loc.shopifyLocation && loc.shopifyLocation.address
+            ? `${loc.shopifyLocation.address.address1 || ''}${loc.shopifyLocation.address.city ? ', ' + loc.shopifyLocation.address.city : ''}${loc.shopifyLocation.address.zip ? ', ' + loc.shopifyLocation.address.zip : ''}`
+            : '',
+          distance: typeof loc.distance_from_entered_zip_code === 'number' ? loc.distance_from_entered_zip_code : null
+        }));
+        pickupLocationsLoading = false;
+        renderPickupLocationsSection();
+        return pickupLocations;
+      })
+      .catch(e => {
+        pickupLocations = [];
+        pickupLocationsLoading = false;
+        renderPickupLocationsSection();
+        return [];
+      });
+    return pickupLocationsPromise;
   }
 
   function renderPickupLocationsSection() {
@@ -192,7 +204,6 @@
               pickupLocationsLoading = true;
               renderPickupLocationsSection();
               await fetchPickupLocations(zip);
-              lastFetchedZip = zip;
             } else {
               renderPickupLocationsSection();
             }
@@ -449,18 +460,51 @@
           <div class="afinity-modal-card afinity-meals-sidebar">
             <h3>Current Meals in Subscription</h3>
             <ul class="afinity-meals-sidebar-list">
-              ${selectedMeals.filter(m=>m.qty>0).map(meal => `
-                <li>
+              ${originalSubscriptionMeals.map(origMeal => {
+                const sel = selectedMeals.find(m => m.id === origMeal.id);
+                const removed = !sel || sel.qty === 0;
+                return `
+                  <li class="afinity-meals-sidebar-item${removed ? ' afinity-meals-sidebar-removed' : ''}" data-meal-id="${origMeal.id}">
+                    <img src="${origMeal.img}" alt="${origMeal.title}" />
+                    <div class="afinity-meals-sidebar-details">
+                      <div class="afinity-meals-sidebar-title">${removed ? `<s>${origMeal.title}</s>` : origMeal.title}</div>
+                      <div class="afinity-meals-sidebar-price">$${origMeal.price.toFixed(2)}</div>
+                    </div>
+                    ${!removed ? `<div class="afinity-meals-sidebar-qty-controls">
+                      <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${origMeal.id}">-</button>
+                      <span class="afinity-meals-sidebar-qty">${sel.qty}</span>
+                      <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${origMeal.id}">+</button>
+                    </div>` : ''}
+                  </li>
+                `;
+              }).join('')}
+            </ul>
+            <h3>Swap Meals to your Subscription</h3>
+            <ul class="afinity-meals-sidebar-list">
+              ${selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => `
+                <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
                   <img src="${meal.img}" alt="${meal.title}" />
-                  <div>
+                  <div class="afinity-meals-sidebar-details">
                     <div class="afinity-meals-sidebar-title">${meal.title}</div>
-                    <div class="afinity-meals-sidebar-qty">x ${meal.qty}</div>
+                    <div class="afinity-meals-sidebar-price">$${meal.price.toFixed(2)}</div>
+                  </div>
+                  <div class="afinity-meals-sidebar-qty-controls">
+                    <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                    <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                    <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
                   </div>
                 </li>
               `).join('')}
             </ul>
-            <h3>New meals to your Subscription</h3>
-            <button class="afinity-meals-swap-btn">Swap Items <span class="afinity-meals-swap-count">0</span></button>
+            <div class="afinity-meals-sidebar-footer">
+              <div class="afinity-meals-sidebar-total">
+                <span>Total:</span>
+                <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
+              </div>
+              <button class="afinity-meals-swap-btn" ${selectedMeals.filter(m=>m.qty>0).length === 0 ? 'disabled' : ''}>
+                Swap Items <span class="afinity-meals-swap-count">${selectedMeals.filter(m=>m.qty>0).length}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -527,6 +571,13 @@
     `;
   }
 
+  // Helper function to calculate sidebar total
+  function calculateSidebarTotal() {
+    return selectedMeals.reduce((total, meal) => {
+      return total + (meal.price * meal.qty);
+    }, 0);
+  }
+
   function attachModalEvents() {
     if (modalLoading) return;
     // Close modal
@@ -578,6 +629,31 @@
           updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
         }
         renderModal();
+      };
+    });
+    // Sidebar quantity controls
+    modalOverlay.querySelectorAll('.afinity-meals-sidebar-qty-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const action = btn.getAttribute('data-action');
+        const mealId = parseInt(btn.getAttribute('data-meal-id'));
+        const idx = selectedMeals.findIndex(m => m.id === mealId);
+        
+        if (idx !== -1) {
+          if (action === 'increment') {
+            selectedMeals[idx].qty++;
+            console.log(`Incremented meal ${mealId}, new qty: ${selectedMeals[idx].qty}`);
+          } else if (action === 'decrement') {
+            selectedMeals[idx].qty--;
+            if (selectedMeals[idx].qty <= 0) {
+              selectedMeals[idx].qty = 0;
+              console.log(`Removed meal ${mealId} from sidebar`);
+            } else {
+              console.log(`Decremented meal ${mealId}, new qty: ${selectedMeals[idx].qty}`);
+            }
+          }
+          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+          renderModal();
+        }
       };
     });
     // Swap Items
@@ -709,6 +785,11 @@
     };
   }
 
+  // Helper to get catalogId
+  function getCurrentCatalogId() {
+    return currentCatalogPayload && currentCatalogPayload.catalogId;
+  }
+
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
@@ -785,6 +866,57 @@
           // Only add selectedPickupLocationId if it's not null
           if (selectedPickupLocationId !== null) {
             updateModalChanges('selectedPickupLocationId', selectedPickupLocationId);
+          }
+          if (payload && payload.include && payload.include.subscription_items) {
+            // Assume subscription_items is an array of {id, title, qty, ...}
+            originalSubscriptionMeals = payload.include.subscription_items.map(item => ({
+              id: item.id,
+              title: item.title,
+              price: item.price || 0,
+              img: item.img || MEAL_IMAGE,
+              qty: item.qty || 1
+            }));
+          } else {
+            originalSubscriptionMeals = [];
+          }
+          let locationId = null;
+          let locationName = null;
+          if (payload && payload.include && payload.include.address && payload.include.address.order_attributes) {
+            const locationIdAttr = payload.include.address.order_attributes.find(attr => attr.name.toLowerCase() === 'locationid');
+            if (locationIdAttr) locationId = locationIdAttr.value;
+            const locationNameAttr = payload.include.address.order_attributes.find(attr => attr.name.toLowerCase() === 'location name');
+            if (locationNameAttr) locationName = locationNameAttr.value;
+          }
+
+          console.log('locationId:', locationId);
+          console.log('locationName:', locationName);
+          if (locationId && zip) {
+            fetchPickupLocations(zip).then(pickupLocations => {
+              const matchedLocation = pickupLocations.find(loc => String(loc.id) === String(locationId));
+              const locationName = matchedLocation ? matchedLocation.name : null;
+              console.log('locationId:', locationId);
+              console.log('locationName (from availability API):', locationName);
+              if (locationName) {
+                fetch(`${API_URL}/location/catalog/${locationId}/${encodeURIComponent(locationName)}`)
+                  .then(resp => resp.json())
+                  .then(catalogPayload => {
+                    currentCatalogPayload = catalogPayload;
+                    console.log('Loaded catalog payload:', catalogPayload);
+                  })
+                  .catch(err => {
+                    currentCatalogPayload = null;
+                    console.error('Failed to load catalog payload:', err);
+                  });
+              } else {
+                currentCatalogPayload = null;
+                console.error('No matching locationName found for locationId:', locationId);
+              }
+            }).catch(err => {
+              currentCatalogPayload = null;
+              console.error('Failed to fetch pickup locations for zip:', zip, err);
+            });
+          } else {
+            currentCatalogPayload = null;
           }
         })
         .catch(error => {
