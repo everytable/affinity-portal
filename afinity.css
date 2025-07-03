@@ -23,6 +23,26 @@
   overflow-y: auto;
   transform: translateY(100%);
   animation: afinity-slideup 0.45s cubic-bezier(0.4, 0.8, 0.2, 1) forwards;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.afinity-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 @media (max-width: 800px) {
   .afinity-modal-content {
@@ -122,10 +142,11 @@
   margin-top: 32px;
 }
 .afinity-modal-card-title {
-  font-size: 1.1rem;
+  color: #434A4A;
+  font-size: 18px;
+  font-style: normal;
   font-weight: 500;
-  margin-bottom: 8px;
-  color: #333;
+  line-height: 27.966px; /* 155.365% */
 }
 .afinity-modal-row {
   display: flex;
@@ -167,13 +188,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #f7f7f7;
   border-radius: 6px;
   padding: 8px 12px;
 }
 .afinity-modal-cart-item img {
-  width: 48px;
-  height: 48px;
+  width: 100px;
+  height: 67px;
   border-radius: 6px;
   object-fit: cover;
 }
@@ -225,8 +245,20 @@
 .afinity-modal-back:hover {
   text-decoration: none;
 }
+.afinity-modal-pickup-distance-container{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
 .afinity-modal-update-meals {
   background: #0b3c3c;
+  color: #FFF;
+  text-align: center;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -315,8 +347,12 @@
     font-size: 0.98rem;
   }
   .afinity-modal-card-title {
-    font-size: 1rem;
-    margin-bottom: 6px;
+    color: #434A4A;
+    font-family: "Martian Mono";
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 27.966px; /* 155.365% */
   }
   .afinity-modal-row {
     gap: 6px;
@@ -820,4 +856,65 @@
 .recharge-meals-sidebar__item-remove:hover {
   color: #ff4444;
 }
-/* --- End recharge card and grid styles --- */ 
+/* --- End recharge card and grid styles --- */
+
+/* Pickup location styles */
+.afinity-modal-pickup-list {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  margin: 16px 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.afinity-modal-pickup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f2f2f2;
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 1rem;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.2s;
+  gap: 1.5rem;
+}
+.afinity-modal-pickup-item:last-child {
+  border-bottom: none;
+}
+.afinity-modal-pickup-item input[type="radio"] {
+  accent-color: #005a57;
+  width: 18px;
+  height: 18px;
+  margin-left: 12px;
+}
+.afinity-modal-pickup-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.afinity-modal-pickup-label {
+  font-size: 0.85em;
+  color: #b2b2b2;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.afinity-modal-pickup-name {
+  color: #222;
+  font-size: 1em;
+  font-weight: 500;
+  margin-bottom: 0;
+}
+.afinity-modal-pickup-distance {
+  color: #005a57;
+  font-size: 1em;
+  font-weight: 600;
+  margin-left: 16px;
+  min-width: 3.5em;
+  text-align: right;
+} 

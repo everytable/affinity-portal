@@ -15,7 +15,7 @@
 
   let currentPage = 'main';
   let modalOverlay = null;
-  let deliveryDate = '2025-12-12'; // default, will be set from order attributes if available
+  let currentSubscription = null;
 
   // Example static meal data for demo
   const MEALS = [
@@ -32,27 +32,6 @@
       price: 6.7,
       img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
       qty: 1
-    },
-    {
-      id: 3,
-      title: 'Backyard BBQ Chicken Salad',
-      price: 6.7,
-      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
-      qty: 0
-    },
-    {
-      id: 3,
-      title: 'Backyard BBQ Chicken Salad',
-      price: 6.7,
-      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
-      qty: 0
-    },
-    {
-      id: 3,
-      title: 'Backyard BBQ Chicken Salad',
-      price: 6.7,
-      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
-      qty: 0
     },
     {
       id: 3,
@@ -161,12 +140,44 @@
   let fulfillmentDate = '';
   let fulfillmentTime = '';
   let fulfillmentMethod = '';
+  let deliveryDate = '';
+
+  // Add static pickup locations
+  const PICKUP_LOCATIONS = [
+    {
+      id: 1,
+      name: 'West Hollywood',
+      address: '8717 Santa Monica Blvd',
+      distance: 1.9
+    },
+    {
+      id: 2,
+      name: 'Hollywood',
+      address: '6775 Santa Monica Blvd',
+      distance: 4.3
+    },
+    {
+      id: 3,
+      name: 'Mid-Wilshire',
+      address: '5164 Wilshire Blvd.',
+      distance: 4.7
+    },
+    {
+      id: 4,
+      name: 'Palms',
+      address: '10419 Venice Blvd. 101 A',
+      distance: 5.3
+    }
+  ];
+  let selectedPickupLocationId = PICKUP_LOCATIONS[0].id;
 
   // Helper to format delivery date
   function formatDeliveryDate(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', {
+    // dateStr is already in ISO format (YYYY-MM-DD), just format it directly
+    const [year, month, day] = dateStr.split('-');
+    const date = new Date(year, month - 1, day); // month is 0-indexed
+    return date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'long',
       day: 'numeric',
@@ -180,174 +191,76 @@
     const state = US_STATES.find(s => s.name === stateName || s.code === stateName);
     return state ? state.code : stateName;
   }
+  
+  // Helper to get delivery date from currentSubscription order attributes
+  function getDeliveryDateFromSubscription() {
+    if (!currentSubscription?.include?.address?.order_attributes) {
+      return deliveryDate; 
+    }
+    
+    const fulfillmentDateAttr = currentSubscription.include.address.order_attributes.find(attr => 
+      attr.name === 'Fulfillment Date' 
+    );
+    
+    if (fulfillmentDateAttr) {
+      const fulfillmentDateTime = fulfillmentDateAttr.value;
+      if (fulfillmentDateTime.includes('T')) {
+        return fulfillmentDateTime.split('T')[0]; 
+      } else {
+        return fulfillmentDateTime; 
+      }
+    }
+    
+    // Fallback to next_charge_scheduled_at if no fulfillment date found
+    if (currentSubscription.next_charge_scheduled_at) {
+      return currentSubscription.next_charge_scheduled_at.split('T')[0];
+    }
+    
+    return deliveryDate; // final fallback
+  }
   // Optionally, set a price variable if you want to show price
   let price = '3.99'; // Replace with real price if available
 
-  function createModal(subscriptionData = null) {
-    // Remove any existing modal
-    const old = document.getElementById('afinity-modal-overlay');
-    if (old) old.remove();
-
-    console.log("subscriptionData", subscriptionData);
-    // Use subscription data if available, otherwise use defaults
-    const date = subscriptionData ? new Date(subscriptionData.next_charge_scheduled_at).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    }): "N/A";
-    const price = subscriptionData ? `$${parseFloat(subscriptionData.price).toFixed(2)}` : '$3.99';
-
-    // Extract address data if available
-    if (subscriptionData && subscriptionData.include && subscriptionData.include.address) {
-      address1 = subscriptionData.include.address.address1 || '';
-      city = subscriptionData.include.address.city || '';
-      state = subscriptionData.include.address.province_code || subscriptionData.include.address.province || '';
-      zip = subscriptionData.include.address.zip || '';
-    }
-
-    // Extract fulfillment date, time, and method from order note attributes
-    if (subscriptionData?.order_attributes) {
-      const fulfillmentDateAttr = subscriptionData.order_attributes.find(attr => 
-        attr.name === 'Fulfillment Date' || 
-        attr.name === 'Delivery Date' ||
-        attr.name === 'delivery_date'
-      );
-      if (fulfillmentDateAttr) {
-        const fulfillmentDateTime = fulfillmentDateAttr.value; // "2025-07-03T20:15:00-07:00"
-        fulfillmentDate = fulfillmentDateTime.split('T')[0]; // "2025-07-03"
-        fulfillmentTime = fulfillmentDateTime.split('T')[1].split('-')[0]; // "20:15:00" -> "20:15"
-      }
-      
-      // Look for fulfillment method in order attributes
-      const fulfillmentMethodAttr = subscriptionData.order_attributes.find(attr => 
-        attr.name === '_fulfillmentMethod' || 
-        attr.name === 'fulfillmentMethod' || 
-        attr.name === 'Fulfillment Method' ||
-        attr.name === 'delivery_method'
-      );
-      if (fulfillmentMethodAttr) {
-        fulfillmentMethod = fulfillmentMethodAttr.value;
-      }
-    }
-
-    // Determine frequency text based on subscription data
-    const frequencyText = subscriptionData ? 
-      `${subscriptionData.order_interval_frequency} ${subscriptionData.order_interval_unit} subscription` : 
-      '1 week subscription';
-
-    // Modal HTML
-    const overlay = document.createElement('div');
-    overlay.className = 'afinity-modal-overlay';
-    overlay.id = 'afinity-modal-overlay';
-    overlay.innerHTML = `
-      <button class="afinity-modal-close" title="Close">&times;</button>
-      <div class="afinity-modal-header">
-        <span class="afinity-modal-date">${formatDeliveryDate(deliveryDate)} $${price}</span>
+  function renderMethodSection() {
+    // Determine method
+    let method = fulfillmentMethod || 'Delivery';
+    return `
+      <div class="afinity-modal-row">
+        <label for="afinity-method">Method</label>
+        <select id="afinity-method">
+          <option value="Delivery" ${method === 'Delivery' ? 'selected' : ''}>Delivery</option>
+          <option value="Pickup" ${method === 'Pickup' ? 'selected' : ''}>Pickup</option>
+        </select>
       </div>
-      <div class="afinity-modal-content">
-        <div class="afinity-modal-card-frequency">
-          <button class="afinity-modal-back">< Back</button>
-          <div class="afinity-modal-card-frequency-content">
-            <div class="afinity-modal-row-frequency">
-              <label class="afinity-modal-label" for="afinity-frequency">Frequency</label>
-              <select id="afinity-frequency">
-                <option ${subscriptionData?.order_interval_frequency === 2 ? 'selected' : ''}>2 week subscription with 10% discount</option>
-                <option ${subscriptionData?.order_interval_frequency === 1 ? 'selected' : ''}>1 week subscription with 10% discount</option>
-              </select>
-            </div>
-            <button class="afinity-modal-update-meals">Update meals</button>
-          </div>
-          <div class="afinity-modal-cart-list">
-            <div class="afinity-modal-cart-item">
-              <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=64&h=64" alt="Blueberry Maple Yogurt Parfait" />
-              <div>
-                <div class="afinity-modal-cart-title">Blueberry Maple Yogurt Parfait</div>
-                <div class="afinity-modal-cart-qty">x 1</div>
+      ${method === 'Pickup' ? `
+        <div class="afinity-modal-pickup-list">
+          ${PICKUP_LOCATIONS.map(loc => `
+            <label class="afinity-modal-pickup-item">
+              <div class="afinity-modal-pickup-meta">
+                <div class="afinity-modal-pickup-label">RETAIL LOCATION</div>
+                <div class="afinity-modal-pickup-name">${loc.name} ${loc.address}</div>
               </div>
-            </div>
-            <div class="afinity-modal-cart-item">
-              <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=64&h=64" alt="Monica's Breakfast Burrito" />
-              <div>
-                <div class="afinity-modal-cart-title">Monica's Breakfast Burrito</div>
-                <div class="afinity-modal-cart-qty">x 1</div>
+              <div class="afinity-modal-pickup-distance-container">
+                <div class="afinity-modal-pickup-distance">${loc.distance} mi</div>
+                <input type="radio" name="pickup-location" value="${loc.id}" ${selectedPickupLocationId === loc.id ? 'checked' : ''} />
               </div>
-            </div>
-          </div>
+            </label>
+          `).join('')}
         </div>
-        <div class="afinity-modal-card">
-          <div class="afinity-modal-card-title">Update Subscription Delivery or Pickup</div>
-          <div class="afinity-modal-row">
-            <label for="afinity-method">Method</label>
-            <select id="afinity-method">
-              <option value="Delivery" ${fulfillmentMethod === 'Delivery' ? 'selected' : ''}>Delivery</option>
-              <option value="Pickup" ${fulfillmentMethod === 'Pickup' ? 'selected' : ''}>Pickup</option>
-            </select>
-          </div>
-          <div class="afinity-modal-row">
-            <label for="afinity-address">Address</label>
-            <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${address1}" />
-          </div>
-          <div class="afinity-modal-row afinity-modal-address-row">
-            <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${city}" />
-            <select id="afinity-state" style="flex:1; margin-right:8px;">
-              ${US_STATES.map(s => `<option value="${s.code}" ${state === s.code || state === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
-            </select>
-            <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${zip}" />
-          </div>
+      ` : `
+        <div class="afinity-modal-row">
+          <label for="afinity-address">Address</label>
+          <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${address1}" />
         </div>
-        <div class="afinity-modal-card">
-          <div class="afinity-modal-card-title">Update Subscription Date</div>
-          <div class="afinity-modal-row">
-            <label for="afinity-date">Date</label>
-            <input id="afinity-date" type="date" value="${fulfillmentDate || deliveryDate}" />
-          </div>
-          <div class="afinity-modal-row">
-            <label for="afinity-time">Time</label>
-            <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
-          </div>
+        <div class="afinity-modal-row afinity-modal-address-row">
+          <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${city}" />
+          <select id="afinity-state" style="flex:1; margin-right:8px;">
+            ${US_STATES.map(s => `<option value="${s.code}" ${state === s.code || state === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
+          </select>
+          <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${zip}" />
         </div>
-        <div class="afinity-modal-card">
-          <a href="#" class="afinity-modal-add-extra">&#8853; <span>Add extra meal to order</span></a>
-        </div>
-        <div class="afinity-modal-card afinity-modal-footer-card">
-         
-          <div class="afinity-modal-footer-actions">
-            <div>
-              <a href="#" class="afinity-cancel-subscription">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M3 6h10M5 6v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V6m-7 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
-              Cancel subscription
-              </a>
-            </div>
-            <div>
-              <button class="afinity-modal-cancel-btn" type="button">Cancel</button>
-              <button class="afinity-modal-save-btn" type="button">Save Changes</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      `}
     `;
-    // Close logic
-    overlay.querySelector('.afinity-modal-close').onclick = () => overlay.remove();
-    overlay.querySelector('.afinity-modal-back').onclick = () => overlay.remove();
-    overlay.querySelector('.afinity-modal-cancel-btn').onclick = () => overlay.remove();
-    overlay.querySelector('.afinity-modal-save-btn').onclick = () => {
-      // TODO: Implement save logic
-      console.log('Save Changes clicked');
-    };
-    overlay.querySelector('.afinity-cancel-subscription').onclick = (e) => {
-      e.preventDefault();
-      // TODO: Implement cancel subscription logic
-      console.log('Cancel subscription clicked');
-    };
-    // Add click handler for add extra meal
-    overlay.querySelector('.afinity-modal-add-extra').onclick = (e) => {
-      e.preventDefault();
-      // TODO: Implement add extra meal logic
-      console.log('Add extra meal clicked');
-    };
-    document.body.appendChild(overlay);
-    // Animate in (already handled by CSS)
   }
 
   function renderModal() {
@@ -363,6 +276,7 @@
     const contentRoot = modalOverlay.querySelector('#afinity-modal-content-root');
     contentRoot.innerHTML = renderModalContent();
     attachModalEvents();
+    attachMethodSectionEvents();
   }
 
   function renderModalContent() {
@@ -376,10 +290,13 @@
 
   function renderMainPage() {
     console.log('renderMainPage - address values:', { address1, city, state, zip });
+    const currentDeliveryDate = getDeliveryDateFromSubscription();
+    // Determine method
+    let method = fulfillmentMethod || 'Delivery';
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(deliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
+        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
       </div>
       <div class="afinity-modal-content">
         <div class="afinity-modal-card-frequency">
@@ -408,30 +325,15 @@
         </div>
         <div class="afinity-modal-card">
           <div class="afinity-modal-card-title">Update Subscription Delivery or Pickup</div>
-          <div class="afinity-modal-row">
-            <label for="afinity-method">Method</label>
-            <select id="afinity-method">
-              <option>Delivery</option>
-              <option>Pickup</option>
-            </select>
-          </div>
-          <div class="afinity-modal-row">
-            <label for="afinity-address">Address</label>
-            <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${address1}" />
-          </div>
-          <div class="afinity-modal-row afinity-modal-address-row">
-            <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${city}" />
-            <select id="afinity-state" style="flex:1; margin-right:8px;">
-              ${US_STATES.map(s => `<option value="${s.code}" ${state === s.code || state === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
-            </select>
-            <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${zip}" />
+          <div id="afinity-method-section">
+            ${renderMethodSection()}
           </div>
         </div>
         <div class="afinity-modal-card">
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date">Date</label>
-            <input id="afinity-date" type="date" value="${fulfillmentDate || deliveryDate}" />
+            <input id="afinity-date" type="date" value="${currentDeliveryDate}" />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time">Time</label>
@@ -460,10 +362,11 @@
   }
 
   function renderMealsPage() {
+    const currentDeliveryDate = getDeliveryDateFromSubscription();
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date">${formatDeliveryDate(deliveryDate)} $${price}</span>
+        <span class="afinity-modal-date">${formatDeliveryDate(currentDeliveryDate)} $${price}</span>
       </div>
       <div class="afinity-modal-card afinity-meals-header-card">
         <button class="afinity-modal-back">< Back</button>
@@ -471,7 +374,7 @@
           <h2 class="afinity-meals-title">Update Subscription Meals</h2>
           <div class="afinity-meals-date-select">
             <label>Delivery Date</label>
-            <input id="afinity-meals-date" type="date" value="${deliveryDate}" />
+            <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" />
           </div>
           <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
         </div>
@@ -620,6 +523,34 @@
     };
   }
 
+  function attachMethodSectionEvents() {
+    const methodSelect = modalOverlay.querySelector('#afinity-method');
+    if (methodSelect) {
+      methodSelect.onchange = (e) => {
+        fulfillmentMethod = e.target.value;
+        // Only re-render the method section
+        const section = modalOverlay.querySelector('#afinity-method-section');
+        if (section) {
+          section.innerHTML = renderMethodSection();
+          attachMethodSectionEvents();
+        }
+      };
+    }
+    // Listen for pickup location change
+    const pickupRadios = modalOverlay.querySelectorAll('input[name="pickup-location"]');
+    pickupRadios.forEach(radio => {
+      radio.onchange = (e) => {
+        selectedPickupLocationId = parseInt(e.target.value);
+        // Only re-render the method section
+        const section = modalOverlay.querySelector('#afinity-method-section');
+        if (section) {
+          section.innerHTML = renderMethodSection();
+          attachMethodSectionEvents();
+        }
+      };
+    });
+  }
+
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
@@ -634,7 +565,7 @@
         .then(data => {
           console.log('Subscription data:', data);
           const payload = data.data;
-          
+          currentSubscription = payload
           const address = payload.include.address;
           // Extract data from API response
           address1 = address.address1 || '';
@@ -647,10 +578,7 @@
           // Extract fulfillment date, time, and method from order attributes
           if (payload?.include?.address?.order_attributes) {
             const fulfillmentDateAttr = payload.include.address.order_attributes.find(attr => 
-              attr.name === 'Fulfillment Date' || 
-              attr.name === 'Delivery Date' ||
-              attr.name === 'delivery_date' ||
-              attr.name === '_selectedFulfillmentDate'
+              attr.name === 'Fulfillment Date' 
             );
             if (fulfillmentDateAttr) {
               const fulfillmentDateTime = fulfillmentDateAttr.value;
@@ -674,9 +602,8 @@
           }
           
           // Update delivery date and price from subscription data
-          if (payload.next_charge_scheduled_at) {
-            deliveryDate = payload.next_charge_scheduled_at.split('T')[0];
-          }
+          // Use fulfillment date from order attributes as delivery date
+          deliveryDate = getDeliveryDateFromSubscription();
           if (payload.price) {
             price = parseFloat(payload.price).toFixed(2);
           }
