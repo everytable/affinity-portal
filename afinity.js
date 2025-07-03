@@ -428,7 +428,6 @@
           <div class="afinity-modal-footer-actions">
             <div>
               <a href="#" class="afinity-cancel-subscription">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M3 6h10M5 6v7a2 2 0 0 0 2 2h2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
                 Cancel subscription
               </a>
             </div>
