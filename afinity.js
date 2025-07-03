@@ -258,13 +258,17 @@
   }
 
   function renderModal() {
-    // Remove any existing modal
-    if (modalOverlay) modalOverlay.remove();
-    modalOverlay = document.createElement('div');
-    modalOverlay.className = 'afinity-modal-overlay';
-    modalOverlay.id = 'afinity-modal-overlay';
-    modalOverlay.innerHTML = renderModalContent();
-    document.body.appendChild(modalOverlay);
+    // Create overlay if not present
+    if (!modalOverlay) {
+      modalOverlay = document.createElement('div');
+      modalOverlay.className = 'afinity-modal-overlay';
+      modalOverlay.id = 'afinity-modal-overlay';
+      modalOverlay.innerHTML = '<div id="afinity-modal-content-root"></div>';
+      document.body.appendChild(modalOverlay);
+    }
+    // Only update the content root
+    const contentRoot = modalOverlay.querySelector('#afinity-modal-content-root');
+    contentRoot.innerHTML = renderModalContent();
     attachModalEvents();
   }
 
@@ -278,7 +282,6 @@
   }
 
   function renderMainPage() {
-    // ...existing main modal content, but replace 'Add extra meal to order' with a link that sets currentPage = 'meals' and re-renders...
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
@@ -295,7 +298,7 @@
                 <option>1 week subscription</option>
               </select>
             </div>
-            <button class="afinity-modal-update-meals">Edit contents</button>
+            <button class="afinity-modal-update-meals">Update Meals</button>
           </div>
           <div class="afinity-modal-cart-list">
             ${selectedMeals.filter(m=>m.qty>0).map(meal => `
@@ -365,6 +368,10 @@
 
   function renderMealsPage() {
     return `
+      <button class="afinity-modal-close" title="Close">&times;</button>
+      <div class="afinity-modal-header">
+        <span class="afinity-modal-date">Subscription Details</span>
+      </div>
       <div class="afinity-modal-card afinity-meals-header-card">
         <button class="afinity-modal-back">&lt; Back</button>
         <div class="afinity-meals-title-group">
@@ -454,7 +461,7 @@
 
   function attachModalEvents() {
     // Close modal
-    modalOverlay.querySelector('.afinity-modal-close').onclick = () => modalOverlay.remove();
+    modalOverlay.querySelector('.afinity-modal-close').onclick = () => modalOverlay.style.display = 'none';
     // Back button
     const backBtn = modalOverlay.querySelector('.afinity-modal-back');
     if (backBtn) backBtn.onclick = () => {
@@ -462,7 +469,7 @@
         currentPage = 'main';
         renderModal(); // force rerender to main page
       } else {
-        modalOverlay.remove();
+        modalOverlay.style.display = 'none';
       }
     };
     // Edit contents or add extra meal
@@ -479,11 +486,11 @@
     };
     // Cancel/Save/Cancel subscription
     const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
-    if (cancelBtn) cancelBtn.onclick = () => modalOverlay.remove();
+    if (cancelBtn) cancelBtn.onclick = () => modalOverlay.style.display = 'none';
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
     if (saveBtn) saveBtn.onclick = () => {
       // TODO: Save logic
-      modalOverlay.remove();
+      modalOverlay.style.display = 'none';
     };
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
@@ -524,6 +531,9 @@
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
     currentPage = 'main';
+    if (modalOverlay) {
+      modalOverlay.style.display = '';
+    }
     renderModal();
   });
 })(); 
