@@ -14,9 +14,7 @@
   <h2>Test: Fire Recharge::click::manageSubscription Event</h2>
   <button id="test-btn">Fire Event</button>
   <script>
-    document.getElementById('test-btn').onclick = function() {
-      // Create custom event with detail
-      const event = new CustomEvent('Recharge::click::manageSubscription', {
+     const event = new CustomEvent('Recharge::click::manageSubscription', {
         bubbles: true,
         cancelable: true,
         detail: {
@@ -26,7 +24,6 @@
         }
       });
       document.dispatchEvent(event);
-    };
   </script>
 </body>
 </html>

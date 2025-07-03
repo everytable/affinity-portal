@@ -443,7 +443,13 @@
           <h3>Current Meals in Subscription</h3>
           <ul class="afinity-meals-sidebar-list">
             ${selectedMeals.filter(m=>m.qty>0).map(meal => `
-              <li><img src="${meal.img}" alt="${meal.title}" /> ${meal.title} <span>x ${meal.qty}</span></li>
+              <li>
+                <img src="${meal.img}" alt="${meal.title}" />
+                <div>
+                  <div class="afinity-meals-sidebar-title">${meal.title}</div>
+                  <div class="afinity-meals-sidebar-qty">x ${meal.qty}</div>
+                </div>
+              </li>
             `).join('')}
           </ul>
           <div class="afinity-meals-sidebar-title">New meals to your Subscription</div>

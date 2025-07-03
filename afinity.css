@@ -647,7 +647,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 16px;
+  font-size: 10px;
   color: #222;
 }
 .afinity-meals-sidebar-list img {
@@ -704,10 +704,13 @@
 }
 .afinity-meals-sidebar-title {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
-  color: #005a57;
   margin: 1.5rem 0 0.5rem 0;
+}
+.afinity-meals-sidebar-qty{
+  font-size: 13px;
+  font-weight: 400;
 }
 .afinity-meals-swap-btn {
   display: flex;
