@@ -27,16 +27,18 @@
         <span class="afinity-modal-desc">1 x Pollo Asado with Seasoned Rice</span>
       </div>
       <div class="afinity-modal-content">
-        <div class="afinity-modal-card">
+        <div class="afinity-modal-card-frequency">
           <button class="afinity-modal-back">&#8592; Back</button>
-          <div class="afinity-modal-row">
-            <label for="afinity-frequency">Frequency</label>
-            <select id="afinity-frequency">
-              <option>2 week subscription with 10% discount</option>
-              <option>1 week subscription</option>
-            </select>
+          <div class="afinity-modal-card-frequency-content">
+            <div class="afinity-modal-row">
+              <label for="afinity-frequency">Frequency</label>
+              <select id="afinity-frequency">
+                <option>2 week subscription with 10% discount</option>
+                <option>1 week subscription</option>
+              </select>
+            </div>
+            <button class="afinity-modal-update-meals">Update meals</button>
           </div>
-          <button class="afinity-modal-update-meals">Update meals</button>
           <div class="afinity-modal-cart-list">
             <div class="afinity-modal-cart-item">
               <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=64&h=64" alt="Blueberry Maple Yogurt Parfait" />
