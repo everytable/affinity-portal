@@ -39,9 +39,128 @@
       price: 6.7,
       img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
       qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
+    },
+    {
+      id: 3,
+      title: 'Backyard BBQ Chicken Salad',
+      price: 6.7,
+      img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400',
+      qty: 0
     }
   ];
   let selectedMeals = [...MEALS];
+
+  // Add global US states array
+  const US_STATES = [
+    { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' }, { code: 'AR', name: 'Arkansas' },
+    { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' }, { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' },
+    { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' }, { code: 'ID', name: 'Idaho' },
+    { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' }, { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' },
+    { code: 'KY', name: 'Kentucky' }, { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' },
+    { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' }, { code: 'MS', name: 'Mississippi' },
+    { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' }, { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' },
+    { code: 'NH', name: 'New Hampshire' }, { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' },
+    { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' }, { code: 'OK', name: 'Oklahoma' },
+    { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' }, { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' },
+    { code: 'SD', name: 'South Dakota' }, { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' },
+    { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' }, { code: 'WV', name: 'West Virginia' },
+    { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' }
+  ];
+
+  // Address state
+  let address1 = '';
+  let city = '';
+  let state = '';
+  let zip = '';
+  
+  // Fulfillment state
+  let fulfillmentDate = '';
+  let fulfillmentTime = '';
+  let fulfillmentMethod = '';
 
   // Helper to format delivery date
   function formatDeliveryDate(dateStr) {
@@ -73,19 +192,20 @@
     const price = subscriptionData ? `$${parseFloat(subscriptionData.price).toFixed(2)}` : '$3.99';
 
     // Extract address data if available
-    const address = subscriptionData?.include?.address;
-    const address1 = address?.address1 || '';
-    const city = address?.city || '';
-    const state = address?.province || '';
-    const zip = address?.zip || '';
+    if (subscriptionData && subscriptionData.include && subscriptionData.include.address) {
+      address1 = subscriptionData.include.address.address1 || '';
+      city = subscriptionData.include.address.city || '';
+      state = subscriptionData.include.address.province_code || subscriptionData.include.address.province || '';
+      zip = subscriptionData.include.address.zip || '';
+    }
 
-    // Extract fulfillment date, time, and method from order attributes
-    let fulfillmentDate = '';
-    let fulfillmentTime = '';
-    let fulfillmentMethod = ''; // Default to delivery
-    
-    if (address?.order_attributes) {
-      const fulfillmentDateAttr = address.order_attributes.find(attr => attr.name === 'Fulfillment Date');
+    // Extract fulfillment date, time, and method from order note attributes
+    if (subscriptionData?.order_attributes) {
+      const fulfillmentDateAttr = subscriptionData.order_attributes.find(attr => 
+        attr.name === 'Fulfillment Date' || 
+        attr.name === 'Delivery Date' ||
+        attr.name === 'delivery_date'
+      );
       if (fulfillmentDateAttr) {
         const fulfillmentDateTime = fulfillmentDateAttr.value; // "2025-07-03T20:15:00-07:00"
         fulfillmentDate = fulfillmentDateTime.split('T')[0]; // "2025-07-03"
@@ -93,10 +213,11 @@
       }
       
       // Look for fulfillment method in order attributes
-      const fulfillmentMethodAttr = address.order_attributes.find(attr => 
+      const fulfillmentMethodAttr = subscriptionData.order_attributes.find(attr => 
         attr.name === '_fulfillmentMethod' || 
         attr.name === 'fulfillmentMethod' || 
-        attr.name === 'Fulfillment Method'
+        attr.name === 'Fulfillment Method' ||
+        attr.name === 'delivery_method'
       );
       if (fulfillmentMethodAttr) {
         fulfillmentMethod = fulfillmentMethodAttr.value;
@@ -163,56 +284,7 @@
           <div class="afinity-modal-row afinity-modal-address-row">
             <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${city}" />
             <select id="afinity-state" style="flex:1; margin-right:8px;">
-              <option value="AL" ${state === 'Alabama' ? 'selected' : ''}>AL</option>
-              <option value="AK" ${state === 'Alaska' ? 'selected' : ''}>AK</option>
-              <option value="AZ" ${state === 'Arizona' ? 'selected' : ''}>AZ</option>
-              <option value="AR" ${state === 'Arkansas' ? 'selected' : ''}>AR</option>
-              <option value="CA" ${state === 'California' ? 'selected' : ''}>CA</option>
-              <option value="CO" ${state === 'Colorado' ? 'selected' : ''}>CO</option>
-              <option value="CT" ${state === 'Connecticut' ? 'selected' : ''}>CT</option>
-              <option value="DE" ${state === 'Delaware' ? 'selected' : ''}>DE</option>
-              <option value="FL" ${state === 'Florida' ? 'selected' : ''}>FL</option>
-              <option value="GA" ${state === 'Georgia' ? 'selected' : ''}>GA</option>
-              <option value="HI" ${state === 'Hawaii' ? 'selected' : ''}>HI</option>
-              <option value="ID" ${state === 'Idaho' ? 'selected' : ''}>ID</option>
-              <option value="IL" ${state === 'Illinois' ? 'selected' : ''}>IL</option>
-              <option value="IN" ${state === 'Indiana' ? 'selected' : ''}>IN</option>
-              <option value="IA" ${state === 'Iowa' ? 'selected' : ''}>IA</option>
-              <option value="KS" ${state === 'Kansas' ? 'selected' : ''}>KS</option>
-              <option value="KY" ${state === 'Kentucky' ? 'selected' : ''}>KY</option>
-              <option value="LA" ${state === 'Louisiana' ? 'selected' : ''}>LA</option>
-              <option value="ME" ${state === 'Maine' ? 'selected' : ''}>ME</option>
-              <option value="MD" ${state === 'Maryland' ? 'selected' : ''}>MD</option>
-              <option value="MA" ${state === 'Massachusetts' ? 'selected' : ''}>MA</option>
-              <option value="MI" ${state === 'Michigan' ? 'selected' : ''}>MI</option>
-              <option value="MN" ${state === 'Minnesota' ? 'selected' : ''}>MN</option>
-              <option value="MS" ${state === 'Mississippi' ? 'selected' : ''}>MS</option>
-              <option value="MO" ${state === 'Missouri' ? 'selected' : ''}>MO</option>
-              <option value="MT" ${state === 'Montana' ? 'selected' : ''}>MT</option>
-              <option value="NE" ${state === 'Nebraska' ? 'selected' : ''}>NE</option>
-              <option value="NV" ${state === 'Nevada' ? 'selected' : ''}>NV</option>
-              <option value="NH" ${state === 'New Hampshire' ? 'selected' : ''}>NH</option>
-              <option value="NJ" ${state === 'New Jersey' ? 'selected' : ''}>NJ</option>
-              <option value="NM" ${state === 'New Mexico' ? 'selected' : ''}>NM</option>
-              <option value="NY" ${state === 'New York' ? 'selected' : ''}>NY</option>
-              <option value="NC" ${state === 'North Carolina' ? 'selected' : ''}>NC</option>
-              <option value="ND" ${state === 'North Dakota' ? 'selected' : ''}>ND</option>
-              <option value="OH" ${state === 'Ohio' ? 'selected' : ''}>OH</option>
-              <option value="OK" ${state === 'Oklahoma' ? 'selected' : ''}>OK</option>
-              <option value="OR" ${state === 'Oregon' ? 'selected' : ''}>OR</option>
-              <option value="PA" ${state === 'Pennsylvania' ? 'selected' : ''}>PA</option>
-              <option value="RI" ${state === 'Rhode Island' ? 'selected' : ''}>RI</option>
-              <option value="SC" ${state === 'South Carolina' ? 'selected' : ''}>SC</option>
-              <option value="SD" ${state === 'South Dakota' ? 'selected' : ''}>SD</option>
-              <option value="TN" ${state === 'Tennessee' ? 'selected' : ''}>TN</option>
-              <option value="TX" ${state === 'Texas' ? 'selected' : ''}>TX</option>
-              <option value="UT" ${state === 'Utah' ? 'selected' : ''}>UT</option>
-              <option value="VT" ${state === 'Vermont' ? 'selected' : ''}>VT</option>
-              <option value="VA" ${state === 'Virginia' ? 'selected' : ''}>VA</option>
-              <option value="WA" ${state === 'Washington' ? 'selected' : ''}>WA</option>
-              <option value="WV" ${state === 'West Virginia' ? 'selected' : ''}>WV</option>
-              <option value="WI" ${state === 'Wisconsin' ? 'selected' : ''}>WI</option>
-              <option value="WY" ${state === 'Wyoming' ? 'selected' : ''}>WY</option>
+              ${US_STATES.map(s => `<option value="${s.code}" ${state === s.code || state === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
             </select>
             <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${zip}" />
           </div>
@@ -221,11 +293,11 @@
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date">Date</label>
-            <input id="afinity-date" type="date" value="${deliveryDate}" />
+            <input id="afinity-date" type="date" value="${fulfillmentDate || deliveryDate}" />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time">Time</label>
-            <input id="afinity-time" type="time" value="${fulfillmentTime}" />
+            <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
           </div>
         </div>
         <div class="afinity-modal-card">
@@ -296,6 +368,7 @@
   }
 
   function renderMainPage() {
+    console.log('renderMainPage - address values:', { address1, city, state, zip });
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
@@ -306,7 +379,7 @@
           <button class="afinity-modal-back">< Back</button>
           <div class="afinity-modal-card-frequency-content">
             <div class="afinity-modal-row-frequency">
-              <label for="afinity-frequency">Frequency</label>
+              <label class="afinity-modal-label-frequency" for="afinity-frequency">Frequency</label>
               <select id="afinity-frequency">
                 <option>2 week subscription with 10% discount</option>
                 <option>1 week subscription</option>
@@ -337,26 +410,25 @@
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-address">Address</label>
-            <input id="afinity-address" type="text" placeholder="12345 Street Dr." />
+            <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${address1}" />
           </div>
           <div class="afinity-modal-row afinity-modal-address-row">
-            <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" />
+            <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${city}" />
             <select id="afinity-state" style="flex:1; margin-right:8px;">
-              <option>CA</option>
-              <option>NY</option>
+              ${US_STATES.map(s => `<option value="${s.code}" ${state === s.code || state === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
             </select>
-            <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" />
+            <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${zip}" />
           </div>
         </div>
         <div class="afinity-modal-card">
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date">Date</label>
-            <input id="afinity-date" type="date" value="${deliveryDate}" />
+            <input id="afinity-date" type="date" value="${fulfillmentDate || deliveryDate}" />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time">Time</label>
-            <input id="afinity-time" type="time" value="15:30" />
+            <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
           </div>
         </div>
         <div class="afinity-modal-card">
@@ -366,7 +438,7 @@
           <div class="afinity-modal-footer-actions">
             <div>
               <a href="#" class="afinity-cancel-subscription">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M3 6h10M5 6v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V6m-7 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M3 6h10M5 6v7a2 2 0 0 0 2 2h2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>
                 Cancel subscription
               </a>
             </div>
@@ -544,10 +616,90 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
-    currentPage = 'main';
-    if (modalOverlay) {
-      modalOverlay.style.display = '';
+    
+    // Get subscription ID from the event
+    const subscriptionId = event.detail?.payload?.subscriptionId || event.detail?.subscription_id || event.target?.getAttribute('data-subscription-id');
+    
+    if (subscriptionId) {
+      // Fetch subscription data from API
+      fetch(`${API_URL}/subscription/${subscriptionId}`)
+        .then(response => response.json())
+        .then(data => {
+          console.log('Subscription data:', data);
+          
+          // Extract data from API response
+          if (data && data.include && data.include.address) {
+            address1 = data.include.address.address1 || '';
+            city = data.include.address.city || '';
+            state = data.include.address.province || '';
+            zip = data.include.address.zip || '';
+            
+            console.log('Extracted address data:', { address1, city, state, zip });
+          }
+          
+          // Extract fulfillment date, time, and method from order attributes
+          if (data?.include?.address?.order_attributes) {
+            const fulfillmentDateAttr = data.include.address.order_attributes.find(attr => 
+              attr.name === 'Fulfillment Date' || 
+              attr.name === 'Delivery Date' ||
+              attr.name === 'delivery_date' ||
+              attr.name === '_selectedFulfillmentDate'
+            );
+            if (fulfillmentDateAttr) {
+              const fulfillmentDateTime = fulfillmentDateAttr.value;
+              if (fulfillmentDateTime.includes('T')) {
+                // Format: "2025-07-03T20:15:00-07:00"
+                fulfillmentDate = fulfillmentDateTime.split('T')[0];
+                fulfillmentTime = fulfillmentDateTime.split('T')[1].split('-')[0];
+              } else {
+                // Format: "2025-07-03"
+                fulfillmentDate = fulfillmentDateTime;
+                fulfillmentTime = '15:30'; // Default time
+              }
+            }
+            
+            const fulfillmentMethodAttr = data.include.address.order_attributes.find(attr => 
+              attr.name === '_fulfillmentMethod' || 
+              attr.name === 'fulfillmentMethod' || 
+              attr.name === 'Fulfillment Method' ||
+              attr.name === 'delivery_method' ||
+              attr.name === 'Fulfillment Type'
+            );
+            if (fulfillmentMethodAttr) {
+              fulfillmentMethod = fulfillmentMethodAttr.value;
+            }
+          }
+          
+          // Update delivery date and price from subscription data
+          if (data.next_charge_scheduled_at) {
+            deliveryDate = data.next_charge_scheduled_at.split('T')[0];
+          }
+          if (data.price) {
+            price = parseFloat(data.price).toFixed(2);
+          }
+          
+          currentPage = 'main';
+          if (modalOverlay) {
+            modalOverlay.style.display = '';
+          }
+          renderModal();
+        })
+        .catch(error => {
+          console.error('Error fetching subscription data:', error);
+          // Fallback to default modal if API fails
+          currentPage = 'main';
+          if (modalOverlay) {
+            modalOverlay.style.display = '';
+          }
+          renderModal();
+        });
+    } else {
+      // Fallback if no subscription ID
+      currentPage = 'main';
+      if (modalOverlay) {
+        modalOverlay.style.display = '';
+      }
+      renderModal();
     }
-    renderModal();
   });
 })(); 

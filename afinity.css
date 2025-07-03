@@ -208,6 +208,12 @@
   color: #474E4E;
 }
 
+.afinity-modal-label-frequency{
+  font-size: 18px;
+  font-weight: 500;
+  color: #3f3f3f;
+  margin-bottom: 10px;
+}
 .afinity-modal-price{
   font-size: 18px;
   font-weight: 500;
@@ -266,7 +272,10 @@
 }
 .afinity-modal-row-frequency select {
   flex: 1;
-  padding: 8px 10px;
+  padding: 9px 30px 9px 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #3f3f3f;
 }
 .afinity-modal-update-meals {
   margin: 0 0 0 12px;
@@ -362,6 +371,7 @@
   }
   .afinity-modal-row-frequency-inner {
     flex-direction: row;
+    margin-bottom: 10px;
   }
   .afinity-modal-card-frequency-content label {
     margin-bottom: 2px;
@@ -483,7 +493,8 @@
   background: #fafaf6;
   border-radius: 0 0 8px 8px;
   padding: 2rem;
-  max-width: 90vw;
+  margin: 32px auto 0 auto;
+  max-width: 1000px;
 }
 .afinity-meals-main {
   min-width: 0;
@@ -497,7 +508,7 @@
 }
 .afinity-meals-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 1.5rem;
 }
 .afinity-meal-card {
@@ -626,7 +637,7 @@
   align-items: flex-start;
   gap: 2rem;
   padding: 1.5rem 2rem 1rem 2rem;
-  max-width: 90vw;
+  max-width: 1000px;
 }
 .afinity-meals-desc {
   font-size: 1rem;
