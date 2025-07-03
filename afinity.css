@@ -131,7 +131,6 @@
 .afinity-modal-card {
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   width: 90vw;
   max-width: 1264px;
   margin: auto 20px auto 19px;
@@ -533,7 +532,6 @@
 }
 .afinity-meals-layout {
   border-radius: 8px 8px 8px 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   margin-bottom: 2rem;
   display: flex;
   gap: 2rem;
@@ -686,7 +684,6 @@
 .afinity-meals-header-card {
   background: #fff;
   border-radius: 8px 8px 8px 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   margin-bottom: 2rem;
   display: flex;
   align-items: flex-start;
