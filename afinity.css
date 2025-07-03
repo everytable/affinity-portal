@@ -956,7 +956,7 @@
   pointer-events: all;
 }
 .afinity-modal-loading-spinner {
-  display:block;
+  display:block !important;
   width: 48px;
   height: 48px;
   border: 5px solid #e0e0e0;
