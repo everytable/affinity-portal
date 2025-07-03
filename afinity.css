@@ -201,6 +201,21 @@
   align-self: flex-start;
   transition: text-decoration 0.2s;
 }
+
+.afinity-modal-date-label{
+  font-size: 18px;
+  font-weight: 500;
+  color: #474E4E;
+}
+
+.afinity-modal-price{
+  font-size: 18px;
+  font-weight: 500;
+  color: #505050;
+  margin-left: 10px;
+  color: #474E4E;
+
+}
 .afinity-modal-back:hover {
   text-decoration: none;
 }

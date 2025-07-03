@@ -43,6 +43,20 @@
   ];
   let selectedMeals = [...MEALS];
 
+  // Helper to format delivery date
+  function formatDeliveryDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }
+  // Optionally, set a price variable if you want to show price
+  let price = '3.99'; // Replace with real price if available
+
   function createModal(subscriptionData = null) {
     // Remove any existing modal
     const old = document.getElementById('afinity-modal-overlay');
@@ -101,11 +115,11 @@
     overlay.innerHTML = `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date">${date} ${price}</span>
+        <span class="afinity-modal-date">${formatDeliveryDate(deliveryDate)} $${price}</span>
       </div>
       <div class="afinity-modal-content">
         <div class="afinity-modal-card-frequency">
-          <button class="afinity-modal-back">&#8592; Back</button>
+          <button class="afinity-modal-back">< Back</button>
           <div class="afinity-modal-card-frequency-content">
             <div class="afinity-modal-row-frequency">
               <label class="afinity-modal-label" for="afinity-frequency">Frequency</label>
@@ -285,11 +299,11 @@
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date">Subscription Details</span>
+        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(deliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
       </div>
       <div class="afinity-modal-content">
         <div class="afinity-modal-card-frequency">
-          <button class="afinity-modal-back">&#8592; Back</button>
+          <button class="afinity-modal-back">< Back</button>
           <div class="afinity-modal-card-frequency-content">
             <div class="afinity-modal-row-frequency">
               <label for="afinity-frequency">Frequency</label>
@@ -370,10 +384,10 @@
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date">Subscription Details</span>
+        <span class="afinity-modal-date">${formatDeliveryDate(deliveryDate)} $${price}</span>
       </div>
       <div class="afinity-modal-card afinity-meals-header-card">
-        <button class="afinity-modal-back">&lt; Back</button>
+        <button class="afinity-modal-back">< Back</button>
         <div class="afinity-meals-title-group">
           <h2 class="afinity-meals-title">Update Subscription Meals</h2>
           <div class="afinity-meals-date-select">
