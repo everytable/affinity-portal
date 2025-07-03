@@ -42,6 +42,7 @@
   let selectedMeals = [...MEALS];
   let originalSubscriptionMeals = [];
   let currentCatalogPayload = null;
+  let currentCatalogVariants = null;
 
   // Add a new catalog for Cold Meals (use a subset or different items)
   const COLD_MEALS = [
@@ -151,7 +152,6 @@
       ]);
     } finally {
       modalLoading = false;
-      hideModalLoading();
     }
   }
 
@@ -372,15 +372,33 @@
             <button class="afinity-modal-update-meals">Update Meals</button>
           </div>
           <div class="afinity-modal-cart-list">
-            ${selectedMeals.filter(m=>m.qty>0).map(meal => `
-              <div class="afinity-modal-cart-item">
-                <img src="${meal.img}" alt="${meal.title}" />
-                <div>
-                  <div class="afinity-modal-cart-title">${meal.title}</div>
-                  <div class="afinity-modal-cart-qty">x ${meal.qty}</div>
-                </div>
-              </div>
-            `).join('')}
+            ${
+              (currentCatalogVariants && currentCatalogVariants.variants &&
+               currentSubscription && currentSubscription.include &&
+               currentSubscription.include.bundle_selections &&
+               Array.isArray(currentSubscription.include.bundle_selections.items))
+                ? currentSubscription.include.bundle_selections.items.map(item => {
+                    const variant = getVariantById(item.external_variant_id);
+                    if (!variant) return '';
+                    const img =
+                      (variant?.product?.featuredMedia?.preview?.image?.url) ||
+                      (variant?.product?.featuredMedia?.preview?.url) ||
+                      (variant?.image?.url) ||
+                      MEAL_IMAGE;
+                    const title = variant ? (variant.product?.title || variant.sku || 'Meal') : (item.title || item.external_variant_id);
+                    const qty = item.quantity || 1;
+                    return `
+                      <div class="afinity-modal-cart-item">
+                        <img src="${img}" alt="${title}" />
+                        <div>
+                          <div class="afinity-modal-cart-title">${title}</div>
+                          <div class="afinity-modal-cart-qty">x ${qty}</div>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')
+                : ''
+            }
           </div>
         </div>
         <div class="afinity-modal-card">
@@ -425,6 +443,7 @@
   }
 
   function renderMealsPage() {
+    const catalogVariants = getCatalogVariants();
     const currentDeliveryDate = getDeliveryDateFromSubscription();
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
@@ -450,11 +469,11 @@
           <div class="afinity-meals-main">
             <h2 class="afinity-meals-section-title">Hot Meals</h2>
             <ul class="afinity-meals-grid">
-              ${MEALS.slice(0, 3).map(meal => renderMealCard(meal)).join('')}
+              ${catalogVariants.slice(0, 3).map(variant => renderMealCard(variant)).join('')}
             </ul>
             <h2 class="afinity-meals-section-title" style="margin-top:2rem;">Cold Meals</h2>
             <ul class="afinity-meals-grid">
-              ${COLD_MEALS.slice(0, 3).map(meal => renderMealCard(meal)).join('')}
+              ${catalogVariants.slice(3, 6).map(variant => renderMealCard(variant)).join('')}
             </ul>
           </div>
           <div class="afinity-modal-card afinity-meals-sidebar">
@@ -511,8 +530,34 @@
     `;
   }
 
-  // Helper to render a meal card (reuse for both catalogs)
-  function renderMealCard(meal) {
+  // Add helper to get image for a variant
+  function getVariantImageByCatalog(variant, catalogId) {
+    console.log("🔍 [getVariantImageByCatalog] variant:", variant);
+    console.log("🔍 [getVariantImageByCatalog] catalogId:", catalogId);
+    if (variant.metafield && String(variant.metafield.value) === String(catalogId)) {
+      return (
+        variant.product?.featuredMedia?.preview?.image?.url ||
+        variant.product?.featuredMedia?.preview?.url ||
+        variant.image?.url ||
+        MEAL_IMAGE
+      );
+    }
+    return MEAL_IMAGE;
+  }
+
+  // Helper to get all catalog variants for the current catalog
+  function getCatalogVariants() {
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || !currentCatalogPayload) return [];
+    return currentCatalogVariants.variants.filter(
+      v => v.metafield && String(v.metafield.value) === String(currentCatalogPayload.catalogId)
+    );
+  }
+
+  // Update renderMealCard to use variant data
+  function renderMealCard(variant) {
+    const img = getVariantImageByCatalog(variant, currentCatalogPayload.catalogId);
+    const title = variant.product?.title || variant.sku || 'Meal';
+    const price = variant.price?.amount ? parseFloat(variant.price.amount) : 0;
     return `
       <li class="afinity-r-meals-grid__item" style="display: block;"
         data-product-start-date="2025-01-01"
@@ -520,16 +565,16 @@
         data-is-first-variant="true"
       >
         <div class="afinity-r-card" 
-          data-variant-id="${meal.id}"
+          data-variant-id="${variant.id}"
           data-collection-id="1"
-          data-product-id="${meal.id}"
+          data-product-id="${variant.id}"
           data-catalog-id="demo-catalog-id"
           data-selling-plan-groups="[]">
           <div class="afinity-r-card__container">
             <div class="afinity-r-card__image-link">
               <img
-                src="${meal.img}"
-                alt="${meal.title}"
+                src="${img}"
+                alt="${title}"
                 class="afinity-r-card__image"
                 loading="lazy"
                 width="220"
@@ -539,24 +584,24 @@
             <div class="afinity-r-card__details">
               <h3 class="afinity-r-card__title">
                 <span class="afinity-r-card__title-link">
-                  ${meal.title}
+                  ${title}
                 </span>
               </h3>
               <div class="afinity-r-card__footer">
-                <div class="price__container price-block" data-variant-id="${meal.id}">
-                  <span class="afinity-r-card__price--discount price-item--regular" data-variant-id="${meal.id}">
-                    $${meal.price.toFixed(2)}
+                <div class="price__container price-block" data-variant-id="${variant.id}">
+                  <span class="afinity-r-card__price--discount price-item--regular" data-variant-id="${variant.id}">
+                    $${price.toFixed(2)}
                   </span>
                 </div>
-                <div class="price-action-wrapper" data-variant-id="${meal.id}">
-                  ${selectedMeals.find(m=>m.id===meal.id&&m.qty>0) ? `
-                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart afinity-r-card__remove-btn" type="button" data-meal-id="${meal.id}" style="background:#c0392b;">
+                <div class="price-action-wrapper" data-variant-id="${variant.id}">
+                  ${selectedMeals.find(m=>m.id===variant.id&&m.qty>0) ? `
+                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart afinity-r-card__remove-btn" type="button" data-meal-id="${variant.id}" style="background:#c0392b;">
                       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
                       </svg>
                     </button>
                   ` : `
-                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart" type="button" data-meal-id="${meal.id}">
+                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart" type="button" data-meal-id="${variant.id}">
                       <svg width="20" height="20" class="icon icon-add-to-cart" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M10 0C15.5228 0 20 4.47715 20 10C20 15.5228 15.5228 20 10 20C4.47715 20 0 15.5228 0 10C0 4.47715 4.47715 0 10 0ZM10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 5C10.5523 5 11 5.44772 11 6V9H14C14.5523 9 15 9.44772 15 10C15 10.5523 14.5523 11 14 11H11V14C11 14.5523 10.5523 15 10 15C9.44772 15 9 14.5523 9 14V11H6C5.44772 11 5 10.5523 5 10C5 9.44772 5.44772 9 6 9H9V6C9 5.44772 9.44772 5 10 5Z" fill="white"/>
                       </svg>
@@ -793,6 +838,7 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
+    showModalLoading();
     
     // Get subscription ID from the event
     const subscriptionId = event.detail?.payload?.subscriptionId || event.detail?.subscription_id || event.target?.getAttribute('data-subscription-id');
@@ -867,15 +913,18 @@
           if (selectedPickupLocationId !== null) {
             updateModalChanges('selectedPickupLocationId', selectedPickupLocationId);
           }
-          if (payload && payload.include && payload.include.subscription_items) {
-            // Assume subscription_items is an array of {id, title, qty, ...}
-            originalSubscriptionMeals = payload.include.subscription_items.map(item => ({
-              id: item.id,
-              title: item.title,
-              price: item.price || 0,
-              img: item.img || MEAL_IMAGE,
-              qty: item.qty || 1
-            }));
+          if (payload && payload.include && payload.include.bundle_selections && Array.isArray(payload.include.bundle_selections.items)) {
+            originalSubscriptionMeals = payload.include.bundle_selections.items.map(item => {
+              // Try to find a matching meal in MEALS or COLD_MEALS for title/img fallback
+              const match = [...MEALS, ...COLD_MEALS].find(m => String(m.id) === String(item.external_variant_id));
+              return {
+                id: item.external_variant_id,
+                title: match ? match.title : (item.title || item.external_variant_id),
+                price: parseFloat(item.price) || (match ? match.price : 0),
+                img: match ? match.img : MEAL_IMAGE,
+                qty: item.quantity || 1
+              };
+            });
           } else {
             originalSubscriptionMeals = [];
           }
@@ -902,6 +951,23 @@
                   .then(catalogPayload => {
                     currentCatalogPayload = catalogPayload;
                     console.log('Loaded catalog payload:', catalogPayload);
+                    
+                    // Fetch variants for this catalog
+                    if (catalogPayload && catalogPayload.catalogId) {
+                      const catalogId = catalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '');
+                      fetch(`${API_URL}/subscriptions/${catalogId}/variants`)
+                        .then(resp => resp.json())
+                        .then(variantsData => {
+                          currentCatalogVariants = variantsData;
+                          rerenderModalCartList();
+                          renderModal();
+                        })
+                        .catch(err => {
+                          currentCatalogVariants = null;
+                          console.error('Failed to load catalog variants:', err);
+                        });
+                    } else {
+                    }
                   })
                   .catch(err => {
                     currentCatalogPayload = null;
@@ -921,7 +987,6 @@
         })
         .catch(error => {
           console.error('Error fetching subscription data:', error);
-          // Fallback to default modal if API fails
           currentPage = 'main';
           if (modalOverlay) {
             modalOverlay.style.display = '';
@@ -929,12 +994,50 @@
           renderModal();
         });
     } else {
-      // Fallback if no subscription ID
       currentPage = 'main';
       if (modalOverlay) {
         modalOverlay.style.display = '';
       }
       renderModal();
+      hideModalLoading();
     }
   });
+
+  // Helper to get variant by id
+  function getVariantById(variantId) {
+    if (!currentCatalogVariants || !currentCatalogVariants.variants) return null;
+    // Normalize both ids by stripping gid://shopify/ProductVariant/ if present
+    const normalize = id => String(id).replace('gid://shopify/ProductVariant/', '');
+    const targetId = normalize(variantId);
+    return currentCatalogVariants.variants.find(v => normalize(v.id) === targetId);
+  }
+
+  // Add this function near other render helpers
+  function rerenderModalCartList() {
+    const cartList = document.querySelector('.afinity-modal-cart-list');
+    if (!cartList) return;
+    // Use bundle_selections.items as the source
+    const items = (currentSubscription && currentSubscription.include && currentSubscription.include.bundle_selections && Array.isArray(currentSubscription.include.bundle_selections.items))
+      ? currentSubscription.include.bundle_selections.items
+      : [];
+    cartList.innerHTML = items.map(item => {
+      const variant = getVariantById(item.external_variant_id);
+      const img =
+        (variant?.product?.featuredMedia?.preview?.image?.url) ||
+        (variant?.product?.featuredMedia?.preview?.url) ||
+        (variant?.image?.url) ||
+        MEAL_IMAGE;
+      const title = variant ? (variant.product?.title || variant.sku || 'Meal') : (item.title || item.external_variant_id);
+      const qty = item.quantity || 1;
+      return `
+        <div class="afinity-modal-cart-item">
+          <img src="${img}" alt="${title}" />
+          <div>
+            <div class="afinity-modal-cart-title">${title}</div>
+            <div class="afinity-modal-cart-qty">x ${qty}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
 })(); 
