@@ -459,7 +459,7 @@
             </div>
             <div class="afinity-meals-date-select" style="font-size:16px;min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
               <label class="afinity-modal-select-label">Delivery Date</label>
-              <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
+              <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:16px;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
             </div>
           </div>
         </div>
