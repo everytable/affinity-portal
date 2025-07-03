@@ -47,6 +47,7 @@
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
+  height: 70px;
 }
 .afinity-modal-date {
   font-size: 1rem;
@@ -101,7 +102,6 @@
 .afinity-modal-row-frequency-inner {
   display: flex;
   flex-direction: row;
-  gap: 12px;
   align-items: center;
 }
 
@@ -131,6 +131,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-bottom: 8px;
+}
+.afinity-modal-row-frequency{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 8px;
 }
 .afinity-modal-row label {
@@ -178,11 +184,16 @@
   font-size: 0.95rem;
   color: #666;
 }
+.afinity-modal-label{
+  font-size: 16px;
+  font-weight: 500;
+  color: #222;
+}
 .afinity-modal-back {
   background: none;
   border: none;
   color: #007bff;
-  font-size: 1rem;
+  font-size: 16px ;
   cursor: pointer;
   margin-bottom: 8px;
   align-self: flex-start;
@@ -225,14 +236,14 @@
 }
 .afinity-modal-row-frequency {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
 }
 .afinity-modal-row-frequency label {
   min-width: 90px;
 }
 .afinity-modal-row-frequency select {
   flex: 1;
+  padding: 8px 10px;
 }
 .afinity-modal-update-meals {
   margin: 0 0 0 12px;
@@ -328,7 +339,6 @@
   }
   .afinity-modal-row-frequency-inner {
     flex-direction: row;
-    gap: 6px;
   }
   .afinity-modal-card-frequency-content label {
     margin-bottom: 2px;

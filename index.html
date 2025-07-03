@@ -15,7 +15,17 @@
   <button id="test-btn">Fire Event</button>
   <script>
     document.getElementById('test-btn').onclick = function() {
-      document.dispatchEvent(new Event('Recharge::click::manageSubscription', { bubbles: true, cancelable: true }));
+      // Create custom event with detail
+      const event = new CustomEvent('Recharge::click::manageSubscription', {
+        bubbles: true,
+        cancelable: true,
+        detail: {
+          payload: {
+            subscriptionId: 663218821
+          }
+        }
+      });
+      document.dispatchEvent(event);
     };
   </script>
 </body>
