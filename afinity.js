@@ -39,7 +39,7 @@
     { id: 14, title: 'Miso Soup & Rice', price: 5.5, img: MEAL_IMAGE, qty: 0 },
     { id: 15, title: 'Fruit & Nut Parfait', price: 6.8, img: MEAL_IMAGE, qty: 0 },
   ];
-  let selectedMeals = [...MEALS];
+  let selectedMeals = [];
   let originalSubscriptionMeals = [];
   let currentCatalogPayload = null;
   let currentCatalogVariants = null;
@@ -471,42 +471,52 @@
           </div>
           <div class="afinity-modal-card afinity-meals-sidebar">
             <h3>Current Meals in Subscription</h3>
-            <ul class="afinity-meals-sidebar-list">
+            <ul class="afinity-meals-sidebar-list current-meals">
               ${originalSubscriptionMeals.map(origMeal => {
+                const variant = getVariantById(origMeal.id);
+                const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
+                const title = variant ? (variant.product?.title || variant.sku || 'Meal') : origMeal.title;
                 const sel = selectedMeals.find(m => m.id === origMeal.id);
-                const removed = !sel || sel.qty === 0;
+                const qty = sel ? sel.qty : origMeal.qty;
+                const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
                 return `
-                  <li class="afinity-meals-sidebar-item${removed ? ' afinity-meals-sidebar-removed' : ''}" data-meal-id="${origMeal.id}">
-                    <img src="${origMeal.img}" alt="${origMeal.title}" />
+                  <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
+                    <img src="${img}" alt="${title}" />
                     <div class="afinity-meals-sidebar-details">
-                      <div class="afinity-meals-sidebar-title">${removed ? `<s>${origMeal.title}</s>` : origMeal.title}</div>
-                      <div class="afinity-meals-sidebar-price">$${origMeal.price.toFixed(2)}</div>
+                      <div class="afinity-meals-sidebar-title">${title}</div>
+                      <div class="afinity-meals-sidebar-price">$${price.toFixed(2)}</div>
                     </div>
-                    ${!removed ? `<div class="afinity-meals-sidebar-qty-controls">
+                    <div class="afinity-meals-sidebar-qty-controls">
                       <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${origMeal.id}">-</button>
-                      <span class="afinity-meals-sidebar-qty">${sel.qty}</span>
+                      <span class="afinity-meals-sidebar-qty">${qty}</span>
                       <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${origMeal.id}">+</button>
-                    </div>` : ''}
+                    </div>
                   </li>
                 `;
               }).join('')}
             </ul>
             <h3>Swap Meals to your Subscription</h3>
-            <ul class="afinity-meals-sidebar-list">
-              ${selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => `
-                <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
-                  <img src="${meal.img}" alt="${meal.title}" />
-                  <div class="afinity-meals-sidebar-details">
-                    <div class="afinity-meals-sidebar-title">${meal.title}</div>
-                    <div class="afinity-meals-sidebar-price">$${meal.price.toFixed(2)}</div>
-                  </div>
-                  <div class="afinity-meals-sidebar-qty-controls">
-                    <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
-                    <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
-                    <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
-                  </div>
-                </li>
-              `).join('')}
+            <ul class="afinity-meals-sidebar-list swap-meals">
+              ${selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => {
+                const variant = getVariantById(meal.id);
+                const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
+                const title = variant ? (variant.product?.title || variant.sku || 'Meal') : meal.title;
+                const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+                return `
+                  <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                    <img src="${img}" alt="${title}" />
+                    <div class="afinity-meals-sidebar-details">
+                      <div class="afinity-meals-sidebar-title">${title}</div>
+                      <div class="afinity-meals-sidebar-price">$${price.toFixed(2)}</div>
+                    </div>
+                    <div class="afinity-meals-sidebar-qty-controls">
+                      <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                      <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                      <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                    </div>
+                  </li>
+                `;
+              }).join('')}
             </ul>
             <div class="afinity-meals-sidebar-footer">
               <div class="afinity-meals-sidebar-total">
@@ -554,14 +564,18 @@
   function renderMealCard(variant) {
     const img = getVariantImageByCatalog(variant);
     const title = variant.product?.title || variant.sku || 'Meal';
-    const price = variant.price?.amount ? parseFloat(variant.price.amount) : 0;
+    const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+    // Preselect if in originalSubscriptionMeals or selectedMeals with qty > 0
+    const isActive =
+      originalSubscriptionMeals.some(m => String(m.id) === String(variant.id)) ||
+      selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
     return `
       <li class="afinity-r-meals-grid__item" style="display: block;"
         data-product-start-date="2025-01-01"
         data-product-end-date="2025-12-31"
         data-is-first-variant="true"
       >
-        <div class="afinity-r-card" 
+        <div class="afinity-r-card${isActive ? ' afinity-r-card--active' : ''}" 
           data-variant-id="${variant.id}"
           data-collection-id="1"
           data-product-id="${variant.id}"
@@ -591,7 +605,7 @@
                   </span>
                 </div>
                 <div class="price-action-wrapper" data-variant-id="${variant.id}">
-                  ${selectedMeals.find(m=>m.id===variant.id&&m.qty>0) ? `
+                  ${isActive ? `
                     <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart afinity-r-card__remove-btn" type="button" data-meal-id="${variant.id}" style="background:#c0392b;">
                       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
@@ -662,15 +676,27 @@
       alert('Cancel subscription clicked');
     };
     // Meal add/remove
-    modalOverlay.querySelectorAll('.afinity-r-card__remove-btn').forEach(btn => {
+    modalOverlay.querySelectorAll('.afinity-r-card__add-btn').forEach(btn => {
       btn.onclick = (e) => {
-        const mealId = parseInt(btn.getAttribute('data-meal-id'));
-        const idx = selectedMeals.findIndex(m => m.id === mealId);
-        if (idx !== -1) {
-          selectedMeals[idx].qty = 0;
-          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+        const mealId = btn.getAttribute('data-meal-id');
+        let sel = selectedMeals.find(m => String(m.id) === String(mealId));
+        if (btn.classList.contains('afinity-r-card__remove-btn')) {
+          // Remove from selectedMeals
+          if (sel) {
+            sel.qty = 0;
+            // Optionally remove from array entirely:
+            // selectedMeals = selectedMeals.filter(m => String(m.id) !== String(mealId));
+          }
+        } else {
+          // Add or increment
+          if (!sel) {
+            selectedMeals.push({ id: mealId, qty: 1 });
+          } else {
+            sel.qty++;
+          }
         }
-        renderModal();
+        updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+        rerenderSidebarMeals();
       };
     });
     // Sidebar quantity controls
@@ -694,7 +720,7 @@
             }
           }
           updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
-          renderModal();
+          rerenderSidebarMeals();
         }
       };
     });
@@ -1036,5 +1062,64 @@
         </div>
       `;
     }).join('');
+  }
+
+  // 1. Refactor sidebar rendering into a function
+  function renderSidebarMeals() {
+    // Current Meals in Subscription
+    const sidebarList = document.querySelector('.afinity-meals-sidebar-list.current-meals');
+    if (sidebarList) {
+      sidebarList.innerHTML = originalSubscriptionMeals.map(origMeal => {
+        const variant = getVariantById(origMeal.id);
+        const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
+        const title = variant ? (variant.product?.title || variant.sku || 'Meal') : origMeal.title;
+        const sel = selectedMeals.find(m => m.id === origMeal.id);
+        const qty = sel ? sel.qty : origMeal.qty;
+        const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+        return `
+          <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
+            <img src="${img}" alt="${title}" />
+            <div class="afinity-meals-sidebar-details">
+              <div class="afinity-meals-sidebar-title">${title}</div>
+              <div class="afinity-meals-sidebar-price">$${price.toFixed(2)}</div>
+            </div>
+            <div class="afinity-meals-sidebar-qty-controls">
+              <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${origMeal.id}">-</button>
+              <span class="afinity-meals-sidebar-qty">${qty}</span>
+              <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${origMeal.id}">+</button>
+            </div>
+          </li>
+        `;
+      }).join('');
+    }
+    // Swap Meals
+    const swapList = document.querySelector('.afinity-meals-sidebar-list.swap-meals');
+    if (swapList) {
+      swapList.innerHTML = selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => {
+        const variant = getVariantById(meal.id);
+        const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
+        const title = variant ? (variant.product?.title || variant.sku || 'Meal') : meal.title;
+        const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+        return `
+          <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+            <img src="${img}" alt="${title}" />
+            <div class="afinity-meals-sidebar-details">
+              <div class="afinity-meals-sidebar-title">${title}</div>
+              <div class="afinity-meals-sidebar-price">$${price.toFixed(2)}</div>
+            </div>
+            <div class="afinity-meals-sidebar-qty-controls">
+              <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+              <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+              <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+            </div>
+          </li>
+        `;
+      }).join('');
+    }
+  }
+
+  // 2. Add rerenderSidebarMeals()
+  function rerenderSidebarMeals() {
+    renderSidebarMeals();
   }
 })(); 
