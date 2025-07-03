@@ -415,45 +415,48 @@
       <div class="afinity-modal-header">
         <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
       </div>
-      <div class="afinity-modal-card afinity-meals-header-card">
-        <button class="afinity-modal-back">< Back</button>
-        <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
-          <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
-            <h2 class="afinity-meals-title">Update Subscription Meals</h2>
-            <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
+
+        <div class="afinity-modal-content">
+          <div class="afinity-modal-card afinity-meals-header-card">
+          <button class="afinity-modal-back">< Back</button>
+            <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
+              <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
+                <h2 class="afinity-meals-title">Update Subscription Meals</h2>
+                <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
+              </div>
+              <div class="afinity-meals-date-select" style="min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
+                <label class="afinity-modal-select-label">Delivery Date</label>
+                <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
+              </div>
+            </div>
           </div>
-          <div class="afinity-meals-date-select" style="min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
-            <label class="afinity-modal-select-label">Delivery Date</label>
-            <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
+          <div class="afinity-meals-layout">
+          <div class="afinity-meals-main">
+            <h2 class="afinity-meals-section-title">Hot Meals</h2>
+            <ul class="afinity-meals-grid">
+              ${MEALS.slice(0, 3).map(meal => renderMealCard(meal)).join('')}
+            </ul>
+            <h2 class="afinity-meals-section-title" style="margin-top:2rem;">Cold Meals</h2>
+            <ul class="afinity-meals-grid">
+              ${COLD_MEALS.slice(0, 3).map(meal => renderMealCard(meal)).join('')}
+            </ul>
           </div>
-        </div>
-      </div>
-      <div class="afinity-meals-layout">
-        <div class="afinity-meals-main">
-          <h2 class="afinity-meals-section-title">Hot Meals</h2>
-          <ul class="afinity-meals-grid">
-            ${MEALS.slice(0, 3).map(meal => renderMealCard(meal)).join('')}
-          </ul>
-          <h2 class="afinity-meals-section-title" style="margin-top:2rem;">Cold Meals</h2>
-          <ul class="afinity-meals-grid">
-            ${COLD_MEALS.slice(0, 3).map(meal => renderMealCard(meal)).join('')}
-          </ul>
-        </div>
-        <div class="afinity-modal-card afinity-meals-sidebar">
-          <h3>Current Meals in Subscription</h3>
-          <ul class="afinity-meals-sidebar-list">
-            ${selectedMeals.filter(m=>m.qty>0).map(meal => `
-              <li>
-                <img src="${meal.img}" alt="${meal.title}" />
-                <div>
-                  <div class="afinity-meals-sidebar-title">${meal.title}</div>
-                  <div class="afinity-meals-sidebar-qty">x ${meal.qty}</div>
-                </div>
-              </li>
-            `).join('')}
-          </ul>
-          <div class="afinity-meals-sidebar-title">New meals to your Subscription</div>
-          <button class="afinity-meals-swap-btn">Swap Items <span class="afinity-meals-swap-count">0</span></button>
+          <div class="afinity-modal-card afinity-meals-sidebar">
+            <h3>Current Meals in Subscription</h3>
+            <ul class="afinity-meals-sidebar-list">
+              ${selectedMeals.filter(m=>m.qty>0).map(meal => `
+                <li>
+                  <img src="${meal.img}" alt="${meal.title}" />
+                  <div>
+                    <div class="afinity-meals-sidebar-title">${meal.title}</div>
+                    <div class="afinity-meals-sidebar-qty">x ${meal.qty}</div>
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+            <div class="afinity-meals-sidebar-title">New meals to your Subscription</div>
+            <button class="afinity-meals-swap-btn">Swap Items <span class="afinity-meals-swap-count">0</span></button>
+          </div>
         </div>
       </div>
     `;

@@ -536,14 +536,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   margin-bottom: 2rem;
   display: flex;
-  align-items: flex-start;
   gap: 2rem;
   padding: 1.5rem 2rem 1rem 2rem;
   max-width: 1264px;
-  margin: auto;
-  flex: 1 1 auto;
-  max-height: 60vh;
-  overflow-y: auto;
+  margin: auto 78px auto 78px;
 }
 .afinity-meals-main {
   flex: 1 1 0%;
