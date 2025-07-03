@@ -519,7 +519,7 @@
 }
 .afinity-meals-title {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 1.5rem;
+  font-size: 24px;
   font-weight: 700;
   color: #005a57;
   margin: 0 0 0.5rem 0;
@@ -696,7 +696,7 @@
 ;
 }
 .afinity-meals-desc {
-  font-size: 1rem;
+  font-size: 16px;
   color: #005a57;
   margin-top: 0.5rem;
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
@@ -704,7 +704,7 @@
 }
 .afinity-meals-sidebar-title {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 1.1rem;
+  font-size: 16px;
   font-weight: 700;
   color: #005a57;
   margin: 1.5rem 0 0.5rem 0;

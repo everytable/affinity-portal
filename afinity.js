@@ -423,7 +423,7 @@
             <div class="afinity-meals-desc">Update your subscription meals. Remove or add more meals to your order.</div>
           </div>
           <div class="afinity-meals-date-select" style="min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
-            <label style="font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:500;color:#234;letter-spacing:0.01em;margin-bottom:4px;">Delivery Date</label>
+            <label class="afinity-modal-select-label">Delivery Date</label>
             <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:1rem;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
           </div>
         </div>
