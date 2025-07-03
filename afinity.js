@@ -413,7 +413,7 @@
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date">${formatDeliveryDate(currentDeliveryDate)} $${price}</span>
+        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
       </div>
       <div class="afinity-modal-card afinity-meals-header-card">
         <button class="afinity-modal-back">< Back</button>
