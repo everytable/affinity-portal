@@ -522,19 +522,19 @@
   font-size: 1rem;
   color: #222;
 }
-.afinity-meals-layout {
-  display: grid;
-  grid-template-columns: 1fr 320px;
+.afinity-meals-layout {   
+  border-radius: 8px 8px 8px 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start;
   gap: 2rem;
-  background: #fafaf6;
-  border-radius: 0 0 8px 8px;
-  padding: 2rem;
-  margin: 32px auto 0 auto;
+  padding: 1.5rem 2rem 1rem 2rem;
   max-width: 1264px;
-  width: 90vw;
-  margin: auto 20px auto 19px;
+  margin: auto;
 }
 .afinity-meals-main {
+  flex: 1 1 0%;
   min-width: 0;
 }
 .afinity-meals-section-title {
@@ -546,7 +546,7 @@
 }
 .afinity-meals-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1.5rem;
 }
 .afinity-meal-card {
@@ -604,15 +604,20 @@
 .afinity-meal-toggle-btn:hover {
   background: #003f3d;
 }
-.afinity-meals-sidebar {
+.afinity-modal-card.afinity-meals-sidebar {
+  flex: 0 0 320px;
+  max-width: 320px;
+  min-width: 220px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
-  min-width: 0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  padding: 24px 16px;
+  margin: 0;
+  position: sticky;
+  top: 24px;
+  overflow: auto;
+  height: fit-content;
+  z-index: 2;
 }
 .afinity-meals-sidebar h3 {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
@@ -658,11 +663,14 @@
 }
 @media (max-width: 900px) {
   .afinity-meals-layout {
-    grid-template-columns: 1fr;
-    padding: 1rem;
+    flex-direction: column;
+    gap: 16px;
   }
-  .afinity-meals-sidebar {
-    margin-top: 2rem;
+  .afinity-modal-card.afinity-meals-sidebar {
+    position: static;
+    max-width: 100%;
+    width: 100%;
+    margin-top: 16px;
   }
 }
 
@@ -710,17 +718,17 @@
 }
 
 /* --- Begin recharge card and grid styles copied from theme --- */
-.recharge-meals-grid {
+.afinity-r-meals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 280px));
   gap: 2rem;
   width: 100%;
 }
-.recharge-meals-grid__item{
+.afinity-r-meals-grid__item{
   width: 100%;
   min-width: 0;
 }
-.recharge-card {
+.afinity-r-card {
   background-color: #fff;
   border-radius: 12px;
   overflow: hidden;
@@ -731,31 +739,31 @@
   display: flex;
   flex-direction: column;
 }
-.recharge-card:hover {
+.afinity-r-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 20px rgba(0,0,0,0.1);
 }
-.recharge-card__image {
+.afinity-r-card__image {
   width: 100%;
   height: 200px;
   object-fit: cover;
   display: block;
 }
-.recharge-card__image--placeholder {
+.afinity-r-card__image--placeholder {
   background-color: #f4f4f4;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 200px;
 }
-.recharge-card__details {
+.afinity-r-card__details {
   padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   flex-grow: 1;
 }
-.recharge-card__title {
+.afinity-r-card__title {
   font-weight: 600;
   margin-bottom: 12px;
   font-size: 16px;
@@ -767,19 +775,19 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.recharge-card__footer {
+.afinity-r-card__footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: auto;
 }
-.recharge-card__price-block,
+.afinity-r-card__price-block,
 .price__container.price-block {
   display: flex;
   gap: 8px;
   align-items: center;
 }
-.recharge-card__price--discount {
+.afinity-r-card__price--discount {
   background-color: #0d5e4c;
   color: #fff;
   font-weight: 600;
@@ -787,13 +795,13 @@
   padding: 4px 12px;
   border-radius: 6px;
 }
-.recharge-card__price--default {
+.afinity-r-card__price--default {
   color: #777;
   text-decoration: line-through;
   font-size: 16px;
   margin-left: 8px;
 }
-.recharge-card__add-btn {
+.afinity-r-card__add-btn {
   width: 40px;
   height: 40px;
   border: none;
@@ -806,10 +814,10 @@
   justify-content: center;
   transition: background-color 0.2s ease;
 }
-.recharge-card__add-btn:hover {
+.afinity-r-card__add-btn:hover {
   background-color: #094237;
 }
-.recharge-card__add-btn--smart {
+.afinity-r-card__add-btn--smart {
   /* No extra style, but keep for markup compatibility */
 }
 .price-action-wrapper {
@@ -819,7 +827,7 @@
 }
 
 /* Sidebar styles for current meals */
-.recharge-meals-sidebar__item {
+.afinity-r-meals-sidebar__item {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -827,28 +835,28 @@
   border-radius: 4px;
   background: #f8f8f8;
 }
-.recharge-meals-sidebar__item-image {
+.afinity-r-meals-sidebar__item-image {
   width: 60px;
   height: 60px;
   border-radius: 4px;
   object-fit: cover;
 }
-.recharge-meals-sidebar__item-details {
+.afinity-r-meals-sidebar__item-details {
   flex: 1;
   min-width: 0;
 }
-.recharge-meals-sidebar__item-title {
+.afinity-r-meals-sidebar__item-title {
   font-weight: 500;
   margin-bottom: 0.25rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.recharge-meals-sidebar__item-price {
+.afinity-r-meals-sidebar__item-price {
   font-size: 0.9rem;
   color: #666;
 }
-.recharge-meals-sidebar__item-remove {
+.afinity-r-meals-sidebar__item-remove {
   background: none;
   border: none;
   color: #999;
@@ -856,7 +864,7 @@
   padding: 0.5rem;
   transition: color 0.2s;
 }
-.recharge-meals-sidebar__item-remove:hover {
+.afinity-r-meals-sidebar__item-remove:hover {
   color: #ff4444;
 }
 /* --- End recharge card and grid styles --- */
