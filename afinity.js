@@ -459,7 +459,7 @@
                 </li>
               `).join('')}
             </ul>
-            <h3>New meals to your Subscription</div>
+            <h3>New meals to your Subscription</h3>
             <button class="afinity-meals-swap-btn">Swap Items <span class="afinity-meals-swap-count">0</span></button>
           </div>
         </div>
