@@ -173,6 +173,13 @@
       year: 'numeric'
     });
   }
+  
+  // Helper to convert state name to code
+  function getStateCode(stateName) {
+    if (!stateName) return '';
+    const state = US_STATES.find(s => s.name === stateName || s.code === stateName);
+    return state ? state.code : stateName;
+  }
   // Optionally, set a price variable if you want to show price
   let price = '3.99'; // Replace with real price if available
 
@@ -626,20 +633,20 @@
         .then(response => response.json())
         .then(data => {
           console.log('Subscription data:', data);
+          const payload = data.data;
           
+          const address = payload.include.address;
           // Extract data from API response
-          if (data && data.include && data.include.address) {
-            address1 = data.include.address.address1 || '';
-            city = data.include.address.city || '';
-            state = data.include.address.province || '';
-            zip = data.include.address.zip || '';
-            
-            console.log('Extracted address data:', { address1, city, state, zip });
-          }
+          address1 = address.address1 || '';
+          city = address.city || '';
+          state = getStateCode(address.province || '');
+          zip = address.zip || '';
+          
+          console.log('Extracted address data:', { address1, city, state, zip });
           
           // Extract fulfillment date, time, and method from order attributes
-          if (data?.include?.address?.order_attributes) {
-            const fulfillmentDateAttr = data.include.address.order_attributes.find(attr => 
+          if (payload?.include?.address?.order_attributes) {
+            const fulfillmentDateAttr = payload.include.address.order_attributes.find(attr => 
               attr.name === 'Fulfillment Date' || 
               attr.name === 'Delivery Date' ||
               attr.name === 'delivery_date' ||
@@ -658,11 +665,7 @@
               }
             }
             
-            const fulfillmentMethodAttr = data.include.address.order_attributes.find(attr => 
-              attr.name === '_fulfillmentMethod' || 
-              attr.name === 'fulfillmentMethod' || 
-              attr.name === 'Fulfillment Method' ||
-              attr.name === 'delivery_method' ||
+            const fulfillmentMethodAttr = payload.include.address.order_attributes.find(attr => 
               attr.name === 'Fulfillment Type'
             );
             if (fulfillmentMethodAttr) {
@@ -671,11 +674,11 @@
           }
           
           // Update delivery date and price from subscription data
-          if (data.next_charge_scheduled_at) {
-            deliveryDate = data.next_charge_scheduled_at.split('T')[0];
+          if (payload.next_charge_scheduled_at) {
+            deliveryDate = payload.next_charge_scheduled_at.split('T')[0];
           }
-          if (data.price) {
-            price = parseFloat(data.price).toFixed(2);
+          if (payload.price) {
+            price = parseFloat(payload.price).toFixed(2);
           }
           
           currentPage = 'main';
