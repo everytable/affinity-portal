@@ -20,33 +20,34 @@
   let lastFetchedZip = null;
   let zip = '';
 
-  // Example static meal data for demo
+  // Use the same image for all meals
+  const MEAL_IMAGE = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400';
   const MEALS = [
-    { id: 1, title: 'Blueberry Maple Yogurt Parfait', price: 6.7, img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400', qty: 1 },
-    { id: 2, title: "Monica's Breakfast Burrito", price: 6.7, img: 'https://images.unsplash.com/photo-1464306076886-debca5e8a6b0?auto=format&fit=facearea&w=400&h=400', qty: 1 },
-    { id: 3, title: 'Backyard BBQ Chicken Salad', price: 6.7, img: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 4, title: 'Spicy Tuna Sushi Bowl', price: 7.2, img: 'https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 5, title: 'Vegan Buddha Bowl', price: 7.0, img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 6, title: 'Chicken Caesar Wrap', price: 6.5, img: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 7, title: 'Egg White Omelette', price: 6.2, img: 'https://images.unsplash.com/photo-1506089676908-3592f7389d4d?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 8, title: 'Greek Yogurt Bowl', price: 6.3, img: 'https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 9, title: 'Avocado Toast', price: 5.9, img: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 10, title: 'Turkey Club Sandwich', price: 7.1, img: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 11, title: 'Quinoa Power Salad', price: 7.4, img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 12, title: 'Buffalo Chicken Wrap', price: 7.0, img: 'https://images.unsplash.com/photo-1464306076886-debca5e8a6b0?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 13, title: 'Classic Cobb Salad', price: 7.2, img: 'https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 14, title: 'Miso Soup & Rice', price: 5.5, img: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 15, title: 'Fruit & Nut Parfait', price: 6.8, img: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=facearea&w=400&h=400', qty: 0 },
+    { id: 1, title: 'Blueberry Maple Yogurt Parfait', price: 6.7, img: MEAL_IMAGE, qty: 1 },
+    { id: 2, title: "Monica's Breakfast Burrito", price: 6.7, img: MEAL_IMAGE, qty: 1 },
+    { id: 3, title: 'Backyard BBQ Chicken Salad', price: 6.7, img: MEAL_IMAGE, qty: 0 },
+    { id: 4, title: 'Spicy Tuna Sushi Bowl', price: 7.2, img: MEAL_IMAGE, qty: 0 },
+    { id: 5, title: 'Vegan Buddha Bowl', price: 7.0, img: MEAL_IMAGE, qty: 0 },
+    { id: 6, title: 'Chicken Caesar Wrap', price: 6.5, img: MEAL_IMAGE, qty: 0 },
+    { id: 7, title: 'Egg White Omelette', price: 6.2, img: MEAL_IMAGE, qty: 0 },
+    { id: 8, title: 'Greek Yogurt Bowl', price: 6.3, img: MEAL_IMAGE, qty: 0 },
+    { id: 9, title: 'Avocado Toast', price: 5.9, img: MEAL_IMAGE, qty: 0 },
+    { id: 10, title: 'Turkey Club Sandwich', price: 7.1, img: MEAL_IMAGE, qty: 0 },
+    { id: 11, title: 'Quinoa Power Salad', price: 7.4, img: MEAL_IMAGE, qty: 0 },
+    { id: 12, title: 'Buffalo Chicken Wrap', price: 7.0, img: MEAL_IMAGE, qty: 0 },
+    { id: 13, title: 'Classic Cobb Salad', price: 7.2, img: MEAL_IMAGE, qty: 0 },
+    { id: 14, title: 'Miso Soup & Rice', price: 5.5, img: MEAL_IMAGE, qty: 0 },
+    { id: 15, title: 'Fruit & Nut Parfait', price: 6.8, img: MEAL_IMAGE, qty: 0 },
   ];
   let selectedMeals = [...MEALS];
 
   // Add a new catalog for Cold Meals (use a subset or different items)
   const COLD_MEALS = [
-    { id: 101, title: 'Chilled Soba Noodle Salad', price: 7.2, img: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 102, title: 'Cold Brew Oats', price: 5.9, img: 'https://images.unsplash.com/photo-1464306076886-debca5e8a6b0?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 103, title: 'Summer Berry Salad', price: 6.5, img: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 104, title: 'Iced Matcha Bowl', price: 6.8, img: 'https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=facearea&w=400&h=400', qty: 0 },
-    { id: 105, title: 'Chilled Mango Chia Pudding', price: 6.4, img: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=facearea&w=400&h=400', qty: 0 },
+    { id: 101, title: 'Chilled Soba Noodle Salad', price: 7.2, img: MEAL_IMAGE, qty: 0 },
+    { id: 102, title: 'Cold Brew Oats', price: 5.9, img: MEAL_IMAGE, qty: 0 },
+    { id: 103, title: 'Summer Berry Salad', price: 6.5, img: MEAL_IMAGE, qty: 0 },
+    { id: 104, title: 'Iced Matcha Bowl', price: 6.8, img: MEAL_IMAGE, qty: 0 },
+    { id: 105, title: 'Chilled Mango Chia Pudding', price: 6.4, img: MEAL_IMAGE, qty: 0 },
   ];
 
   // Add global US states array
@@ -458,7 +459,7 @@
                 </li>
               `).join('')}
             </ul>
-            <div class="afinity-meals-sidebar-title">New meals to your Subscription</div>
+            <h3>New meals to your Subscription</div>
             <button class="afinity-meals-swap-btn">Swap Items <span class="afinity-meals-swap-count">0</span></button>
           </div>
         </div>
