@@ -476,7 +476,7 @@
         <div class="afinity-meals-main">
           <h2 class="afinity-meals-section-title">Hot Meals</h2>
           <ul class="afinity-meals-grid">
-            ${MEALS.map(meal => `
+            ${MEALS.slice(0, 3).map(meal => `
               <li class="recharge-meals-grid__item" style="display: block;"
                 data-product-start-date="2025-01-01"
                 data-product-end-date="2025-12-31"

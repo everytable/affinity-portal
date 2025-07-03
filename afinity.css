@@ -101,8 +101,9 @@
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  width: 100%;
-  max-width: 1000px;
+  width: 90vw;
+  max-width: 1264px;
+  margin: auto 20px auto 19px;
   margin: 32px auto 0 auto;
   padding: 24px 24px 16px 24px;
   display: flex;
@@ -129,8 +130,9 @@
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  width: 100%;
-  max-width: 1000px;
+  width: 90vw;
+  max-width: 1264px;
+  margin: auto 20px auto 19px;
   margin: 32px auto 0 auto;
   padding: 24px 24px 16px 24px;
   display: flex;
@@ -348,7 +350,6 @@
   }
   .afinity-modal-card-title {
     color: #434A4A;
-    font-family: "Martian Mono";
     font-size: 18px;
     font-style: normal;
     font-weight: 500;
@@ -451,7 +452,6 @@
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 1.5rem;
 }
 
 .afinity-modal-cancel-btn {
@@ -530,7 +530,9 @@
   border-radius: 0 0 8px 8px;
   padding: 2rem;
   margin: 32px auto 0 auto;
-  max-width: 1000px;
+  max-width: 1264px;
+  width: 90vw;
+  margin: auto 20px auto 19px;
 }
 .afinity-meals-main {
   min-width: 0;
@@ -673,7 +675,8 @@
   align-items: flex-start;
   gap: 2rem;
   padding: 1.5rem 2rem 1rem 2rem;
-  max-width: 1000px;
+  max-width: 1264px
+;
 }
 .afinity-meals-desc {
   font-size: 1rem;
