@@ -531,20 +531,24 @@
   font-size: 16px;
   color: #222;
 }
-.afinity-meals-layout {   
+.afinity-meals-layout {
   border-radius: 8px 8px 8px 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   margin-bottom: 2rem;
   display: flex;
   align-items: flex-start;
   gap: 2rem;
-  padding: 1.5rem 2rem 16px 2rem;
+  padding: 1.5rem 2rem 1rem 2rem;
   max-width: 1264px;
   margin: auto;
+  flex: 1 1 auto;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 .afinity-meals-main {
   flex: 1 1 0%;
   min-width: 0;
+  overflow-y: auto;
 }
 .afinity-meals-section-title {
   font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
