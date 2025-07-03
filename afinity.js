@@ -319,6 +319,10 @@
     const contentRoot = modalOverlay.querySelector('#afinity-modal-content-root');
     contentRoot.innerHTML = renderModalContent();
     attachModalEvents();
+    // Always re-render the method section if on main page
+    if (currentPage === 'main') {
+      renderPickupLocationsSection();
+    }
     attachMethodSectionEvents();
     if (modalLoading) showModalLoading(); else hideModalLoading();
   }
