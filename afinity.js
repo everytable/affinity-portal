@@ -101,6 +101,7 @@
 
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
+    event.preventDefault();
     createModal();
   });
 })(); 
