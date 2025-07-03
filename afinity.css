@@ -535,6 +535,7 @@
   margin-bottom: 2rem;
   display: flex;
   gap: 2rem;
+  width: 90%;
   padding: 1.5rem 2rem 1rem 2rem;
   max-width: 1264px;
   margin: 32px auto 0 auto;
@@ -729,9 +730,10 @@
 /* --- Begin recharge card and grid styles copied from theme --- */
 .afinity-r-meals-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 280px));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 2rem;
   width: 100%;
+  max-width: 1264px;
 }
 .afinity-r-meals-grid__item{
   width: 100%;

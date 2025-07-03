@@ -1063,7 +1063,7 @@
     }).join('');
   }
 
-  // 1. Refactor sidebar rendering into a function
+  // Update rerenderSidebarMeals and renderSidebarMeals to recalculate and update the cart total
   function renderSidebarMeals() {
     // Current Meals in Subscription
     const sidebarList = document.querySelector('.afinity-meals-sidebar-list.current-meals');
@@ -1115,10 +1115,31 @@
         `;
       }).join('');
     }
+    // Calculate total
+    let total = 0;
+    // Current Meals
+    originalSubscriptionMeals.forEach(origMeal => {
+      const variant = getVariantById(origMeal.id);
+      const sel = selectedMeals.find(m => m.id === origMeal.id);
+      const qty = sel ? sel.qty : origMeal.qty;
+      const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+      total += price * qty;
+    });
+    // Swap Meals
+    selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).forEach(meal => {
+      const variant = getVariantById(meal.id);
+      const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+      total += price * meal.qty;
+    });
+    // Update total in DOM
+    const totalEl = document.querySelector('.afinity-meals-sidebar-total-price');
+    if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
   }
 
-  // 2. Add rerenderSidebarMeals()
   function rerenderSidebarMeals() {
     renderSidebarMeals();
   }
+
+  // At the very end of the IIFE, before it closes, trigger sidebar/cart calculations immediately
+  rerenderSidebarMeals();
 })(); 
