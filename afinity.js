@@ -1,7 +1,7 @@
 // affinity.js - Standalone modal widget
 (function() {
 
-  const API_URL = "https://shoapenglee.jp.ngrok.io/api"
+  const API_URL = "https://admin-app.everytable-sh.com/api"
   // Dynamically load afinity.css if not already present
   var cssId = 'afinity-css';
   if (!document.getElementById(cssId)) {
