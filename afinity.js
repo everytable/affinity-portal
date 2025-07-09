@@ -1,7 +1,7 @@
 // affinity.js - Standalone modal widget
 (function() {
 
-  const API_URL = "https://admin-app.everytable-sh.com/api"
+  // const API_URL = "https://admin-app.everytable-sh.com/api"
   // Dynamically load afinity.css if not already present
   var cssId = 'afinity-css';
   if (!document.getElementById(cssId)) {
@@ -19,6 +19,8 @@
   let modalLoading = false;
   let lastFetchedZip = null;
   let zip = '';
+  let availableFrequencies = [];
+  let selectedFrequency = null;
 
   // Use the same image for all meals
   const MEAL_IMAGE = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400';
@@ -36,7 +38,7 @@
     { id: 11, title: 'Quinoa Power Salad', price: 7.4, img: MEAL_IMAGE, qty: 0 },
     { id: 12, title: 'Buffalo Chicken Wrap', price: 7.0, img: MEAL_IMAGE, qty: 0 },
     { id: 13, title: 'Classic Cobb Salad', price: 7.2, img: MEAL_IMAGE, qty: 0 },
-    { id: 14, title: 'Miso Soup & Rice', price: 5.5, img: MEAL_IMAGE, qty: 0 },
+    { id: 14, title: 'Miso Soup & Rice', price: 5.5, img: MEAL_IMAGE, qty:   0 },
     { id: 15, title: 'Fruit & Nut Parfait', price: 6.8, img: MEAL_IMAGE, qty: 0 },
   ];
   let selectedMeals = [];
@@ -81,32 +83,6 @@
   let deliveryDate = '';
 
   // Add static pickup locations
-  const PICKUP_LOCATIONS = [
-    {
-      id: 1,
-      name: 'West Hollywood',
-      address: '8717 Santa Monica Blvd',
-      distance: 1.9
-    },
-    {
-      id: 2,
-      name: 'Hollywood',
-      address: '6775 Santa Monica Blvd',
-      distance: 4.3
-    },
-    {
-      id: 3,
-      name: 'Mid-Wilshire',
-      address: '5164 Wilshire Blvd.',
-      distance: 4.7
-    },
-    {
-      id: 4,
-      name: 'Palms',
-      address: '10419 Venice Blvd. 101 A',
-      distance: 5.3
-    }
-  ];
   let selectedPickupLocationId = null;
 
   let pickupLocations = [];
@@ -148,10 +124,87 @@
     try {
       await Promise.all([
         // Subscription fetch is already happening elsewhere, so just fetch pickup locations here
-        fetchPickupLocations(zip)
+        fetchPickupLocations(zip),
+        fetchFrequencies()
       ]);
     } finally {
       modalLoading = false;
+    }
+  }
+
+  async function fetchFrequencies() {
+    try {
+      const response = await fetch(`${API_URL}/subscription/frequencies`);
+      const data = await response.json();
+      availableFrequencies = data.frequencies || [];
+      console.log('Fetched frequencies:', availableFrequencies);
+    } catch (error) {
+      console.error('Error fetching frequencies:', error);
+      availableFrequencies = [];
+    }
+  }
+
+  async function refreshSubscriptionData(subscriptionId) {
+    try {
+      console.log('Refreshing subscription data for ID:', subscriptionId);
+      
+      // Fetch updated subscription data
+      const response = await fetch(`${API_URL}/subscription/${subscriptionId}`);
+      const data = await response.json();
+      
+      if (data.data) {
+        const payload = data.data;
+        currentSubscription = payload;
+        
+        // Update address data
+        const address = payload.include.address;
+        address1 = address.address1 || '';
+        city = address.city || '';
+        state = getStateCode(address.province || '');
+        zip = address.zip || '';
+        
+        console.log('Updated address data:', { address1, city, state, zip });
+        
+        // Update delivery date and time
+        deliveryDate = getDeliveryDateFromSubscription();
+        
+        // Update fulfillment method
+        if (payload?.include?.address?.order_attributes) {
+          const fulfillmentTypeAttr = payload.include.address.order_attributes.find(attr => 
+            attr.name.toLowerCase() === 'fulfillment type'
+          );
+          if (fulfillmentTypeAttr && fulfillmentTypeAttr.value) {
+            fulfillmentMethod = fulfillmentTypeAttr.value.trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
+          }
+        }
+        
+        // Update frequency
+        if (payload.subscription_preferences) {
+          const intervalUnit = payload.subscription_preferences.interval_unit;
+          const orderIntervalFrequency = payload.subscription_preferences.order_interval_frequency;
+          if (intervalUnit && orderIntervalFrequency) {
+            selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
+          }
+        }
+        
+        // Update modalChanges with fresh data
+        updateModalChanges('address1', address1);
+        updateModalChanges('city', city);
+        updateModalChanges('state', state);
+        updateModalChanges('zip', zip);
+        updateModalChanges('fulfillmentMethod', fulfillmentMethod);
+        updateModalChanges('deliveryDate', deliveryDate);
+        updateModalChanges('selectedFrequency', selectedFrequency);
+        
+        // Re-render the modal to show updated data
+        renderModal();
+        
+        console.log('Subscription data refreshed successfully');
+      } else {
+        console.error('No data received when refreshing subscription');
+      }
+    } catch (error) {
+      console.error('Error refreshing subscription data:', error);
     }
   }
 
@@ -263,7 +316,7 @@
         </div>
       `}
       <div style="display:flex; justify-content:flex-end; margin-top:8px;">
-        <button id="afinity-save-method-btn" class="afinity-modal-save-btn" type="button">Save</button>
+        <button id="afinity-save-method-btn" class="afinity-modal-save-btn" type="button" onclick="saveAddressAndMethod()">Save</button>
       </div>
     `;
   }
@@ -334,6 +387,7 @@
     // Always re-render the method section if on main page
     if (currentPage === 'main') {
       renderPickupLocationsSection();
+      renderFrequencyDropdown();
     }
     attachMethodSectionEvents();
     if (modalLoading) showModalLoading(); else hideModalLoading();
@@ -365,8 +419,16 @@
             <div class="afinity-modal-row-frequency">
               <label class="afinity-modal-label-frequency" for="afinity-frequency">Frequency</label>
               <select id="afinity-frequency">
-                <option>2 week subscription with 10% discount</option>
-                <option>1 week subscription</option>
+                ${availableFrequencies.length > 0 
+                  ? availableFrequencies.map(freq => 
+                      freq.options.map(option => 
+                        `<option value="${freq.unit}-${option}" ${selectedFrequency === `${freq.unit}-${option}` ? 'selected' : ''}>
+                          ${option} ${freq.unit}${option > 1 ? 's' : ''} subscription
+                        </option>`
+                      ).join('')
+                    ).join('')
+                  : '<option>Loading frequencies...</option>'
+                }
               </select>
             </div>
             <button class="afinity-modal-update-meals">Update Meals</button>
@@ -418,7 +480,7 @@
             <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
-            <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button">Save</button>
+            <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()">Save</button>
           </div>
         </div>
         <div class="afinity-modal-card">
@@ -633,6 +695,60 @@
     }, 0);
   }
 
+  // Dedicated function to save address and method
+  async function saveAddressAndMethod() {
+    const subscriptionId = currentSubscription?.id;
+    if (!subscriptionId) {
+      showToast('No subscription ID found', 'error');
+      return;
+    }
+    // Update address
+    if (modalChanges.address1 || modalChanges.city || modalChanges.state || modalChanges.zip) {
+      const resp = await fetch(`${API_URL}/subscription/address`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscriptionId,
+          address1: modalChanges.address1,
+          city: modalChanges.city,
+          state: modalChanges.state,
+          zip: modalChanges.zip
+        })
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        showToast(data.error || (data.recharge && data.recharge.error) || 'Failed to update address', 'error');
+        return;
+      }
+    }
+    await refreshSubscriptionData(subscriptionId);
+    showToast('Address and delivery method updated successfully!', 'success');
+  }
+
+  // Dedicated function to save date
+  async function saveDate() {
+    const subscriptionId = currentSubscription?.id;
+    if (!subscriptionId) {
+      showToast('No subscription ID found', 'error');
+      return;
+    }
+    const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deliveryDate: modalChanges.deliveryDate,
+        fulfillmentTime: modalChanges.fulfillmentTime
+      })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast(data.error || 'Failed to update delivery date', 'error');
+      return;
+    }
+    await refreshSubscriptionData(subscriptionId);
+    showToast('Delivery date updated successfully!', 'success');
+  }
+
   function attachModalEvents() {
     if (modalLoading) return;
     // Close modal
@@ -663,10 +779,76 @@
     const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
     if (cancelBtn) cancelBtn.onclick = () => modalOverlay.style.display = 'none';
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
-    if (saveBtn) saveBtn.onclick = () => {
-      // TODO: Save logic
-      console.log('Saving changes:', modalChanges);
-      modalOverlay.style.display = 'none';
+    if (saveBtn) saveBtn.onclick = async () => {
+      console.log('Saving all changes:', modalChanges);
+      
+      try {
+        const subscriptionId = currentSubscription?.id;
+        if (!subscriptionId) {
+          alert('No subscription ID found');
+          return;
+        }
+
+        // Update address using the dedicated address endpoint
+        if (modalChanges.address1 || modalChanges.city || modalChanges.state || modalChanges.zip) {
+          const addressData = {
+            subscriptionId: subscriptionId,
+            address1: modalChanges.address1,
+            city: modalChanges.city,
+            state: modalChanges.state,
+            zip: modalChanges.zip
+          };
+
+          const addressResponse = await fetch(`${API_URL}/subscription/address`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(addressData)
+          });
+
+          const addressResult = await addressResponse.json();
+          if (!addressResult.success) {
+            console.error('Failed to update address:', addressResult);
+            alert('Failed to update address');
+            return;
+          }
+        }
+
+        // Update subscription properties (everything except address)
+        const subscriptionData = {
+          fulfillmentMethod: modalChanges.fulfillmentMethod,
+          selectedPickupLocationId: modalChanges.selectedPickupLocationId,
+          deliveryDate: modalChanges.deliveryDate,
+          fulfillmentTime: modalChanges.fulfillmentTime,
+          selectedFrequency: modalChanges.selectedFrequency
+        };
+
+        const subscriptionResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(subscriptionData)
+        });
+
+        const subscriptionResult = await subscriptionResponse.json();
+        if (subscriptionResult.success) {
+          console.log('All changes saved successfully:', subscriptionResult);
+          alert('All changes saved successfully!');
+          
+          // Refresh subscription data to show updated information
+          await refreshSubscriptionData(subscriptionId);
+          
+          modalOverlay.style.display = 'none';
+        } else {
+          console.error('Failed to save subscription changes:', subscriptionResult);
+          alert('Failed to save changes');
+        }
+      } catch (error) {
+        console.error('Error saving changes:', error);
+        alert('Error saving changes');
+      }
     };
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
@@ -747,6 +929,13 @@
       updateModalChanges('fulfillmentTime', e.target.value);
       fulfillmentTime = e.target.value;
     };
+    
+    // Frequency input
+    const frequencyInput = modalOverlay.querySelector('#afinity-frequency');
+    if (frequencyInput) frequencyInput.onchange = (e) => {
+      updateModalChanges('selectedFrequency', e.target.value);
+      selectedFrequency = e.target.value;
+    };
     // Address inputs - ensure they update modalChanges
     const addressInput = modalOverlay.querySelector('#afinity-address');
     console.log('Found address input:', addressInput);
@@ -786,28 +975,10 @@
     }
     // Save button for Delivery/Pickup/Address section
     const saveMethodBtn = modalOverlay.querySelector('#afinity-save-method-btn');
-    if (saveMethodBtn) saveMethodBtn.onclick = () => {
-      const methodAndAddress = {
-        fulfillmentMethod: modalChanges.fulfillmentMethod,
-        address1: modalChanges.address1,
-        city: modalChanges.city,
-        state: modalChanges.state,
-        zip: modalChanges.zip,
-        selectedPickupLocationId: modalChanges.selectedPickupLocationId
-      };
-      console.log('Save (Delivery/Pickup/Address):', methodAndAddress);
-      // TODO: Call API or further logic here
-    };
+    if (saveMethodBtn) saveMethodBtn.onclick = saveAddressAndMethod;
     // Save button for Date section
     const saveDateBtn = modalOverlay.querySelector('#afinity-save-date-btn');
-    if (saveDateBtn) saveDateBtn.onclick = () => {
-      const dateFields = {
-        deliveryDate: modalChanges.deliveryDate,
-        fulfillmentTime: modalChanges.fulfillmentTime
-      };
-      console.log('Save (Date):', dateFields);
-      // TODO: Call API or further logic here
-    };
+    if (saveDateBtn) saveDateBtn.onclick = saveDate;
   }
 
   function attachMethodSectionEvents() {
@@ -921,6 +1092,15 @@
           }
           renderModal();
           fetchSubscriptionAndPickup(subscriptionId, zip);
+          // Set current frequency from subscription data
+          if (payload.subscription_preferences) {
+            const intervalUnit = payload.subscription_preferences.interval_unit;
+            const orderIntervalFrequency = payload.subscription_preferences.order_interval_frequency;
+            if (intervalUnit && orderIntervalFrequency) {
+              selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
+            }
+          }
+          
           // Initialize modalChanges from subscription data
           modalChanges = {};
           updateModalChanges('address1', address1);
@@ -930,6 +1110,7 @@
           updateModalChanges('fulfillmentMethod', fulfillmentMethod);
           updateModalChanges('deliveryDate', deliveryDate);
           updateModalChanges('fulfillmentTime', fulfillmentTime);
+          updateModalChanges('selectedFrequency', selectedFrequency);
           updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
           // Only add selectedPickupLocationId if it's not null
           if (selectedPickupLocationId !== null) {
@@ -1140,6 +1321,159 @@
     renderSidebarMeals();
   }
 
+  function renderFrequencyDropdown() {
+    const frequencySelect = modalOverlay && modalOverlay.querySelector('#afinity-frequency');
+    if (frequencySelect && availableFrequencies.length > 0) {
+      frequencySelect.innerHTML = availableFrequencies.map(freq => 
+        freq.options.map(option => 
+          `<option value="${freq.unit}-${option}" ${selectedFrequency === `${freq.unit}-${option}` ? 'selected' : ''}>
+            ${option} ${freq.unit}${option > 1 ? 's' : ''} subscription
+          </option>`
+        ).join('')
+      ).join('');
+      
+      // Re-attach the change event
+      frequencySelect.onchange = (e) => {
+        updateModalChanges('selectedFrequency', e.target.value);
+        selectedFrequency = e.target.value;
+      };
+    }
+  }
+
   // At the very end of the IIFE, before it closes, trigger sidebar/cart calculations immediately
   rerenderSidebarMeals();
+  // At the end of the IIFE, expose the save functions to the global scope:
+  window.saveAddressAndMethod = saveAddressAndMethod;
+  window.saveDate = saveDate;
 })(); 
+
+// Toast logic
+function showToast(message, type = 'error') {
+  // Remove any existing toast
+  let existing = document.getElementById('afinity-toast');
+  if (existing) existing.remove();
+
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.id = 'afinity-toast';
+  toast.className = `afinity-toast afinity-toast-${type}`;
+  toast.innerHTML = `
+    <span class="afinity-toast-message">${message}</span>
+    <button class="afinity-toast-close" aria-label="Close">&times;</button>
+  `;
+
+  // Add close logic
+  toast.querySelector('.afinity-toast-close').onclick = () => toast.remove();
+
+  // Insert at top of modal overlay or body
+  if (modalOverlay) {
+    modalOverlay.prepend(toast);
+  } else {
+    document.body.prepend(toast);
+  }
+
+  // Auto-dismiss after 5 seconds
+  setTimeout(() => {
+    toast.remove();
+  }, 5000);
+}
+
+// Add minimal CSS for toast (if not present)
+(function addToastCss() {
+  if (document.getElementById('afinity-toast-css')) return;
+  const style = document.createElement('style');
+  style.id = 'afinity-toast-css';
+  style.innerHTML = `
+    .afinity-toast {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      min-width: 280px;
+      max-width: 90vw;
+      background: #fff;
+      color: #222;
+      border-radius: 6px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      padding: 16px 40px 16px 16px;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-left: 6px solid #e74c3c;
+      animation: afinity-toast-in 0.2s;
+    }
+    .afinity-toast-success { border-left-color: #27ae60; }
+    .afinity-toast-error { border-left-color: #e74c3c; }
+    .afinity-toast-message { flex: 1; }
+    .afinity-toast-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 22px;
+      cursor: pointer;
+      margin-left: 8px;
+      padding: 0;
+    }
+    @keyframes afinity-toast-in {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// Update saveAddressAndMethod to use showToast for errors
+async function saveAddressAndMethod() {
+  const subscriptionId = currentSubscription?.id;
+  if (!subscriptionId) {
+    showToast('No subscription ID found', 'error');
+    return;
+  }
+  // Update address
+  if (modalChanges.address1 || modalChanges.city || modalChanges.state || modalChanges.zip) {
+    const resp = await fetch(`${API_URL}/subscription/address`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscriptionId,
+        address1: modalChanges.address1,
+        city: modalChanges.city,
+        state: modalChanges.state,
+        zip: modalChanges.zip
+      })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast(data.error || (data.recharge && data.recharge.error) || 'Failed to update address', 'error');
+      return;
+    }
+  }
+  await refreshSubscriptionData(subscriptionId);
+  showToast('Address and delivery method updated successfully!', 'success');
+}
+
+// Update saveDate to use showToast for errors
+async function saveDate() {
+  const subscriptionId = currentSubscription?.id;
+  if (!subscriptionId) {
+    showToast('No subscription ID found', 'error');
+    return;
+  }
+  const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deliveryDate: modalChanges.deliveryDate,
+      fulfillmentTime: modalChanges.fulfillmentTime
+    })
+  });
+  const data = await resp.json();
+  if (!data.success) {
+    showToast(data.error || 'Failed to update delivery date', 'error');
+    return;
+  }
+  await refreshSubscriptionData(subscriptionId);
+  showToast('Delivery date updated successfully!', 'success');
+} 
