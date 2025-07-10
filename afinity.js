@@ -2,6 +2,7 @@
 (function() {
 
   // const API_URL = "https://admin-app.everytable-sh.com/api"
+  const API_URL = " https://format-queensland-briefs-.trycloudflare.com/api"
   // Dynamically load afinity.css if not already present
   var cssId = 'afinity-css';
   if (!document.getElementById(cssId)) {
@@ -18,7 +19,6 @@
   let currentSubscription = null;
   let modalLoading = false;
   let lastFetchedZip = null;
-  let zip = '';
   let availableFrequencies = [];
   let selectedFrequency = null;
 
@@ -74,8 +74,10 @@
 
   // Address state
   let address1 = '';
+  let address2 = '';
   let city = '';
   let state = '';
+  let zip = '';
   
   // Fulfillment state
   let fulfillmentTime = '';
@@ -97,25 +99,84 @@
   // Helper function to update modalChanges with logging
   function updateModalChanges(key, value) {
     modalChanges[key] = value;
-    console.log('modalChanges updated:', key, '=', value);
-    console.log('Current modalChanges:', JSON.parse(JSON.stringify(modalChanges)));
   }
 
   function showModalLoading() {
-    if (!modalOverlay) return;
+    // Try to find modalOverlay if it doesn't exist
+    if (!modalOverlay) {
+      modalOverlay = document.getElementById('afinity-modal-overlay');
+    }
+
+    console.log("Triggering modal loading")
+    
+    // If modal overlay doesn't exist, create a global loading overlay
+    if (!modalOverlay || !modalOverlay.appendChild) {
+      console.log('showModalLoading: creating global loading overlay');
+      
+      // Check if document.body exists
+      if (!document.body) {
+        console.log('showModalLoading: document.body not ready');
+        return;
+      }
+      
+      let globalLoading = document.getElementById('afinity-global-loading');
+      if (!globalLoading) {
+        globalLoading = document.createElement('div');
+        globalLoading.id = 'afinity-global-loading';
+        globalLoading.className = 'afinity-modal-loading';
+        globalLoading.innerHTML = '<div class="afinity-modal-loading-spinner"></div><div class="afinity-modal-loading-text">Loading…</div>';
+        
+        try {
+          document.body.appendChild(globalLoading);
+          console.log('showModalLoading: global loading overlay created');
+        } catch (error) {
+          console.error('showModalLoading: failed to create global loading overlay:', error);
+          return;
+        }
+      }
+      globalLoading.style.display = 'flex';
+      return;
+    }
+    
     let loading = modalOverlay.querySelector('.afinity-modal-loading');
     if (!loading) {
+      console.log('showModalLoading: creating new loading element');
       loading = document.createElement('div');
       loading.className = 'afinity-modal-loading';
       loading.innerHTML = '<div class="afinity-modal-loading-spinner"></div><div class="afinity-modal-loading-text">Loading…</div>';
-      modalOverlay.appendChild(loading);
+      
+      try {
+        modalOverlay.appendChild(loading);
+        console.log('showModalLoading: created new loading element');
+      } catch (error) {
+        console.error('showModalLoading: failed to append loading element:', error);
+        return;
+      }
     }
-    loading.style.display = '';
+    
+    if (loading) {
+      loading.style.display = 'flex';
+      console.log('showModalLoading: loading element shown');
+    }
   }
+  
   function hideModalLoading() {
-    if (!modalOverlay) return;
-    const loading = modalOverlay.querySelector('.afinity-modal-loading');
-    if (loading) loading.style.display = 'none';
+    // Try to find modalOverlay if it doesn't exist
+    if (!modalOverlay) {
+      modalOverlay = document.getElementById('afinity-modal-overlay');
+    }
+    
+    // Hide global loading overlay if it exists
+    const globalLoading = document.getElementById('afinity-global-loading');
+    if (globalLoading) {
+      globalLoading.style.display = 'none';
+    }
+    
+    // Hide modal loading overlay if it exists
+    if (modalOverlay) {
+      const loading = modalOverlay.querySelector('.afinity-modal-loading');
+      if (loading) loading.style.display = 'none';
+    }
   }
 
   async function fetchSubscriptionAndPickup(subscriptionId, zip) {
@@ -159,11 +220,12 @@
         // Update address data
         const address = payload.include.address;
         address1 = address.address1 || '';
+        address2 = address.address2 || '';
         city = address.city || '';
         state = getStateCode(address.province || '');
         zip = address.zip || '';
         
-        console.log('Updated address data:', { address1, city, state, zip });
+        console.log('Updated address data:', { address1, address2, city, state, zip });
         
         // Update delivery date and time
         deliveryDate = getDeliveryDateFromSubscription();
@@ -189,6 +251,7 @@
         
         // Update modalChanges with fresh data
         updateModalChanges('address1', address1);
+        updateModalChanges('address2', address2);
         updateModalChanges('city', city);
         updateModalChanges('state', state);
         updateModalChanges('zip', zip);
@@ -305,14 +368,18 @@
       ${method === 'Pickup' ? pickupListHtml : `
         <div class="afinity-modal-row">
           <label for="afinity-address" class="afinity-modal-select-label">Address</label>
-          <input id="afinity-address" type="text" placeholder="12345 Street Dr." value="${modalChanges.address1 || address1}" />
+          <input id="afinity-address" type="text" placeholder="Street Address" value="${modalChanges.address1 || address1}" />
+        </div>
+        <div class="afinity-modal-row">
+          <input id="afinity-address2" type="text" placeholder="Address Line 2 (optional)" value="${modalChanges.address2 || ''}" />
         </div>
         <div class="afinity-modal-row afinity-modal-address-row">
-          <input id="afinity-city" type="text" placeholder="Anytown" style="flex:2; margin-right:8px;" value="${modalChanges.city || city}" />
+          <input id="afinity-city" type="text" placeholder="City" style="flex:2; margin-right:8px;" value="${modalChanges.city || city}" />
           <select id="afinity-state" style="flex:1; margin-right:8px;">
+            <option value="">State</option>
             ${US_STATES.map(s => `<option value="${s.code}" ${(modalChanges.state || state) === s.code || (modalChanges.state || state) === s.name ? 'selected' : ''}>${s.code}</option>`).join('')}
           </select>
-          <input id="afinity-zip" type="text" placeholder="12345" style="flex:1;" value="${modalChanges.zip || zip}" />
+          <input id="afinity-zip" type="text" placeholder="Zip / Postal Code" style="flex:1;" value="${modalChanges.zip || zip}" />
         </div>
       `}
       <div style="display:flex; justify-content:flex-end; margin-top:8px;">
@@ -403,10 +470,8 @@
   }
 
   function renderMainPage() {
-    console.log('renderMainPage - address values:', { address1, city, state, zip });
     const currentDeliveryDate = getDeliveryDateFromSubscription();
     // Determine method
-    let method = fulfillmentMethod || 'Delivery';
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
@@ -698,18 +763,34 @@
   // Dedicated function to save address and method
   async function saveAddressAndMethod() {
     const subscriptionId = currentSubscription?.id;
+    showModalLoading()
     if (!subscriptionId) {
       showToast('No subscription ID found', 'error');
       return;
     }
-    // Update address
-    if (modalChanges.address1 || modalChanges.city || modalChanges.state || modalChanges.zip) {
+
+    const addressFieldsChanged = (
+      modalChanges.address1 !== address1 ||
+      modalChanges.address2 !== address2 ||
+      modalChanges.city !== city ||
+      modalChanges.state !== state ||
+      modalChanges.zip !== zip
+    );
+
+    const prevMethod = fulfillmentMethod; // This is the method before the change
+    const newMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
+    const isDelivery = newMethod === 'Delivery';
+    const switchedToDelivery = prevMethod === 'Pickup' && newMethod === 'Delivery';
+
+    if ((isDelivery && addressFieldsChanged) || switchedToDelivery) {
+      // Call address update endpoint
       const resp = await fetch(`${API_URL}/subscription/address`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subscriptionId,
           address1: modalChanges.address1,
+          address2: modalChanges.address2,
           city: modalChanges.city,
           state: modalChanges.state,
           zip: modalChanges.zip
@@ -718,11 +799,32 @@
       const data = await resp.json();
       if (!data.success) {
         showToast(data.error || (data.recharge && data.recharge.error) || 'Failed to update address', 'error');
-        return;
+        hideModalLoading()
+        return; 
+      }
+    } else {
+      // Only update fulfillment type (call fulfillment endpoint or just update modal state)
+      const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fulfillmentMethod: modalChanges.fulfillmentMethod,
+          selectedPickupLocationId: modalChanges.selectedPickupLocationId,
+          deliveryDate: modalChanges.deliveryDate,
+          fulfillmentTime: modalChanges.fulfillmentTime,
+          selectedFrequency: modalChanges.selectedFrequency
+        })
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        showToast(data.error || 'Failed to update delivery method', 'error');
+        hideModalLoading()
+        return; 
       }
     }
     await refreshSubscriptionData(subscriptionId);
     showToast('Address and delivery method updated successfully!', 'success');
+    hideModalLoading()
   }
 
   // Dedicated function to save date
@@ -780,20 +882,23 @@
     if (cancelBtn) cancelBtn.onclick = () => modalOverlay.style.display = 'none';
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
-      console.log('Saving all changes:', modalChanges);
+      
+      // Show loading state
+      showModalLoading();
       
       try {
         const subscriptionId = currentSubscription?.id;
         if (!subscriptionId) {
-          alert('No subscription ID found');
+          showToast('No subscription ID found', 'error');
           return;
         }
 
         // Update address using the dedicated address endpoint
-        if (modalChanges.address1 || modalChanges.city || modalChanges.state || modalChanges.zip) {
+        if (modalChanges.address1 || modalChanges.address2 || modalChanges.city || modalChanges.state || modalChanges.zip) {
           const addressData = {
             subscriptionId: subscriptionId,
             address1: modalChanges.address1,
+            address2: modalChanges.address2,
             city: modalChanges.city,
             state: modalChanges.state,
             zip: modalChanges.zip
@@ -810,12 +915,13 @@
           const addressResult = await addressResponse.json();
           if (!addressResult.success) {
             console.error('Failed to update address:', addressResult);
-            alert('Failed to update address');
+            showToast(addressResult.error || 'Failed to update address', 'error');
+            hideModalLoading();
             return;
           }
         }
 
-        // Update subscription properties (everything except address)
+        // Always update fulfillment type and related fields
         const subscriptionData = {
           fulfillmentMethod: modalChanges.fulfillmentMethod,
           selectedPickupLocationId: modalChanges.selectedPickupLocationId,
@@ -834,20 +940,20 @@
 
         const subscriptionResult = await subscriptionResponse.json();
         if (subscriptionResult.success) {
-          console.log('All changes saved successfully:', subscriptionResult);
-          alert('All changes saved successfully!');
-          
+          showToast('All changes saved successfully!', 'success');
           // Refresh subscription data to show updated information
           await refreshSubscriptionData(subscriptionId);
-          
           modalOverlay.style.display = 'none';
         } else {
           console.error('Failed to save subscription changes:', subscriptionResult);
-          alert('Failed to save changes');
+          showToast('Failed to save changes', 'error');
         }
       } catch (error) {
         console.error('Error saving changes:', error);
-        alert('Error saving changes');
+        showToast('Error saving changes', 'error');
+      } finally {
+        // Hide loading state
+        hideModalLoading();
       }
     };
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
@@ -890,14 +996,10 @@
         if (idx !== -1) {
           if (action === 'increment') {
             selectedMeals[idx].qty++;
-            console.log(`Incremented meal ${mealId}, new qty: ${selectedMeals[idx].qty}`);
           } else if (action === 'decrement') {
             selectedMeals[idx].qty--;
             if (selectedMeals[idx].qty <= 0) {
               selectedMeals[idx].qty = 0;
-              console.log(`Removed meal ${mealId} from sidebar`);
-            } else {
-              console.log(`Decremented meal ${mealId}, new qty: ${selectedMeals[idx].qty}`);
             }
           }
           updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
@@ -938,34 +1040,33 @@
     };
     // Address inputs - ensure they update modalChanges
     const addressInput = modalOverlay.querySelector('#afinity-address');
-    console.log('Found address input:', addressInput);
     if (addressInput) {
       addressInput.oninput = (e) => { 
-        console.log('Address input changed:', e.target.value);
         updateModalChanges('address1', e.target.value); 
         address1 = e.target.value; 
       };
     }
+    const address2Input = modalOverlay.querySelector('#afinity-address2');
+    if (address2Input) {
+      address2Input.oninput = (e) => {
+        updateModalChanges('address2', e.target.value);
+      };
+    }
     const cityInput = modalOverlay.querySelector('#afinity-city');
-    console.log('Found city input:', cityInput);
     if (cityInput) {
       cityInput.oninput = (e) => { 
-        console.log('City input changed:', e.target.value);
         updateModalChanges('city', e.target.value); 
         city = e.target.value; 
       };
     }
     const stateInput = modalOverlay.querySelector('#afinity-state');
-    console.log('Found state input:', stateInput);
     if (stateInput) {
       stateInput.onchange = (e) => { 
-        console.log('State input changed:', e.target.value);
         updateModalChanges('state', e.target.value); 
         state = e.target.value; 
       };
     }
     const zipInput = modalOverlay.querySelector('#afinity-zip');
-    console.log('Found zip input:', zipInput);
     if (zipInput) {
       zipInput.oninput = (e) => { 
         console.log('Zip input changed:', e.target.value);
@@ -994,30 +1095,26 @@
     });
     // Listen for address, city, state, zip changes
     const addressInput = modalOverlay.querySelector('#afinity-address');
-    console.log('attachMethodSectionEvents - Found address input:', addressInput);
     if (addressInput) addressInput.oninput = (e) => { 
-      console.log('attachMethodSectionEvents - Address input changed:', e.target.value);
       updateModalChanges('address1', e.target.value); 
       address1 = e.target.value; 
     };
+    const address2Input = modalOverlay.querySelector('#afinity-address2');
+    if (address2Input) address2Input.oninput = (e) => {
+      updateModalChanges('address2', e.target.value);
+    };
     const cityInput = modalOverlay.querySelector('#afinity-city');
-    console.log('attachMethodSectionEvents - Found city input:', cityInput);
     if (cityInput) cityInput.oninput = (e) => { 
-      console.log('attachMethodSectionEvents - City input changed:', e.target.value);
       updateModalChanges('city', e.target.value); 
       city = e.target.value; 
     };
     const stateInput = modalOverlay.querySelector('#afinity-state');
-    console.log('attachMethodSectionEvents - Found state input:', stateInput);
     if (stateInput) stateInput.onchange = (e) => { 
-      console.log('attachMethodSectionEvents - State input changed:', e.target.value);
       updateModalChanges('state', e.target.value); 
       state = e.target.value; 
     };
     const zipInput = modalOverlay.querySelector('#afinity-zip');
-    console.log('attachMethodSectionEvents - Found zip input:', zipInput);
     if (zipInput) zipInput.oninput = (e) => { 
-      console.log('attachMethodSectionEvents - Zip input changed:', e.target.value);
       updateModalChanges('zip', e.target.value); 
       zip = e.target.value; 
     };
@@ -1047,11 +1144,12 @@
           const address = payload.include.address;
           // Extract data from API response
           address1 = address.address1 || '';
+          address2 = address.address2 || '';
           city = address.city || '';
           state = getStateCode(address.province || '');
           zip = address.zip || '';
           
-          console.log('Extracted address data:', { address1, city, state, zip });
+          console.log('Extracted address data:', { address1, address2, city, state, zip });
           
           // Extract fulfillment date, time, and method from order attributes
           if (payload?.include?.address?.order_attributes) {
@@ -1104,6 +1202,7 @@
           // Initialize modalChanges from subscription data
           modalChanges = {};
           updateModalChanges('address1', address1);
+          updateModalChanges('address2', address2);
           updateModalChanges('city', city);
           updateModalChanges('state', state);
           updateModalChanges('zip', zip);
@@ -1349,79 +1448,104 @@
 
 // Toast logic
 function showToast(message, type = 'error') {
-  // Remove any existing toast
-  let existing = document.getElementById('afinity-toast');
-  if (existing) existing.remove();
-
-  // Create toast element
-  const toast = document.createElement('div');
-  toast.id = 'afinity-toast';
-  toast.className = `afinity-toast afinity-toast-${type}`;
-  toast.innerHTML = `
-    <span class="afinity-toast-message">${message}</span>
-    <button class="afinity-toast-close" aria-label="Close">&times;</button>
-  `;
-
-  // Add close logic
-  toast.querySelector('.afinity-toast-close').onclick = () => toast.remove();
-
-  // Insert at top of modal overlay or body
-  if (modalOverlay) {
-    modalOverlay.prepend(toast);
-  } else {
-    document.body.prepend(toast);
+  console.log('showToast called with:', { message, type });
+  
+  const toast = document.getElementById('afinity-toast'); 
+  console.log('Toast element found:', toast);
+  
+  if (!toast) {
+    console.log('showToast: No toast element found, creating one...');
+    // Try to create the toast element if it doesn't exist
+    const createToast = () => {
+      if (document.getElementById('afinity-toast')) return;
+      
+      if (!document.body) {
+        console.log('showToast: document.body not ready, retrying...');
+        setTimeout(createToast, 100);
+        return;
+      }
+      
+      const newToast = document.createElement('div');
+      newToast.id = 'afinity-toast';
+      newToast.className = 'afinity-toast';
+      newToast.style.display = 'none';
+      newToast.innerHTML = `
+        <div class="afinity-toast-message"></div>
+        <button class="afinity-toast-close" onclick="this.parentElement.style.display='none'">&times;</button>
+      `;
+      
+      try {
+        document.body.appendChild(newToast);
+        console.log('showToast: Created new toast element');
+        // Recursively call showToast with the new element
+        setTimeout(() => showToast(message, type), 50);
+      } catch (error) {
+        console.error('showToast: Failed to create toast element:', error);
+      }
+    };
+    createToast();
+    return;
   }
+  
+  console.log('showToast: Setting toast content and classes');
+  
+  // Set content and type
+  toast.className = `afinity-toast afinity-toast-${type}`;
+  console.log('showToast: Set toast className to:', toast.className);
+  
+  const messageElement = toast.querySelector('.afinity-toast-message');
+  console.log('showToast: Message element found:', messageElement);
+  
+  if (messageElement) {
+    messageElement.textContent = message;
+    console.log('showToast: Set message text to:', message);
+  } else {
+    console.error('showToast: Could not find message element');
+  }
+  
+  toast.style.display = 'flex';
+  console.log('showToast: Set toast display to flex');
 
   // Auto-dismiss after 5 seconds
-  setTimeout(() => {
-    toast.remove();
+  if (toast._timeout) {
+    console.log('showToast: Clearing existing timeout');
+    clearTimeout(toast._timeout);
+  }
+  
+  toast._timeout = setTimeout(() => {
+    console.log('showToast: Auto-dismissing toast');
+    toast.style.display = 'none';
   }, 5000);
+  
+  console.log('showToast: Toast should now be visible');
 }
 
-// Add minimal CSS for toast (if not present)
-(function addToastCss() {
-  if (document.getElementById('afinity-toast-css')) return;
-  const style = document.createElement('style');
-  style.id = 'afinity-toast-css';
-  style.innerHTML = `
-    .afinity-toast {
-      position: fixed;
-      top: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 9999;
-      min-width: 280px;
-      max-width: 90vw;
-      background: #fff;
-      color: #222;
-      border-radius: 6px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
-      padding: 16px 40px 16px 16px;
-      font-size: 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-left: 6px solid #e74c3c;
-      animation: afinity-toast-in 0.2s;
-    }
-    .afinity-toast-success { border-left-color: #27ae60; }
-    .afinity-toast-error { border-left-color: #e74c3c; }
-    .afinity-toast-message { flex: 1; }
-    .afinity-toast-close {
-      background: none;
-      border: none;
-      color: #888;
-      font-size: 22px;
-      cursor: pointer;
-      margin-left: 8px;
-      padding: 0;
-    }
-    @keyframes afinity-toast-in {
-      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
+// Create toast element if not present
+(function createToastElement() {
+  if (document.getElementById('afinity-toast')) return;
+  
+  // Check if document.body exists
+  if (!document.body) {
+    console.log('createToastElement: document.body not ready, retrying...');
+    setTimeout(createToastElement, 100);
+    return;
+  }
+  
+  const toast = document.createElement('div');
+  toast.id = 'afinity-toast';
+  toast.className = 'afinity-toast';
+  toast.style.display = 'none';
+  toast.innerHTML = `
+    <div class="afinity-toast-message"></div>
+    <button class="afinity-toast-close" onclick="this.parentElement.style.display='none'">&times;</button>
   `;
-  document.head.appendChild(style);
+  
+  try {
+    document.body.appendChild(toast);
+    console.log('createToastElement: toast element created successfully');
+  } catch (error) {
+    console.error('createToastElement: failed to append toast element:', error);
+  }
 })();
 
 // Update saveAddressAndMethod to use showToast for errors
@@ -1431,27 +1555,82 @@ async function saveAddressAndMethod() {
     showToast('No subscription ID found', 'error');
     return;
   }
-  // Update address
-  if (modalChanges.address1 || modalChanges.city || modalChanges.state || modalChanges.zip) {
-    const resp = await fetch(`${API_URL}/subscription/address`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subscriptionId,
-        address1: modalChanges.address1,
-        city: modalChanges.city,
-        state: modalChanges.state,
-        zip: modalChanges.zip
-      })
-    });
-    const data = await resp.json();
-    if (!data.success) {
-      showToast(data.error || (data.recharge && data.recharge.error) || 'Failed to update address', 'error');
-      return;
+  
+  // Show loading state
+  showModalLoading();
+  
+  try {
+    const addressFieldsChanged = (
+      modalChanges.address1 !== address1 ||
+      modalChanges.address2 !== address2 ||
+      modalChanges.city !== city ||
+      modalChanges.state !== state ||
+      modalChanges.zip !== zip
+    );
+
+    if (addressFieldsChanged) {
+      // Call address update endpoint
+      const resp = await fetch(`${API_URL}/subscription/address`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscriptionId,
+          address1: modalChanges.address1,
+          address2: modalChanges.address2,
+          city: modalChanges.city,
+          state: modalChanges.state,
+          zip: modalChanges.zip
+        })
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        let errorMessage = 'Failed to update address';
+        
+        // Handle Recharge error formatting
+        if (data.recharge && data.recharge.error) {
+          try {
+            const rechargeError = JSON.parse(data.recharge.error);
+            if (rechargeError.errors && rechargeError.errors.all) {
+              errorMessage = `Failed to update address in Recharge: ${rechargeError.errors.all.toLowerCase()}`;
+            } else {
+              errorMessage = `Failed to update address in Recharge: ${data.recharge.error}`;
+            }
+          } catch (e) {
+            // If parsing fails, use the raw error
+            errorMessage = `Failed to update address in Recharge: ${data.recharge.error}`;
+          }
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+        
+        showToast(errorMessage, 'error');
+        return;
+      }
+    } else {
+      // Only update fulfillment type (call fulfillment endpoint or just update modal state)
+      const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fulfillmentMethod: modalChanges.fulfillmentMethod,
+          selectedPickupLocationId: modalChanges.selectedPickupLocationId,
+          deliveryDate: modalChanges.deliveryDate,
+          fulfillmentTime: modalChanges.fulfillmentTime,
+          selectedFrequency: modalChanges.selectedFrequency
+        })
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        showToast(data.error || 'Failed to update delivery method', 'error');
+        return;
+      }
     }
+    await refreshSubscriptionData(subscriptionId);
+    showToast('Address and delivery method updated successfully!', 'success');
+  } finally {
+    // Hide loading state
+    hideModalLoading();
   }
-  await refreshSubscriptionData(subscriptionId);
-  showToast('Address and delivery method updated successfully!', 'success');
 }
 
 // Update saveDate to use showToast for errors
@@ -1461,19 +1640,28 @@ async function saveDate() {
     showToast('No subscription ID found', 'error');
     return;
   }
-  const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      deliveryDate: modalChanges.deliveryDate,
-      fulfillmentTime: modalChanges.fulfillmentTime
-    })
-  });
-  const data = await resp.json();
-  if (!data.success) {
-    showToast(data.error || 'Failed to update delivery date', 'error');
-    return;
+  
+  // Show loading state
+  showModalLoading();
+  
+  try {
+    const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deliveryDate: modalChanges.deliveryDate,
+        fulfillmentTime: modalChanges.fulfillmentTime
+      })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast(data.error || 'Failed to update delivery date', 'error');
+      return;
+    }
+    await refreshSubscriptionData(subscriptionId);
+    showToast('Delivery date updated successfully!', 'success');
+  } finally {
+    // Hide loading state
+    hideModalLoading();
   }
-  await refreshSubscriptionData(subscriptionId);
-  showToast('Delivery date updated successfully!', 'success');
 } 
