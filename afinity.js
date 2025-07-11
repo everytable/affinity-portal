@@ -1218,7 +1218,20 @@
     };
     // Cancel/Save/Cancel subscription
     const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
-    if (cancelBtn) cancelBtn.onclick = () => modalOverlay.style.display = 'none';
+    if (cancelBtn) cancelBtn.onclick = () => {
+      // Dispatch custom event for cancel
+      const cancelEvent = new CustomEvent('Recharge::click::cancel', {
+        detail: {
+          subscriptionId: currentSubscription?.id,
+          timestamp: new Date().toISOString()
+        }
+      });
+      document.dispatchEvent(cancelEvent);
+      console.log('Dispatched Recharge::click::cancel event');
+      
+      // Hide the modal
+      modalOverlay.style.display = 'none';
+    };
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
       
