@@ -982,8 +982,34 @@
       console.log("Saved Address")
       // Always update fulfillment/order attributes
       const orderAttributesArr = [];
+      
+      // First, get all existing order attributes from the current subscription
+      if (currentSubscription?.include?.address?.order_attributes) {
+        // Convert existing order attributes to the format we need
+        currentSubscription.include.address.order_attributes.forEach(attr => {
+          if (attr && typeof attr === 'object') {
+            // Handle both {name, value} and {"Key": "Value"} formats
+            if ('name' in attr && 'value' in attr) {
+              orderAttributesArr.push({ [attr.name]: attr.value });
+            } else {
+              // It's already in {"Key": "Value"} format
+              orderAttributesArr.push(attr);
+            }
+          }
+        });
+      }
+      
+      // Now update or add the specific attributes we're changing
       if (modalChanges.fulfillmentMethod || fulfillmentMethod) {
-        orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
+        // Update existing Fulfillment Type or add new one
+        const existingIndex = orderAttributesArr.findIndex(attr => 
+          Object.keys(attr)[0] === 'Fulfillment Type'
+        );
+        if (existingIndex !== -1) {
+          orderAttributesArr[existingIndex] = { "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod };
+        } else {
+          orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
+        }
       }
       
       // Always include LocationID
@@ -996,12 +1022,29 @@
       }
       
       if (locationIdToSend) {
-        orderAttributesArr.push({ "LocationID": locationIdToSend });
+        // Update existing LocationID or add new one
+        const existingIndex = orderAttributesArr.findIndex(attr => 
+          Object.keys(attr)[0] === 'LocationID'
+        );
+        if (existingIndex !== -1) {
+          orderAttributesArr[existingIndex] = { "LocationID": locationIdToSend };
+        } else {
+          orderAttributesArr.push({ "LocationID": locationIdToSend });
+        }
       }
       
       if (modalChanges.deliveryDate) {
-        orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
+        // Update existing Fulfillment Date or add new one
+        const existingIndex = orderAttributesArr.findIndex(attr => 
+          Object.keys(attr)[0] === 'Fulfillment Date'
+        );
+        if (existingIndex !== -1) {
+          orderAttributesArr[existingIndex] = { "Fulfillment Date": modalChanges.deliveryDate };
+        } else {
+          orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
+        }
       }
+      
       console.log("Computinig timezone date")
       // Compute ISO string for Fulfillment Date
       let timeZone = '';
@@ -1049,7 +1092,15 @@
         return;
       }
       if (isoString) {
-        orderAttributesArr.push({ "Fulfillment Date": isoString });
+        // Update existing Fulfillment Date with the ISO string
+        const existingIndex = orderAttributesArr.findIndex(attr => 
+          Object.keys(attr)[0] === 'Fulfillment Date'
+        );
+        if (existingIndex !== -1) {
+          orderAttributesArr[existingIndex] = { "Fulfillment Date": isoString };
+        } else {
+          orderAttributesArr.push({ "Fulfillment Date": isoString });
+        }
       }
       
       const updatePayload = {
@@ -1151,8 +1202,34 @@
 
         // Always update fulfillment type and related fields
         const orderAttributesArr = [];
+        
+        // First, get all existing order attributes from the current subscription
+        if (currentSubscription?.include?.address?.order_attributes) {
+          // Convert existing order attributes to the format we need
+          currentSubscription.include.address.order_attributes.forEach(attr => {
+            if (attr && typeof attr === 'object') {
+              // Handle both {name, value} and {"Key": "Value"} formats
+              if ('name' in attr && 'value' in attr) {
+                orderAttributesArr.push({ [attr.name]: attr.value });
+              } else {
+                // It's already in {"Key": "Value"} format
+                orderAttributesArr.push(attr);
+              }
+            }
+          });
+        }
+        
+        // Now update or add the specific attributes we're changing
         if (modalChanges.fulfillmentMethod || fulfillmentMethod) {
-          orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
+          // Update existing Fulfillment Type or add new one
+          const existingIndex = orderAttributesArr.findIndex(attr => 
+            Object.keys(attr)[0] === 'Fulfillment Type'
+          );
+          if (existingIndex !== -1) {
+            orderAttributesArr[existingIndex] = { "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod };
+          } else {
+            orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
+          }
         }
         
         // Always include LocationID
@@ -1165,11 +1242,27 @@
         }
         
         if (locationIdToSend) {
-          orderAttributesArr.push({ "LocationID": locationIdToSend });
+          // Update existing LocationID or add new one
+          const existingIndex = orderAttributesArr.findIndex(attr => 
+            Object.keys(attr)[0] === 'LocationID'
+          );
+          if (existingIndex !== -1) {
+            orderAttributesArr[existingIndex] = { "LocationID": locationIdToSend };
+          } else {
+            orderAttributesArr.push({ "LocationID": locationIdToSend });
+          }
         }
         
         if (modalChanges.deliveryDate) {
-          orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
+          // Update existing Fulfillment Date or add new one
+          const existingIndex = orderAttributesArr.findIndex(attr => 
+            Object.keys(attr)[0] === 'Fulfillment Date'
+          );
+          if (existingIndex !== -1) {
+            orderAttributesArr[existingIndex] = { "Fulfillment Date": modalChanges.deliveryDate };
+          } else {
+            orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
+          }
         }
         
         // Compute ISO string for Fulfillment Date
