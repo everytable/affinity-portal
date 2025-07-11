@@ -318,9 +318,15 @@
     }
     
     console.log('Configuring flatpickr with allowed dates:', allowedDates);
+    
+    // Get current date from subscription data
+    const currentDate = modalChanges.deliveryDate || deliveryDate;
+    console.log('Current date to set in picker:', currentDate);
+    
     flatpickr(input, {
       dateFormat: "Y-m-d", // Keep ISO format for storage
       enable: allowedDates,
+      defaultDate: currentDate || undefined, // Set default date if available
       onChange: function(selectedDates, dateStr) {
         console.log('Date picker onChange triggered');
         console.log('Selected date:', dateStr);
@@ -343,7 +349,9 @@
         fetchFrequencies()
       ]);
       // Fetch available dates for the current fulfillment type and pickup location
-      await fetchAvailableDates(zip, modalChanges.selectedPickupLocationId || selectedPickupLocationId);
+      const pickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+      console.log('Fetching available dates with pickup location ID:', pickupLocationId);
+      await fetchAvailableDates(zip, pickupLocationId);
       setupDatePicker(modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery');
     }catch(error){
       console.error('Error fetching subscription and pickup:', error);
@@ -352,9 +360,11 @@
 
   async function fetchFrequencies() {
     try {
+      console.log('Fetching frequencies from:', `${API_URL}/subscription/frequencies`);
       const response = await fetch(`${API_URL}/subscription/frequencies`);
       const data = await response.json();
       availableFrequencies = data.frequencies || [];
+      console.log('Fetched frequencies:', availableFrequencies);
     } catch (error) {
       console.error('Error fetching frequencies:', error);
       availableFrequencies = [];
@@ -408,12 +418,11 @@
         }
         
         // Update frequency
-        if (payload.subscription_preferences) {
-          const intervalUnit = payload.subscription_preferences.interval_unit;
-          const orderIntervalFrequency = payload.subscription_preferences.order_interval_frequency;
-          if (intervalUnit && orderIntervalFrequency) {
-            selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
-          }
+        const intervalUnit = payload.order_interval_unit;
+        const orderIntervalFrequency = payload.order_interval_frequency;
+        if (intervalUnit && orderIntervalFrequency) {
+          selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
+          console.log('Set selectedFrequency from subscription data:', selectedFrequency);
         }
         
         // Update modalChanges with fresh data
@@ -600,9 +609,27 @@
       return deliveryDate; 
     }
     
-    const fulfillmentDateAttr = currentSubscription.include.address.order_attributes.find(attr => 
-      attr.name === 'Fulfillment Date' 
-    );
+    // Look for Fulfillment Date in order attributes
+    let fulfillmentDateAttr = null;
+    
+    // Handle both {name, value} and {"Key": "Value"} formats
+    for (const attr of currentSubscription.include.address.order_attributes) {
+      if (attr && typeof attr === 'object') {
+        if ('name' in attr && 'value' in attr) {
+          if (attr.name === 'Fulfillment Date') {
+            fulfillmentDateAttr = attr;
+            break;
+          }
+        } else {
+          // It's already in {"Key": "Value"} format
+          const key = Object.keys(attr)[0];
+          if (key === 'Fulfillment Date') {
+            fulfillmentDateAttr = { name: key, value: attr[key] };
+            break;
+          }
+        }
+      }
+    }
     
     if (fulfillmentDateAttr) {
       const fulfillmentDateTime = fulfillmentDateAttr.value;
@@ -613,12 +640,8 @@
       }
     }
     
-    // Fallback to next_charge_scheduled_at if no fulfillment date found
-    if (currentSubscription.next_charge_scheduled_at) {
-      return currentSubscription.next_charge_scheduled_at.split('T')[0];
-    }
-    
-    return deliveryDate; // final fallback
+    // No Fulfillment Date found, return empty string to force user selection
+    return '';
   }
   
   // Helper to get fulfillment time from currentSubscription order attributes
@@ -769,7 +792,7 @@
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time" class="afinity-modal-select-label">Time</label>
-            <input id="timepicker" class="timepicker" type="text" placeholder="Select delivery time" value="${formatTimeForDisplay(getFulfillmentTimeFromSubscription())}"/>
+            <input id="timepicker" class="timepicker" type="text" placeholder="Select delivery time" value="${formatTimeForDisplay(modalChanges.fulfillmentTime || fulfillmentTime || getFulfillmentTimeFromSubscription())}"/>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
             <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()">Save</button>
@@ -1133,11 +1156,18 @@
         }
       }
       
+      // Parse frequency if changed
+      let frequencyData = null;
+      if (modalChanges.selectedFrequency && modalChanges.selectedFrequency !== selectedFrequency) {
+        frequencyData = parseFrequency(modalChanges.selectedFrequency);
+      }
+      
       const updatePayload = {
         order_attributes: orderAttributesArr,
         deliveryDate: modalChanges.deliveryDate,
         fulfillmentTime: modalChanges.fulfillmentTime,
-        selectedFrequency: modalChanges.selectedFrequency
+        selectedFrequency: modalChanges.selectedFrequency,
+        ...(frequencyData && { subscription_preferences: frequencyData })
       };
       const subscriptionResp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
         method: 'POST',
@@ -1339,11 +1369,18 @@
           orderAttributesArr.push({ "Fulfillment Date": isoString });
         }
         
+        // Parse frequency if changed
+        let frequencyData = null;
+        if (modalChanges.selectedFrequency && modalChanges.selectedFrequency !== selectedFrequency) {
+          frequencyData = parseFrequency(modalChanges.selectedFrequency);
+        }
+        
         const updatePayload = {
           order_attributes: orderAttributesArr,
           deliveryDate: modalChanges.deliveryDate,
           fulfillmentTime: modalChanges.fulfillmentTime,
-          selectedFrequency: modalChanges.selectedFrequency
+          selectedFrequency: modalChanges.selectedFrequency,
+          ...(frequencyData && { subscription_preferences: frequencyData })
         };
 
         const subscriptionResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
@@ -1693,9 +1730,28 @@
           
           // Extract fulfillment date, time, and method from order attributes
           if (payload?.include?.address?.order_attributes) {
-            const fulfillmentDateAttr = payload.include.address.order_attributes.find(attr => 
-              attr.name === 'Fulfillment Date' 
-            );
+            // Look for Fulfillment Date in order attributes
+            let fulfillmentDateAttr = null;
+            
+            // Handle both {name, value} and {"Key": "Value"} formats
+            for (const attr of payload.include.address.order_attributes) {
+              if (attr && typeof attr === 'object') {
+                if ('name' in attr && 'value' in attr) {
+                  if (attr.name === 'Fulfillment Date') {
+                    fulfillmentDateAttr = attr;
+                    break;
+                  }
+                } else {
+                  // It's already in {"Key": "Value"} format
+                  const key = Object.keys(attr)[0];
+                  if (key === 'Fulfillment Date') {
+                    fulfillmentDateAttr = { name: key, value: attr[key] };
+                    break;
+                  }
+                }
+              }
+            }
+            
             if (fulfillmentDateAttr) {
               const fulfillmentDateTime = fulfillmentDateAttr.value;
               if (fulfillmentDateTime.includes('T')) {
@@ -1711,6 +1767,10 @@
                 deliveryDate = fulfillmentDateTime;
                 fulfillmentTime = '15:30'; // Default time
               }
+            } else {
+              // No Fulfillment Date found, set empty values to force user selection
+              deliveryDate = '';
+              fulfillmentTime = '';
             }
             
             let fulfillmentTypeAttr;
@@ -1738,30 +1798,20 @@
               fulfillmentMethod = 'Delivery';
             }
           }
-          // Update delivery date and price from subscription data
-          // Use fulfillment date from order attributes as delivery date
-          deliveryDate = getDeliveryDateFromSubscription();
+          // Update price from subscription data
           if (payload.price) {
             price = parseFloat(payload.price).toFixed(2);
           }
           
-          currentPage = 'main';
-          if (modalOverlay) {
-            modalOverlay.style.display = '';
-          }
-          renderModal();
-          try {
-            await fetchSubscriptionAndPickup(subscriptionId, zip);
-          } catch (err) {
-            console.error("Error in fetchSubscriptionAndPickup", err);
-          }
           // Set current frequency from subscription data
-          if (payload.subscription_preferences) {
-            const intervalUnit = payload.subscription_preferences.interval_unit;
-            const orderIntervalFrequency = payload.subscription_preferences.order_interval_frequency;
-            if (intervalUnit && orderIntervalFrequency) {
-              selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
-            }
+          const intervalUnit = payload.order_interval_unit;
+          const orderIntervalFrequency = payload.order_interval_frequency;
+          console.log('Raw subscription frequency data:', { intervalUnit, orderIntervalFrequency });
+          if (intervalUnit && orderIntervalFrequency) {
+            selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
+            console.log('Set selectedFrequency from subscription data (initial load):', selectedFrequency);
+          } else {
+            console.log('Missing order_interval_unit or order_interval_frequency:', { intervalUnit, orderIntervalFrequency });
           }
           
           // Initialize modalChanges from subscription data
@@ -1776,10 +1826,44 @@
           updateModalChanges('fulfillmentTime', fulfillmentTime);
           updateModalChanges('selectedFrequency', selectedFrequency);
           updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
-          // Only add selectedPickupLocationId if it's not null
-          if (selectedPickupLocationId !== null) {
-            updateModalChanges('selectedPickupLocationId', selectedPickupLocationId);
+          
+          // Set pickup location ID if it exists in order attributes
+          if (payload?.include?.address?.order_attributes) {
+            for (const attr of payload.include.address.order_attributes) {
+              if (attr && typeof attr === 'object') {
+                if ('name' in attr && 'value' in attr) {
+                  if (attr.name === 'LocationID') {
+                    selectedPickupLocationId = parseInt(attr.value);
+                    updateModalChanges('selectedPickupLocationId', selectedPickupLocationId);
+                    break;
+                  }
+                } else {
+                  const key = Object.keys(attr)[0];
+                  if (key === 'LocationID') {
+                    selectedPickupLocationId = parseInt(attr[key]);
+                    updateModalChanges('selectedPickupLocationId', selectedPickupLocationId);
+                    break;
+                  }
+                }
+              }
+            }
           }
+          
+          currentPage = 'main';
+          if (modalOverlay) {
+            modalOverlay.style.display = '';
+          }
+          renderModal();
+          
+          // Now fetch available dates and times, then initialize pickers
+          try {
+            await fetchSubscriptionAndPickup(subscriptionId, zip);
+            // After fetching available dates, initialize the date and time pickers with current values
+            await initializeDateAndTimePickers();
+          } catch (err) {
+            console.error("Error in fetchSubscriptionAndPickup", err);
+          }
+
           if (payload && payload.include && payload.include.bundle_selections && Array.isArray(payload.include.bundle_selections.items)) {
             originalSubscriptionMeals = payload.include.bundle_selections.items.map(item => {
               // Try to find a matching meal in MEALS or COLD_MEALS for title/img fallback
@@ -1836,6 +1920,8 @@
                           rerenderModalCartList();
                           renderModal();
                           hideModalLoading();
+                          // <-- Place the picker initialization here!
+                          initializeDateAndTimePickers();
                         })
                         .catch(err => {
                           currentCatalogVariants = null;
@@ -1885,6 +1971,8 @@
                             rerenderModalCartList();
                             renderModal();
                             hideModalLoading();
+                            // <-- Place the picker initialization here!
+                            initializeDateAndTimePickers();
                           })
                           .catch(err => {
                             currentCatalogVariants = null;
@@ -2045,16 +2133,39 @@
   }
 
   function renderFrequencyDropdown() {
+    console.log('=== RENDER FREQUENCY DROPDOWN START ===');
+    console.log('selectedFrequency:', selectedFrequency);
+    console.log('availableFrequencies:', availableFrequencies);
+    console.log('modalChanges.selectedFrequency:', modalChanges.selectedFrequency);
+    console.log('Current subscription data:', currentSubscription?.subscription_preferences);
+    
     const frequencySelect = modalOverlay && modalOverlay.querySelector('#afinity-frequency');
-    if (frequencySelect && availableFrequencies.length > 0) {
-      frequencySelect.innerHTML = availableFrequencies.map(freq => 
-        freq.options.map(option => 
-          `<option value="${freq.unit}-${option}" ${selectedFrequency === `${freq.unit}-${option}` ? 'selected' : ''}>
+    console.log('Frequency select element found:', !!frequencySelect);
+    
+    if (frequencySelect && availableFrequencies.length > 0 && selectedFrequency) {
+      const optionsHtml = availableFrequencies.map(freq => 
+        freq.options.map(option => {
+          const optionValue = `${freq.unit}-${option}`;
+          const isSelected = selectedFrequency === optionValue;
+          console.log(`Option ${optionValue}: selected = ${isSelected}`);
+          return `<option value="${optionValue}" ${isSelected ? 'selected' : ''}>
             ${option} ${freq.unit}${option > 1 ? 's' : ''} subscription
-          </option>`
-        ).join('')
+          </option>`;
+        }).join('')
       ).join('');
+      
+      frequencySelect.innerHTML = optionsHtml;
+      console.log('Frequency dropdown HTML updated');
+      
+      // Also set the value programmatically to ensure it's selected
+      if (selectedFrequency) {
+        frequencySelect.value = selectedFrequency;
+        console.log('Set frequency select value to:', selectedFrequency);
+      }
+    } else {
+      console.log('Frequency select not found or no frequencies available');
     }
+    console.log('=== RENDER FREQUENCY DROPDOWN COMPLETE ===');
   }
 
   // Helper to convert 24-hour time to 12-hour format for utility functions
@@ -2066,6 +2177,19 @@
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
+  }
+  
+  // Helper to parse frequency string and return interval unit and frequency
+  function parseFrequency(frequencyStr) {
+    if (!frequencyStr) return null;
+    const parts = frequencyStr.split('-');
+    if (parts.length === 2) {
+      return {
+        order_interval_unit: parts[0],
+        order_interval_frequency: parseInt(parts[1])
+      };
+    }
+    return null;
   }
   
   // Helper to convert date and 12-hour time to ISO string with timezone
@@ -2266,6 +2390,418 @@
     // Always re-initialize the time picker after everything else
     reinitializeTimePicker();
     hideModalLoading();
+  }
+
+  // Add this new function to initialize date and time pickers with current values
+  async function initializeDateAndTimePickers() {
+    console.log('=== INITIALIZE DATE AND TIME PICKERS START ===');
+    
+    // Get current values from subscription data - ALWAYS prioritize order_attributes
+    const currentDate = modalChanges.deliveryDate || deliveryDate;
+    const currentTime = modalChanges.fulfillmentTime || fulfillmentTime;
+    const currentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
+    
+    // Ensure we're using the values from order_attributes as the primary source
+    const orderAttributesDate = getDeliveryDateFromSubscription();
+    const orderAttributesTime = getFulfillmentTimeFromSubscription();
+    
+    // Use order_attributes values if available, otherwise fall back to modalChanges/global variables
+    const finalDate = orderAttributesDate || currentDate;
+    const finalTime = orderAttributesTime || currentTime;
+    
+    console.log('=== DATE/TIME SOURCE PRIORITY ===');
+    console.log('Order attributes date:', orderAttributesDate);
+    console.log('Order attributes time:', orderAttributesTime);
+    console.log('ModalChanges date:', modalChanges.deliveryDate);
+    console.log('ModalChanges time:', modalChanges.fulfillmentTime);
+    console.log('Global deliveryDate:', deliveryDate);
+    console.log('Global fulfillmentTime:', fulfillmentTime);
+    console.log('Final selected date:', finalDate);
+    console.log('Final selected time:', finalTime);
+    console.log('Current method from subscription:', currentMethod);
+    
+    // Set up date picker with allowed dates
+    setupDatePicker(currentMethod);
+    
+    // Set the date input value if we have a valid date
+    const dateInput = document.getElementById('afinity-date');
+    if (dateInput && finalDate) {
+      dateInput.value = finalDate;
+      console.log('Set date input value to:', finalDate);
+      // Add this:
+      reinitializeTimePicker();
+    }
+    
+    // Initialize time picker with current time
+    const timeInput = document.getElementById('timepicker');
+    console.log('Time input element found:', !!timeInput);
+    console.log('jQuery available:', typeof jQuery !== 'undefined');
+    console.log('jQuery timepicker plugin available:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker);
+    console.log('jQuery version:', typeof jQuery !== 'undefined' ? jQuery.fn.jquery : 'not available');
+    console.log('Timepicker plugin methods:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker ? Object.keys(jQuery.fn.timepicker) : 'not available');
+    console.log('Timepicker plugin prototype:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker ? Object.keys(jQuery.fn.timepicker.prototype || {}) : 'not available');
+    
+    if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
+      // Remove existing timepicker if it exists
+      if ($(timeInput).data('timepicker')) {
+        $(timeInput).timepicker('remove');
+      }
+      
+      // Generate time options based on the current date
+      let timeOptions = [];
+      if (finalDate) {
+        timeOptions = generateTimeOptions(finalDate);
+      }
+      
+      // Fallback to default if empty
+      if (timeOptions.length === 0) {
+        timeOptions = [
+          '9:00 AM', '9:15 AM', '9:30 AM', '9:45 AM',
+          '10:00 AM', '10:15 AM', '10:30 AM', '10:45 AM',
+          '11:00 AM', '11:15 AM', '11:30 AM', '11:45 AM',
+          '12:00 PM', '12:15 PM', '12:30 PM', '12:45 PM',
+          '1:00 PM', '1:15 PM', '1:30 PM', '1:45 PM',
+          '2:00 PM', '2:15 PM', '2:30 PM', '2:45 PM',
+          '3:00 PM', '3:15 PM', '3:30 PM', '3:45 PM',
+          '4:00 PM', '4:15 PM', '4:30 PM', '4:45 PM',
+          '5:00 PM'
+        ];
+      }
+      
+      // Set min/max from the generated options
+      const minTime = timeOptions[0];
+      const maxTime = timeOptions[timeOptions.length - 1];
+      
+      // Convert current time to 12-hour format for display and find the best match
+      let defaultTime12 = minTime; // fallback
+      let selectedTime24 = finalTime; // store the 24-hour time for later use
+      
+      if (finalTime) {
+        const [h, m] = finalTime.split(':');
+        let hour = parseInt(h, 10);
+        const minute = m;
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        let displayHour = hour % 12;
+        if (displayHour === 0) displayHour = 12;
+        const currentTime12 = `${displayHour}:${minute} ${ampm}`;
+        
+        console.log('Current time in 12-hour format:', currentTime12);
+        console.log('Available time options:', timeOptions);
+        
+        // Try to find an exact match first
+        if (timeOptions.includes(currentTime12)) {
+          defaultTime12 = currentTime12;
+          console.log('Found exact match for current time:', defaultTime12);
+        } else {
+          // Find the closest available time
+          const currentTimeMinutes = hour * 60 + parseInt(minute);
+          let closestTime = minTime;
+          let minDifference = Infinity;
+          
+          for (const option of timeOptions) {
+            const [optHour, optMin] = parseTimeString(option);
+            const optionMinutes = optHour * 60 + optMin;
+            const difference = Math.abs(optionMinutes - currentTimeMinutes);
+            
+            if (difference < minDifference) {
+              minDifference = difference;
+              closestTime = option;
+            }
+          }
+          
+          defaultTime12 = closestTime;
+          console.log('Using closest available time:', defaultTime12, '(difference:', minDifference, 'minutes)');
+        }
+      }
+      
+      // Set the time input value BEFORE initializing timepicker
+      timeInput.value = defaultTime12;
+      console.log('Set time input value to:', defaultTime12);
+      
+      // Update the modalChanges with the selected time (convert back to 24-hour format)
+      if (defaultTime12 !== minTime || currentTime) {
+        const [h, m] = parseTimeString(defaultTime12);
+        const selectedTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        updateModalChanges('fulfillmentTime', selectedTime);
+        fulfillmentTime = selectedTime;
+        console.log('Updated modalChanges.fulfillmentTime to:', selectedTime);
+      }
+      
+      console.log('About to initialize timepicker with:', {
+        interval: 15,
+        minTime,
+        maxTime,
+        defaultTime: defaultTime12,
+        startTime: minTime,
+        timeOptions: timeOptions
+      });
+      console.log('Time options array:', timeOptions);
+      console.log('Default time to set:', defaultTime12);
+      console.log('Is default time in options?', timeOptions.includes(defaultTime12));
+      
+      // Initialize timepicker
+      $(timeInput).timepicker({
+        interval: 15,
+        minTime,
+        maxTime,
+        defaultTime: defaultTime12,
+        startTime: minTime,
+        dynamic: false,
+        dropdown: true,
+        scrollbar: true,
+        change: function(time) {
+          if (time) {
+            // Convert 12-hour format to 24-hour format for storage
+            const [timeStr, period] = time.split(' ');
+            const [hour, minute] = timeStr.split(':');
+            let hour24 = parseInt(hour);
+            if (period === 'PM' && hour24 < 12) hour24 += 12;
+            if (period === 'AM' && hour24 === 12) hour24 = 0;
+            const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
+            updateModalChanges('fulfillmentTime', time24Format);
+            fulfillmentTime = time24Format;
+            console.log('Time picker changed to:', time24Format);
+          }
+        }
+      });
+      
+      console.log('Timepicker initialized. Current input value:', timeInput.value);
+      console.log('Timepicker data:', $(timeInput).data('timepicker'));
+      console.log('Timepicker options:', $(timeInput).data('timepicker') ? $(timeInput).data('timepicker').options : 'not available');
+      
+      // Force the timepicker to show the selected time
+      try {
+        $(timeInput).timepicker('setTime', defaultTime12);
+        console.log('Forced timepicker to set time:', defaultTime12);
+        console.log('Timepicker instance exists:', $(timeInput).data('timepicker'));
+        
+              // Alternative approach: trigger the change event
+      $(timeInput).trigger('change');
+      console.log('Triggered change event on timepicker');
+      
+      // Also try to trigger the timepicker's show method to force it to update
+      try {
+        $(timeInput).timepicker('show');
+        console.log('Triggered timepicker show method');
+      } catch (error) {
+        console.log('Could not trigger timepicker show method:', error);
+      }
+      
+      // Also try to trigger the timepicker's hide method to force it to update
+      try {
+        $(timeInput).timepicker('hide');
+        console.log('Triggered timepicker hide method');
+      } catch (error) {
+        console.log('Could not trigger timepicker hide method:', error);
+      }
+        
+        // Also try to update the timepicker's internal state
+        const timepickerInstance = $(timeInput).data('timepicker');
+        if (timepickerInstance && timepickerInstance.setTime) {
+          timepickerInstance.setTime(defaultTime12);
+          console.log('Called setTime on timepicker instance');
+        }
+        
+        // Check what methods are available on the timepicker instance
+        if (timepickerInstance) {
+          console.log('Available timepicker methods:', Object.keys(timepickerInstance));
+          console.log('Timepicker time property:', timepickerInstance.time);
+          console.log('Timepicker options:', timepickerInstance.options);
+        }
+      } catch (error) {
+        console.error('Error setting timepicker time:', error);
+        // Fallback: just set the input value directly
+        timeInput.value = defaultTime12;
+        console.log('Fallback: Set input value directly to:', defaultTime12);
+      }
+      
+      // Ensure the time value is set after timepicker initialization
+      setTimeout(() => {
+        console.log('100ms timeout - checking timepicker state');
+        console.log('Input value at 100ms:', timeInput.value);
+        console.log('Expected value:', defaultTime12);
+        console.log('Timepicker instance at 100ms:', $(timeInput).data('timepicker'));
+        
+        if (timeInput.value !== defaultTime12) {
+          timeInput.value = defaultTime12;
+          console.log('Re-set time input value to:', defaultTime12);
+        }
+        // Also try to trigger the timepicker to update its display
+        try {
+          $(timeInput).timepicker('setTime', defaultTime12);
+          console.log('Re-forced timepicker to set time:', defaultTime12);
+        } catch (error) {
+          console.error('Error in 100ms timeout setTime:', error);
+        }
+      }, 100);
+      
+      // Additional timeout to ensure the timepicker is fully initialized
+      setTimeout(() => {
+        console.log('Final time input value:', timeInput.value);
+        console.log('Expected time value:', defaultTime12);
+        console.log('Timepicker instance at 300ms:', $(timeInput).data('timepicker'));
+        if (timeInput.value !== defaultTime12) {
+          timeInput.value = defaultTime12;
+          $(timeInput).timepicker('setTime', defaultTime12);
+          console.log('Final attempt to set time:', defaultTime12);
+        }
+        
+        // Try to force the timepicker to update its display
+        const timepickerInstance = $(timeInput).data('timepicker');
+        if (timepickerInstance) {
+          console.log('Timepicker instance found at 300ms');
+          console.log('Timepicker time property:', timepickerInstance.time);
+          console.log('Timepicker options:', timepickerInstance.options);
+          
+          // Try to manually update the timepicker's display
+          if (timepickerInstance.time !== defaultTime12) {
+            timepickerInstance.time = defaultTime12;
+            console.log('Manually set timepicker.time to:', defaultTime12);
+          }
+        }
+      }, 300);
+      
+      console.log('Time picker initialized with', timeOptions.length, 'time options. Default:', defaultTime12);
+      console.log('Final timepicker state check:');
+      console.log('- Input value:', timeInput.value);
+      console.log('- Timepicker instance:', $(timeInput).data('timepicker'));
+      console.log('- Timepicker time:', $(timeInput).data('timepicker') ? $(timeInput).data('timepicker').time : 'not available');
+    } else {
+      console.log('Timepicker plugin not available, will retry in 500ms');
+      // Retry after a short delay in case the plugin is still loading
+      setTimeout(() => {
+        if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
+          console.log('Retrying timepicker initialization...');
+          initializeDateAndTimePickers();
+                 } else {
+           console.log('Timepicker plugin still not available after retry');
+           // Set the time value directly in the input as fallback
+           if (timeInput && finalTime) {
+                        // Generate time options for the current date
+           let timeOptions = [];
+           if (finalDate) {
+             timeOptions = generateTimeOptions(finalDate);
+           }
+             
+             // Fallback to default if empty
+             if (timeOptions.length === 0) {
+               timeOptions = [
+                 '9:00 AM', '9:15 AM', '9:30 AM', '9:45 AM',
+                 '10:00 AM', '10:15 AM', '10:30 AM', '10:45 AM',
+                 '11:00 AM', '11:15 AM', '11:30 AM', '11:45 AM',
+                 '12:00 PM', '12:15 PM', '12:30 PM', '12:45 PM',
+                 '1:00 PM', '1:15 PM', '1:30 PM', '1:45 PM',
+                 '2:00 PM', '2:15 PM', '2:30 PM', '2:45 PM',
+                 '3:00 PM', '3:15 PM', '3:30 PM', '3:45 PM',
+                 '4:00 PM', '4:15 PM', '4:30 PM', '4:45 PM',
+                 '5:00 PM'
+               ];
+             }
+             
+             const minTime = timeOptions[0];
+             
+             // Convert current time to 12-hour format and find best match
+             const [h, m] = finalTime.split(':');
+             let hour = parseInt(h, 10);
+             const minute = m;
+             const ampm = hour >= 12 ? 'PM' : 'AM';
+             let displayHour = hour % 12;
+             if (displayHour === 0) displayHour = 12;
+             const currentTime12 = `${displayHour}:${minute} ${ampm}`;
+             
+             let selectedTime12 = minTime; // fallback
+             
+             // Try to find an exact match first
+             if (timeOptions.includes(currentTime12)) {
+               selectedTime12 = currentTime12;
+               console.log('Fallback: Found exact match for current time:', selectedTime12);
+             } else {
+               // Find the closest available time
+               const currentTimeMinutes = hour * 60 + parseInt(minute);
+               let closestTime = minTime;
+               let minDifference = Infinity;
+               
+               for (const option of timeOptions) {
+                 const [optHour, optMin] = parseTimeString(option);
+                 const optionMinutes = optHour * 60 + optMin;
+                 const difference = Math.abs(optionMinutes - currentTimeMinutes);
+                 
+                 if (difference < minDifference) {
+                   minDifference = difference;
+                   closestTime = option;
+                 }
+               }
+               
+               selectedTime12 = closestTime;
+               console.log('Fallback: Using closest available time:', selectedTime12, '(difference:', minDifference, 'minutes)');
+             }
+             
+             timeInput.value = selectedTime12;
+             console.log('Set time input value directly (fallback):', selectedTime12);
+             
+             // Update the modalChanges with the selected time
+             const [selHour, selMin] = parseTimeString(selectedTime12);
+             const selectedTime24 = `${selHour.toString().padStart(2, '0')}:${selMin.toString().padStart(2, '0')}`;
+             updateModalChanges('fulfillmentTime', selectedTime24);
+             fulfillmentTime = selectedTime24;
+             console.log('Fallback: Updated modalChanges.fulfillmentTime to:', selectedTime24);
+           }
+         }
+      }, 500);
+    }
+    
+    console.log('=== INITIALIZE DATE AND TIME PICKERS COMPLETE ===');
+    
+    // Also ensure the frequency dropdown is properly set
+    await loadInitialFrequency();
+  }
+
+  // New function to load initial frequency from currentSubscription
+  async function loadInitialFrequency() {
+    console.log('=== LOAD INITIAL FREQUENCY START ===');
+    console.log('currentSubscription:', currentSubscription);
+    
+    if (!currentSubscription) {
+      console.log('No currentSubscription available');
+      return;
+    }
+    
+    // Extract frequency from currentSubscription (on root level)
+    let frequencyFromSubscription = null;
+    const intervalUnit = currentSubscription.order_interval_unit;
+    const orderIntervalFrequency = currentSubscription.order_interval_frequency;
+    
+    console.log('Subscription root level frequency data:');
+    console.log('order_interval_unit:', intervalUnit);
+    console.log('order_interval_frequency:', orderIntervalFrequency);
+    
+    if (intervalUnit && orderIntervalFrequency) {
+      frequencyFromSubscription = `${intervalUnit}-${orderIntervalFrequency}`;
+      console.log('Calculated frequency from subscription:', frequencyFromSubscription);
+    } else {
+      console.log('Missing order_interval_unit or order_interval_frequency in subscription');
+    }
+    
+    // Set the global selectedFrequency
+    if (frequencyFromSubscription) {
+      selectedFrequency = frequencyFromSubscription;
+      updateModalChanges('selectedFrequency', frequencyFromSubscription);
+      console.log('Set selectedFrequency to:', selectedFrequency);
+    }
+    
+    // Ensure frequencies are loaded
+    if (availableFrequencies.length === 0) {
+      console.log('No frequencies available, fetching them first...');
+      await fetchFrequencies();
+    }
+    
+    console.log('Available frequencies:', availableFrequencies);
+    console.log('Final selectedFrequency:', selectedFrequency);
+    
+    // Render the frequency dropdown
+    renderFrequencyDropdown();
+    
+    console.log('=== LOAD INITIAL FREQUENCY COMPLETE ===');
   }
 
   // Add this new function near other helpers
