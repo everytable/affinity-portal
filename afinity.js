@@ -1224,22 +1224,7 @@
       currentPage = 'meals';
       renderModal();
     };
-    // Cancel/Save/Cancel subscription
-    const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
-    if (cancelBtn) cancelBtn.onclick = () => {
-      // Dispatch custom event for cancel
-      const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow', {
-        detail: {
-          subscriptionId: currentSubscription?.id,
-          timestamp: new Date().toISOString()
-        }
-      });
-      document.dispatchEvent(cancelEvent);
-      console.log('Dispatched Recharge::click::cancel event');
-      
-      // Hide the modal
-      modalOverlay.style.display = 'none';
-    };
+   
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
       
@@ -1433,17 +1418,16 @@
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
       e.preventDefault();
-      // TODO: Cancel subscription logic
-      const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow', {
-        detail: {
-          subscriptionId: currentSubscription?.id,
-          timestamp: new Date().toISOString()
-        }
-      });
-      document.dispatchEvent(cancelEvent);
-      console.log('Dispatched Recharge::click::cancel event');
-      hideModalLoading();
-      modalOverlay.style.display = 'none';
+      const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
+      if (cancelBtn) cancelBtn.onclick = () => {
+        // Dispatch custom event for cancel
+        const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow');
+        document.dispatchEvent(cancelEvent);
+        console.log('Dispatched Recharge::click::cancel event');
+        
+        // Hide the modal
+        modalOverlay.style.display = 'none';
+      };
     };
     // Meal add/remove
     modalOverlay.querySelectorAll('.afinity-r-card__add-btn').forEach(btn => {
