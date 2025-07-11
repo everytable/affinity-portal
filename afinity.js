@@ -1,8 +1,6 @@
 // affinity.js - Standalone modal widget
 (function() {
 
-  let API_URL = ""
-  // const API_URL = "https://admin-app.everytable-sh.com/api"
   
   // Dynamically load afinity.css if not already present
   var cssId = 'afinity-css';
@@ -1651,7 +1649,6 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
-    API_URL = "https://format-queensland-briefs-.trycloudflare.com/api"
     showModalLoading();
     // When modal is closed, the style is set to none, so we need to set it to block
     if(modalOverlay) {
