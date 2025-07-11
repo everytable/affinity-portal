@@ -1426,7 +1426,16 @@
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
       e.preventDefault();
       // TODO: Cancel subscription logic
-      alert('Cancel subscription clicked');
+      const cancelEvent = new CustomEvent('Recharge::click::cancel', {
+        detail: {
+          subscriptionId: currentSubscription?.id,
+          timestamp: new Date().toISOString()
+        }
+      });
+      document.dispatchEvent(cancelEvent);
+      console.log('Dispatched Recharge::click::cancel event');
+      hideModalLoading();
+      modalOverlay.style.display = 'none';
     };
     // Meal add/remove
     modalOverlay.querySelectorAll('.afinity-r-card__add-btn').forEach(btn => {
