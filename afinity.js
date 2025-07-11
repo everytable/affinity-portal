@@ -1,6 +1,14 @@
 // affinity.js - Standalone modal widget
 (function() {
+  
+  const originalDispatchEvent = EventTarget.prototype.dispatchEvent;
 
+  EventTarget.prototype.dispatchEvent = function(event) {
+    if (event.type.includes("Recharge")) {
+      console.log("Custom Event Fired:", event.type, event);
+    }
+    return originalDispatchEvent.call(this, event);
+  };
   
   // Dynamically load afinity.css if not already present
   var cssId = 'afinity-css';
