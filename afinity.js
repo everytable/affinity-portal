@@ -32,6 +32,22 @@
       flatpickrScript.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
       document.head.appendChild(flatpickrScript);
     }
+    
+    // Load jQuery Timepicker CSS
+    if (!document.querySelector('link[href*="jquery.timepicker.min.css"]')) {
+      const timepickerCSS = document.createElement('link');
+      timepickerCSS.rel = 'stylesheet';
+      timepickerCSS.type = 'text/css';
+      timepickerCSS.href = 'https://cdn.jsdelivr.net/npm/timepicker@1.14.1/jquery.timepicker.min.css';
+      document.head.appendChild(timepickerCSS);
+    }
+    
+    // Load jQuery Timepicker JS
+    if (typeof jQuery !== 'undefined' && !jQuery.fn.timepicker) {
+      const timepickerScript = document.createElement('script');
+      timepickerScript.src = 'https://cdn.jsdelivr.net/npm/timepicker@1.14.1/jquery.timepicker.min.js';
+      document.head.appendChild(timepickerScript);
+    }
   }
   
   // Load dependencies immediately
@@ -177,15 +193,11 @@
       modalOverlay = document.getElementById('afinity-modal-overlay');
     }
 
-    console.log("Triggering modal loading")
-    
     // If modal overlay doesn't exist, create a global loading overlay
     if (!modalOverlay || !modalOverlay.appendChild) {
-      console.log('showModalLoading: creating global loading overlay');
       
       // Check if document.body exists
       if (!document.body) {
-        console.log('showModalLoading: document.body not ready');
         return;
       }
       
@@ -198,7 +210,6 @@
         
         try {
           document.body.appendChild(globalLoading);
-          console.log('showModalLoading: global loading overlay created');
         } catch (error) {
           console.error('showModalLoading: failed to create global loading overlay:', error);
           return;
@@ -210,14 +221,12 @@
     
     let loading = modalOverlay.querySelector('.afinity-modal-loading');
     if (!loading) {
-      console.log('showModalLoading: creating new loading element');
       loading = document.createElement('div');
       loading.className = 'afinity-modal-loading';
       loading.innerHTML = '<div class="afinity-modal-loading-spinner"></div><div class="afinity-modal-loading-text">Loading…</div>';
       
       try {
         modalOverlay.appendChild(loading);
-        console.log('showModalLoading: created new loading element');
       } catch (error) {
         console.error('showModalLoading: failed to append loading element:', error);
         return;
@@ -226,7 +235,6 @@
     
     if (loading) {
       loading.style.display = 'flex';
-      console.log('showModalLoading: loading element shown');
     }
   }
   
@@ -258,60 +266,158 @@
 
   // Update fetchAvailableDates to store the time zone from the payload
   async function fetchAvailableDates(zip, selectedPickupLocationId) {
+    console.log('=== FETCH AVAILABLE DATES START ===');
+    console.log('Fetching availability for zip:', zip);
+    console.log('Selected pickup location ID:', selectedPickupLocationId);
+    
     try {
-      const resp = await fetch(`${API_URL}/search/availability/${encodeURIComponent(zip)}`);
+      const url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
+      console.log('Fetching from URL:', url);
+      
+      const resp = await fetch(url);
       const data = await resp.json();
+      console.log('Raw availability data:', data);
+      
+      // Store delivery days data globally for time options
+      window.deliveryDaysData = data.deliveryDays || [];
+      window.pickupLocationsData = data.pickupLocations || [];
+      console.log('Stored deliveryDaysData:', window.deliveryDaysData);
+      console.log('Stored pickupLocationsData:', window.pickupLocationsData);
+      
       // Delivery dates
       allowedDeliveryDates = (data.deliveryDays || [])
         .filter(day => !day.isclosed)
         .map(day => day.date);
+      console.log('Filtered delivery dates:', allowedDeliveryDates);
+      
       // Pickup dates for the selected location
       if (selectedPickupLocationId) {
+        console.log('Looking for pickup location with ID:', selectedPickupLocationId);
         const pickupLocation = (data.pickupLocations || []).find(
           loc => String(loc.location_id) === String(selectedPickupLocationId)
         );
+        console.log('Found pickup location:', pickupLocation);
+        
         if (pickupLocation && pickupLocation.pickupDates) {
+          console.log('Pickup location has pickupDates:', pickupLocation.pickupDates);
           allowedPickupDates = pickupLocation.pickupDates
             .filter(day => !day.isclosed)
             .map(day => day.date);
+          console.log('Filtered pickup dates:', allowedPickupDates);
         } else {
+          console.log('No pickup dates found for location');
           allowedPickupDates = [];
         }
       } else {
+        console.log('No selectedPickupLocationId provided');
         allowedPickupDates = [];
       }
+      
       // Store the time zone from the payload
       if (data.locationTimeZone) {
         currentTimeZone = data.locationTimeZone;
+        console.log('Set timezone from locationTimeZone:', currentTimeZone);
       } else if (data.time_zone) {
         currentTimeZone = data.time_zone;
+        console.log('Set timezone from time_zone:', currentTimeZone);
+      } else {
+        console.log('No timezone found in data, keeping current:', currentTimeZone);
       }
+      
+      console.log('Final allowedDeliveryDates:', allowedDeliveryDates);
+      console.log('Final allowedPickupDates:', allowedPickupDates);
+      console.log('Final currentTimeZone:', currentTimeZone);
+      console.log('=== FETCH AVAILABLE DATES COMPLETE ===');
+      
     } catch (e) {
+      console.error('Error in fetchAvailableDates:', e);
       allowedDeliveryDates = [];
       allowedPickupDates = [];
+      window.deliveryDaysData = [];
+      window.pickupLocationsData = [];
+      console.log('Reset all dates to empty arrays due to error');
     }
   }
 
   // Helper to (re)initialize the date picker with allowed dates
   function setupDatePicker(fulfillmentType) {
+    console.log('=== SETUP DATE PICKER START ===');
+    console.log('Setting up date picker for fulfillment type:', fulfillmentType);
+    
     const input = document.getElementById('afinity-date');
-    if (!input || typeof flatpickr === 'undefined') return;
+    if (!input) {
+      console.log('Date input element not found');
+      return;
+    }
+    if (typeof flatpickr === 'undefined') {
+      console.log('Flatpickr not loaded yet');
+      return;
+    }
+    
     // Destroy any previous instance
-    if (input._flatpickr) input._flatpickr.destroy();
+    if (input._flatpickr) {
+      console.log('Destroying previous flatpickr instance');
+      input._flatpickr.destroy();
+    }
+    
     let allowedDates = [];
     if (fulfillmentType === 'Delivery') {
       allowedDates = allowedDeliveryDates;
+      console.log('Using delivery dates:', allowedDates);
     } else if (fulfillmentType === 'Pickup') {
       allowedDates = allowedPickupDates;
+      console.log('Using pickup dates:', allowedDates);
+    } else {
+      console.log('Unknown fulfillment type:', fulfillmentType);
     }
+    
+    console.log('Configuring flatpickr with allowed dates:', allowedDates);
     flatpickr(input, {
       dateFormat: "Y-m-d", // Keep ISO format for storage
       enable: allowedDates,
       onChange: function(selectedDates, dateStr) {
+        console.log('Date picker onChange triggered');
+        console.log('Selected date:', dateStr);
         updateModalChanges('deliveryDate', dateStr);
         deliveryDate = dateStr;
+        
+        // Update time picker with new available times for the selected date
+        const timeInput = document.getElementById('afinity-time');
+        if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
+          console.log('Updating time picker for selected date:', dateStr);
+          const availableTimes = generateTimeOptions(dateStr);
+          console.log('Available times for date:', availableTimes);
+          
+          // Convert available times to timepicker format
+          const timeOptions = availableTimes.map(time => {
+            const [timeStr, period] = time.split(' ');
+            const [hour, minute] = timeStr.split(':');
+            return `${hour}:${minute} ${period}`;
+          });
+          console.log('Time options for timepicker:', timeOptions);
+          
+          // Update jQuery timepicker options
+          const timepickerOptions = {
+            minTime: timeOptions.length > 0 ? timeOptions[0] : '9:00 AM',
+            maxTime: timeOptions.length > 0 ? timeOptions[timeOptions.length - 1] : '5:00 PM',
+            startTime: timeOptions.length > 0 ? timeOptions[0] : '9:00 AM'
+          };
+          console.log('Setting timepicker options:', timepickerOptions);
+          $(timeInput).timepicker('option', timepickerOptions);
+          
+          // Clear the time if no times are available
+          if (availableTimes.length === 0) {
+            console.log('No available times, clearing time picker');
+            updateModalChanges('fulfillmentTime', '');
+            fulfillmentTime = '';
+            $(timeInput).timepicker('setTime', '');
+          }
+        } else {
+          console.log('Time input or jQuery timepicker not available');
+        }
       }
     });
+    console.log('=== SETUP DATE PICKER COMPLETE ===');
   }
 
   async function fetchSubscriptionAndPickup(subscriptionId, zip) {
@@ -336,7 +442,6 @@
       const response = await fetch(`${API_URL}/subscription/frequencies`);
       const data = await response.json();
       availableFrequencies = data.frequencies || [];
-      console.log('Fetched frequencies:', availableFrequencies);
     } catch (error) {
       console.error('Error fetching frequencies:', error);
       availableFrequencies = [];
@@ -345,8 +450,6 @@
 
   async function refreshSubscriptionData(subscriptionId) {
     try {
-      console.log('Refreshing subscription data for ID:', subscriptionId);
-      
       // Fetch updated subscription data
       const response = await fetch(`${API_URL}/subscription/${subscriptionId}`);
       const data = await response.json();
@@ -363,9 +466,6 @@
         state = getStateCode(address.province || '');
         zip = address.zip || '';
         
-        console.log('Updated address data:', { address1, address2, city, state, zip });
-        
-        // Update delivery date and time
         deliveryDate = getDeliveryDateFromSubscription();
         
         // Update fulfillment method
@@ -416,7 +516,6 @@
         // Re-render the modal to show updated data
         renderModal();
         
-        console.log('Subscription data refreshed successfully');
       } else {
         console.error('No data received when refreshing subscription');
       }
@@ -749,9 +848,6 @@
             </div>
           </div>
         </div>
-        <div style="display:flex; justify-content:flex-end; margin-top:16px;">
-          <button id="afinity-save-all-btn" class="afinity-modal-save-btn" type="button" disabled>Save</button>
-        </div>
       </div>
     `;
   }
@@ -979,7 +1075,6 @@
           return;
         }
       }
-      console.log("Saved Address")
       // Always update fulfillment/order attributes
       const orderAttributesArr = [];
       
@@ -1045,7 +1140,6 @@
         }
       }
       
-      console.log("Computinig timezone date")
       // Compute ISO string for Fulfillment Date
       let timeZone = '';
       if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
@@ -1056,31 +1150,24 @@
         // Delivery
         timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
       }
-      console.log("timeZone: ", timeZone)
       
       // If fulfillmentTime is empty, get it from the original subscription
       let timeToUse = modalChanges.fulfillmentTime || fulfillmentTime;
-      console.log("timeToUse: ", timeToUse)
       if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
         const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
           obj => obj.hasOwnProperty("Fulfillment Date")
         );
         const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
-        console.log("fulfillmentDateAttr: ", fulfillmentDateAttr)
         if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
           const timePart = fulfillmentDateAttr.split('T')[1];
           const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
           const [hours, minutes] = timeWithOffset.split(':');
           timeToUse = `${hours}:${minutes}`;
-          console.log("Time to use: ", timeToUse)
         }
       }
-      console.log("Final Time to use: ", timeToUse)
-      
       let isoString = '';
       try {
         const timeStr = toAmPm(timeToUse);
-        console.log("toAMPM: ", timeStr)
         isoString = getLocalISOFromDateAndTime(
           modalChanges.deliveryDate,
           timeStr,
@@ -1293,12 +1380,8 @@
         }
         
         let isoString = '';
-        console.log(modalChanges.deliveryDate, timeToUse, currentTimeZone)
         try {
           const timeStr = toAmPm(timeToUse || '15:30');
-          console.log( modalChanges.deliveryDate,
-            timeStr,
-            currentTimeZone)
           isoString = getLocalISOFromDateAndTime(
             modalChanges.deliveryDate,
             timeStr,
@@ -1441,32 +1524,51 @@
       });
     }
     
-    // Initialize Flatpickr for time input
+    // Initialize jQuery Timepicker for time input
     const mainTimeInput = modalOverlay.querySelector('#afinity-time');
-    if (mainTimeInput && typeof flatpickr !== 'undefined') {
-      // Convert stored 24-hour time to Date object for Flatpickr
-      let defaultTime = new Date();
+    if (mainTimeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
+      // Get available time slots for the selected date
+      const selectedDate = modalChanges.deliveryDate || deliveryDate;
+      const availableTimes = generateTimeOptions(selectedDate);
+      
+      // Convert available times to timepicker format
+      const timeOptions = availableTimes.map(time => {
+        const [timeStr, period] = time.split(' ');
+        const [hour, minute] = timeStr.split(':');
+        return `${hour}:${minute} ${period}`;
+      });
+      
+      // Set default time
       const currentFulfillmentTime = getFulfillmentTimeFromSubscription();
+      let defaultTime = '3:30 PM'; // Default
       if (currentFulfillmentTime) {
         const [hours, minutes] = currentFulfillmentTime.split(':');
-        defaultTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      } else {
-        defaultTime.setHours(15, 30, 0, 0); // Default to 3:30 PM
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        defaultTime = `${displayHour}:${minutes} ${ampm}`;
       }
       
-      flatpickr(mainTimeInput, {
-        enableTime: true,
-        noCalendar: true,
-        dateFormat: "h:i K", // 12-hour format with AM/PM for display
-        time_24hr: false,
-        defaultDate: defaultTime,
-        minuteIncrement: 15,
-        onChange: function(selectedDates, dateStr) {
-          // Convert 12-hour format to 24-hour format for storage
-          if (selectedDates[0]) {
-            const hours = selectedDates[0].getHours().toString().padStart(2, '0');
-            const minutes = selectedDates[0].getMinutes().toString().padStart(2, '0');
-            const time24Format = `${hours}:${minutes}`;
+      // Initialize jQuery timepicker
+      $(mainTimeInput).timepicker({
+        timeFormat: 'h:mm p',
+        interval: 15,
+        minTime: timeOptions.length > 0 ? timeOptions[0] : '9:00 AM',
+        maxTime: timeOptions.length > 0 ? timeOptions[timeOptions.length - 1] : '5:00 PM',
+        defaultTime: defaultTime,
+        startTime: timeOptions.length > 0 ? timeOptions[0] : '9:00 AM',
+        dynamic: false,
+        dropdown: true,
+        scrollbar: true,
+        change: function(time) {
+          if (time) {
+            // Convert 12-hour format to 24-hour format for storage
+            const [timeStr, period] = time.split(' ');
+            const [hour, minute] = timeStr.split(':');
+            let hour24 = parseInt(hour);
+            if (period === 'PM' && hour24 < 12) hour24 += 12;
+            if (period === 'AM' && hour24 === 12) hour24 = 0;
+            const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
             updateModalChanges('fulfillmentTime', time24Format);
             fulfillmentTime = time24Format;
           }
@@ -1511,7 +1613,6 @@
     const zipInput = modalOverlay.querySelector('#afinity-zip');
     if (zipInput) {
       zipInput.oninput = (e) => { 
-        console.log('Zip input changed:', e.target.value);
         updateModalChanges('zip', e.target.value); 
         zip = e.target.value; 
       };
@@ -1525,6 +1626,25 @@
       methodSelect.onchange = async (e) => {
         updateModalChanges('fulfillmentMethod', e.target.value);
         fulfillmentMethod = e.target.value;
+        
+        // Clear delivery date and time when switching methods to force new selection
+        updateModalChanges('deliveryDate', '');
+        updateModalChanges('fulfillmentTime', '');
+        deliveryDate = '';
+        fulfillmentTime = '';
+        
+        // Clear the input field values
+        const dateInput = document.getElementById('afinity-date');
+        const timeInput = document.getElementById('afinity-time');
+        if (dateInput) dateInput.value = '';
+        if (timeInput) {
+          timeInput.value = '';
+          // Clear jQuery timepicker if it exists
+          if (typeof jQuery !== 'undefined' && jQuery.fn.timepicker && $(timeInput).data('timepicker')) {
+            $(timeInput).timepicker('setTime', '');
+          }
+        }
+        
         if (fulfillmentMethod === 'Pickup') {
           // Use the selected pickup location, or default to the first one
           let pickupId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
@@ -1539,18 +1659,108 @@
           await fetchAvailableDates(zip, null);
           setupDatePicker('Delivery');
         }
+        
+        // Re-render the modal to show cleared date/time fields
+        renderModal();
       };
     }
     // Listen for pickup location change
     const pickupRadios = modalOverlay.querySelectorAll('input[name="pickup-location"]');
     pickupRadios.forEach(radio => {
       radio.onchange = async (e) => {
-        updateModalChanges('selectedPickupLocationId', parseInt(e.target.value));
-        selectedPickupLocationId = parseInt(e.target.value);
+        const newLocationId = parseInt(e.target.value);
+        console.log('=== PICKUP LOCATION CHANGE START ===');
+        console.log('Selected pickup location ID:', newLocationId);
+        console.log('Previous selectedPickupLocationId:', selectedPickupLocationId);
+        console.log('Current zip code:', zip);
+        console.log('Current fulfillment method:', modalChanges.fulfillmentMethod || fulfillmentMethod);
+        
+        updateModalChanges('selectedPickupLocationId', newLocationId);
+        selectedPickupLocationId = newLocationId;
+        console.log('Updated selectedPickupLocationId to:', selectedPickupLocationId);
+        
+        // Clear delivery date and time when switching pickup locations
+        console.log('Clearing delivery date and time fields...');
+        updateModalChanges('deliveryDate', '');
+        updateModalChanges('fulfillmentTime', '');
+        deliveryDate = '';
+        fulfillmentTime = '';
+        console.log('Cleared deliveryDate:', deliveryDate);
+        console.log('Cleared fulfillmentTime:', fulfillmentTime);
+        
+        // Clear the input field values
+        const dateInput = document.getElementById('afinity-date');
+        const timeInput = document.getElementById('afinity-time');
+        if (dateInput) {
+          dateInput.value = '';
+          console.log('Cleared date input field');
+        }
+        if (timeInput) {
+          timeInput.value = '';
+          console.log('Cleared time input field');
+          // Clear jQuery timepicker if it exists
+          if (typeof jQuery !== 'undefined' && jQuery.fn.timepicker && $(timeInput).data('timepicker')) {
+            $(timeInput).timepicker('setTime', '');
+            console.log('Cleared jQuery timepicker');
+          }
+        }
+        
         // Refetch available dates and update picker
-        await fetchAvailableDates(zip, parseInt(e.target.value));
-        setupDatePicker(modalChanges.fulfillmentMethod || fulfillmentMethod || 'Pickup');
+        console.log('Fetching available dates for zip:', zip, 'and location ID:', newLocationId);
+        await fetchAvailableDates(zip, newLocationId);
+        console.log('Available delivery dates:', allowedDeliveryDates);
+        console.log('Available pickup dates:', allowedPickupDates);
+        console.log('Current timezone:', currentTimeZone);
+        
+        const fulfillmentType = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Pickup';
+        console.log('Setting up date picker for fulfillment type:', fulfillmentType);
+        setupDatePicker(fulfillmentType);
+        
+        // Re-initialize time picker with new location data
+        console.log('Re-initializing time picker...');
+        if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
+          // Destroy existing timepicker instance
+          if ($(timeInput).data('timepicker')) {
+            $(timeInput).timepicker('remove');
+            console.log('Destroyed existing timepicker instance');
+          }
+          
+          // Re-initialize timepicker with default options
+          $(timeInput).timepicker({
+            timeFormat: 'h:mm p',
+            interval: 15,
+            minTime: '9:00 AM',
+            maxTime: '5:00 PM',
+            defaultTime: '3:30 PM',
+            startTime: '9:00 AM',
+            dynamic: false,
+            dropdown: true,
+            scrollbar: true,
+            change: function(time) {
+              if (time) {
+                // Convert 12-hour format to 24-hour format for storage
+                const [timeStr, period] = time.split(' ');
+                const [hour, minute] = timeStr.split(':');
+                let hour24 = parseInt(hour);
+                if (period === 'PM' && hour24 < 12) hour24 += 12;
+                if (period === 'AM' && hour24 === 12) hour24 = 0;
+                const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
+                updateModalChanges('fulfillmentTime', time24Format);
+                fulfillmentTime = time24Format;
+                console.log('Time picker changed to:', time24Format);
+              }
+            }
+          });
+          console.log('Re-initialized time picker with default options');
+        }
+        
+        console.log('Re-rendering pickup locations section...');
         renderPickupLocationsSection();
+        
+        // Re-render the modal to show cleared date/time fields
+        console.log('Re-rendering modal...');
+        renderModal();
+        console.log('=== PICKUP LOCATION CHANGE COMPLETE ===');
       };
     });
     // Initialize Flatpickr for date input (main)
@@ -1608,7 +1818,6 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
-    console.log("Recharge::click::manageSubscription")
     showModalLoading();
     // When modal is closed, the style is set to none, so we need to set it to block
     if(modalOverlay) {
@@ -1623,7 +1832,6 @@
       fetch(`${API_URL}/subscription/${subscriptionId}`)
         .then(response => response.json())
         .then(async data => {
-          console.log('Subscription data:', data);
           const payload = data.data;
           currentSubscription = payload
           const address = payload.include.address;
@@ -1634,11 +1842,8 @@
           state = getStateCode(address.province || '');
           zip = address.zip || '';
           
-          console.log('Extracted address data:', { address1, address2, city, state, zip });
-          
           // Extract fulfillment date, time, and method from order attributes
           if (payload?.include?.address?.order_attributes) {
-            console.log("Paylod has order attributes");
             const fulfillmentDateAttr = payload.include.address.order_attributes.find(attr => 
               attr.name === 'Fulfillment Date' 
             );
@@ -1684,8 +1889,6 @@
               fulfillmentMethod = 'Delivery';
             }
           }
-          console.log("Fulfillment Method:", fulfillmentMethod);
-          
           // Update delivery date and price from subscription data
           // Use fulfillment date from order attributes as delivery date
           deliveryDate = getDeliveryDateFromSubscription();
@@ -1698,14 +1901,11 @@
             modalOverlay.style.display = '';
           }
           renderModal();
-          console.log("Before fetchSubscriptionAndPickup");
           try {
             await fetchSubscriptionAndPickup(subscriptionId, zip);
-            console.log("After fetchSubscriptionAndPickup");
           } catch (err) {
             console.error("Error in fetchSubscriptionAndPickup", err);
           }
-          console.log("FEtchingSubscritpoinAndPicu");
           // Set current frequency from subscription data
           if (payload.subscription_preferences) {
             const intervalUnit = payload.subscription_preferences.interval_unit;
@@ -1770,14 +1970,11 @@
             fetchPickupLocations(zip).then(pickupLocations => {
               const matchedLocation = pickupLocations.find(loc => String(loc.id) === String(locationId));
               const locationName = matchedLocation ? matchedLocation.name : null;
-              console.log('locationId:', locationId);
-              console.log('locationName (from availability API):', locationName);
               if (locationName) {
                 fetch(`${API_URL}/location/catalog/${locationId}/${encodeURIComponent(locationName)}`)
                   .then(resp => resp.json())
                   .then(catalogPayload => {
                     currentCatalogPayload = catalogPayload;
-                    console.log('Loaded catalog payload:', catalogPayload);
                     
                     // Fetch variants for this catalog
                     if (catalogPayload && catalogPayload.catalogId) {
@@ -1816,14 +2013,11 @@
                   const firstLocation = pickupLocations[0];
                   locationId = firstLocation.id;
                   locationName = firstLocation.name;
-                  console.log('No LocationID found, selected first pickup location:', locationId, locationName);
-                  
                   // Load catalog for the first location
                   fetch(`${API_URL}/location/catalog/${locationId}/${encodeURIComponent(locationName)}`)
                     .then(resp => resp.json())
                     .then(catalogPayload => {
                       currentCatalogPayload = catalogPayload;
-                      console.log('Loaded catalog payload for first location:', catalogPayload);
                       
                       // Fetch variants for this catalog
                       if (catalogPayload && catalogPayload.catalogId) {
@@ -1847,7 +2041,6 @@
                     });
                 } else {
                   currentCatalogPayload = null;
-                  console.log('No pickup locations found for zip:', zip);
                 }
               }).catch(err => {
                 currentCatalogPayload = null;
@@ -2072,6 +2265,124 @@
     const offset = `${sign}${hh}:${mmOff}`;
     
     return `${yyyy}-${mm}-${dd}T${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00${offset}`;
+  }
+  
+  // Helper to parse time string (e.g., "9:00 AM" -> [9, 0])
+  function parseTimeString(timeStr) {
+    if (!timeStr) return [9, 0]; // Default fallback
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return [9, 0];
+    
+    let [, hourStr, minStr, period] = match;
+    let hour = parseInt(hourStr, 10);
+    const minute = parseInt(minStr, 10);
+    const isPM = period.toUpperCase() === "PM";
+    
+    // Convert to 24-hour
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+    
+    return [hour, minute];
+  }
+  
+  // Helper to generate time options based on open/close times
+  function generateTimeOptions(selectedDate) {
+    console.log('=== GENERATE TIME OPTIONS START ===');
+    console.log('Generating time options for date:', selectedDate);
+    
+    if (!selectedDate) {
+      console.log('No selected date provided, returning empty array');
+      return [];
+    }
+    
+    const fulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
+    console.log('Current fulfillment method:', fulfillmentMethod);
+    
+    // Find the delivery day data for the selected date
+    let dayData = null;
+    if (fulfillmentMethod === 'Delivery') {
+      console.log('Looking for delivery day data');
+      dayData = (window.deliveryDaysData || []).find(day => day.date === selectedDate);
+      console.log('Found delivery day data:', dayData);
+    } else {
+      // For pickup, find the selected location's pickup dates
+      const selectedLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+      console.log('Looking for pickup location with ID:', selectedLocationId);
+      
+      const selectedLocation = (window.pickupLocationsData || []).find(
+        loc => String(loc.location_id) === String(selectedLocationId)
+      );
+      console.log('Found selected location:', selectedLocation);
+      
+      if (selectedLocation && selectedLocation.pickupDates) {
+        console.log('Location has pickup dates:', selectedLocation.pickupDates);
+        dayData = selectedLocation.pickupDates.find(day => day.date === selectedDate);
+        console.log('Found pickup day data for selected date:', dayData);
+      } else {
+        console.log('No pickup dates found for selected location');
+      }
+    }
+    
+    if (!dayData) {
+      console.log('No day data found for selected date');
+      return [];
+    }
+    
+    if (dayData.isClosed) {
+      console.log('Day is closed');
+      return [];
+    }
+    
+    if (!dayData.open || !dayData.close) {
+      console.log('No open/close times found in day data');
+      return [];
+    }
+    
+    console.log('Day data found - open:', dayData.open, 'close:', dayData.close);
+    
+    const [startHour, startMin] = parseTimeString(dayData.open);
+    const [endHour, endMin] = parseTimeString(dayData.close);
+    console.log('Parsed start time:', startHour + ':' + startMin);
+    console.log('Parsed end time:', endHour + ':' + endMin);
+    
+    const slots = [];
+    let currentHour = startHour;
+    let currentMin = startMin;
+    
+    // Check if it's today and adjust for past times
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const isToday = selectedDate === todayStr;
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    console.log('Is today:', isToday);
+    console.log('Current time in minutes:', currentTime);
+    
+    while (
+      currentHour < endHour ||
+      (currentHour === endHour && currentMin < endMin)
+    ) {
+      const slotTime = currentHour * 60 + currentMin;
+      
+      // Skip past times for today
+      if (!isToday || slotTime > currentTime + 30) {
+        const timeStr = `${currentHour % 12 || 12}:${currentMin.toString().padStart(2, '0')} ${currentHour >= 12 ? 'PM' : 'AM'}`;
+        slots.push(timeStr);
+        console.log('Added time slot:', timeStr);
+      } else {
+        console.log('Skipping past time slot:', `${currentHour}:${currentMin}`);
+      }
+      
+      currentMin += 15;
+      if (currentMin >= 60) {
+        currentMin = 0;
+        currentHour += 1;
+      }
+    }
+    
+    console.log('Generated time slots:', slots);
+    console.log('=== GENERATE TIME OPTIONS COMPLETE ===');
+    return slots;
   }
 
 })();
