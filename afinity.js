@@ -1201,7 +1201,11 @@
   function attachModalEvents() {
     if (modalLoading) return;
     // Close modal
-    modalOverlay.querySelector('.afinity-modal-close').onclick = () => modalOverlay.style.display = 'none';
+    modalOverlay.querySelector('.afinity-modal-close').onclick = () => {
+      modalOverlay.style.display = 'none';
+      // Refresh the window when modal is closed
+      window.location.reload();
+    };
     // Back button
     const backBtn = modalOverlay.querySelector('.afinity-modal-back');
     if (backBtn) backBtn.onclick = () => {
@@ -1210,6 +1214,8 @@
         renderModal(); // force rerender to main page
       } else {
         modalOverlay.style.display = 'none';
+        // Refresh the window when modal is closed via back button
+        window.location.reload();
       }
     };
     // Edit contents or add extra meal
