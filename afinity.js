@@ -678,13 +678,31 @@
     return '';
   }
 
+  // Helper to calculate the total price for the subscription
+  function calculateSubscriptionTotal() {
+    if (!currentSubscription || !currentSubscription.include || !currentSubscription.include.bundle_selections || !Array.isArray(currentSubscription.include.bundle_selections.items)) {
+      return '0.00';
+    }
+    let totalCents = 0;
+    currentSubscription.include.bundle_selections.items.forEach(item => {
+      // Convert price to cents, multiply, then add
+      const priceCents = Math.round(Number(item.price) * 100) || 0;
+      const qty = parseInt(item.quantity) || 1;
+      totalCents += priceCents * qty;
+    });
+    // Convert back to dollars
+    return (totalCents / 100).toFixed(2);
+  }
+
   function renderMainPage() {
     const currentDeliveryDate = getDeliveryDateFromSubscription();
+    // Calculate total price for header
+    const headerTotal = calculateSubscriptionTotal();
     // Determine method
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
+        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${headerTotal}</span></span>
       </div>
       <div class="afinity-modal-content">
         <div class="afinity-modal-card-frequency">
