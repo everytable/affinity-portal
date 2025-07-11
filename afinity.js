@@ -1,6 +1,6 @@
 // affinity.js - Standalone modal widget
 (function() {
-  
+
   const originalDispatchEvent = EventTarget.prototype.dispatchEvent;
 
   EventTarget.prototype.dispatchEvent = function(event) {
@@ -1228,7 +1228,7 @@
     const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
     if (cancelBtn) cancelBtn.onclick = () => {
       // Dispatch custom event for cancel
-      const cancelEvent = new CustomEvent('Recharge::click::cancel', {
+      const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow', {
         detail: {
           subscriptionId: currentSubscription?.id,
           timestamp: new Date().toISOString()
@@ -1434,7 +1434,7 @@
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
       e.preventDefault();
       // TODO: Cancel subscription logic
-      const cancelEvent = new CustomEvent('Recharge::click::cancel', {
+      const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow', {
         detail: {
           subscriptionId: currentSubscription?.id,
           timestamp: new Date().toISOString()
