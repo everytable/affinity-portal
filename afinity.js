@@ -1,6 +1,42 @@
 // affinity.js - Standalone modal widget
 (function() {
 
+  // Load required dependencies
+  function loadDependencies() {
+    // Load jQuery
+    if (typeof jQuery === 'undefined') {
+      const jqueryScript = document.createElement('script');
+      jqueryScript.src = 'https://cdn.jsdelivr.net/jquery/latest/jquery.min.js';
+      document.head.appendChild(jqueryScript);
+    }
+    
+    // Load Moment.js
+    if (typeof moment === 'undefined') {
+      const momentScript = document.createElement('script');
+      momentScript.src = 'https://cdn.jsdelivr.net/momentjs/latest/moment.min.js';
+      document.head.appendChild(momentScript);
+    }
+    
+    // Load Flatpickr CSS
+    if (!document.querySelector('link[href*="flatpickr.min.css"]')) {
+      const flatpickrCSS = document.createElement('link');
+      flatpickrCSS.rel = 'stylesheet';
+      flatpickrCSS.type = 'text/css';
+      flatpickrCSS.href = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
+      document.head.appendChild(flatpickrCSS);
+    }
+    
+    // Load Flatpickr JS
+    if (typeof flatpickr === 'undefined') {
+      const flatpickrScript = document.createElement('script');
+      flatpickrScript.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+      document.head.appendChild(flatpickrScript);
+    }
+  }
+  
+  // Load dependencies immediately
+  loadDependencies();
+
   // const API_URL = "https://admin-app.everytable-sh.com/api"
   const API_URL = " https://format-queensland-briefs-.trycloudflare.com/api"
   // Dynamically load afinity.css if not already present
@@ -101,6 +137,40 @@
     modalChanges[key] = value;
   }
 
+  // Toast notification function
+  function showToast(message, type = 'info') {
+    // Remove any existing toasts
+    const existingToast = document.querySelector('.afinity-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `afinity-toast afinity-toast-${type}`;
+    
+    // Set icon based on type
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+    
+    toast.innerHTML = `
+      <span>${icon}</span>
+      <span class="afinity-toast-message">${message}</span>
+      <button class="afinity-toast-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(toast);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.remove();
+      }
+    }, 4000);
+  }
+
   function showModalLoading() {
     // Try to find modalOverlay if it doesn't exist
     if (!modalOverlay) {
@@ -179,6 +249,71 @@
     }
   }
 
+  // Global arrays to store allowed dates
+  let allowedDeliveryDates = [];
+  let allowedPickupDates = [];
+
+  // Add global variable for current time zone
+  let currentTimeZone = 'America/Los_Angeles'; // default fallback
+
+  // Update fetchAvailableDates to store the time zone from the payload
+  async function fetchAvailableDates(zip, selectedPickupLocationId) {
+    try {
+      const resp = await fetch(`${API_URL}/search/availability/${encodeURIComponent(zip)}`);
+      const data = await resp.json();
+      // Delivery dates
+      allowedDeliveryDates = (data.deliveryDays || [])
+        .filter(day => !day.isclosed)
+        .map(day => day.date);
+      // Pickup dates for the selected location
+      if (selectedPickupLocationId) {
+        const pickupLocation = (data.pickupLocations || []).find(
+          loc => String(loc.location_id) === String(selectedPickupLocationId)
+        );
+        if (pickupLocation && pickupLocation.pickupDates) {
+          allowedPickupDates = pickupLocation.pickupDates
+            .filter(day => !day.isclosed)
+            .map(day => day.date);
+        } else {
+          allowedPickupDates = [];
+        }
+      } else {
+        allowedPickupDates = [];
+      }
+      // Store the time zone from the payload
+      if (data.locationTimeZone) {
+        currentTimeZone = data.locationTimeZone;
+      } else if (data.time_zone) {
+        currentTimeZone = data.time_zone;
+      }
+    } catch (e) {
+      allowedDeliveryDates = [];
+      allowedPickupDates = [];
+    }
+  }
+
+  // Helper to (re)initialize the date picker with allowed dates
+  function setupDatePicker(fulfillmentType) {
+    const input = document.getElementById('afinity-date');
+    if (!input || typeof flatpickr === 'undefined') return;
+    // Destroy any previous instance
+    if (input._flatpickr) input._flatpickr.destroy();
+    let allowedDates = [];
+    if (fulfillmentType === 'Delivery') {
+      allowedDates = allowedDeliveryDates;
+    } else if (fulfillmentType === 'Pickup') {
+      allowedDates = allowedPickupDates;
+    }
+    flatpickr(input, {
+      dateFormat: "Y-m-d", // Keep ISO format for storage
+      enable: allowedDates,
+      onChange: function(selectedDates, dateStr) {
+        updateModalChanges('deliveryDate', dateStr);
+        deliveryDate = dateStr;
+      }
+    });
+  }
+
   async function fetchSubscriptionAndPickup(subscriptionId, zip) {
     modalLoading = true;
     showModalLoading();
@@ -188,6 +323,9 @@
         fetchPickupLocations(zip),
         fetchFrequencies()
       ]);
+      // Fetch available dates for the current fulfillment type and pickup location
+      await fetchAvailableDates(zip, modalChanges.selectedPickupLocationId || selectedPickupLocationId);
+      setupDatePicker(modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery');
     } finally {
       modalLoading = false;
     }
@@ -232,10 +370,26 @@
         
         // Update fulfillment method
         if (payload?.include?.address?.order_attributes) {
-          const fulfillmentTypeAttr = payload.include.address.order_attributes.find(attr => 
-            attr.name.toLowerCase() === 'fulfillment type'
-          );
-          if (fulfillmentTypeAttr && fulfillmentTypeAttr.value) {
+          let fulfillmentTypeAttr;
+          for (const attr of payload.include.address.order_attributes) {
+            if (attr && typeof attr === 'object') {
+              // If it's { name, value }
+              if ('name' in attr && 'value' in attr) {
+                if (attr.name === 'Fulfillment Type') {
+                  fulfillmentTypeAttr = attr;
+                  break;
+                }
+              } else {
+                // If it's { "Fulfillment Type": "Delivery" }
+                const key = Object.keys(attr)[0];
+                if (key === 'Fulfillment Type') {
+                  fulfillmentTypeAttr = { name: key, value: attr[key] };
+                  break;
+                }
+              }
+            }
+          }
+          if (fulfillmentTypeAttr) {
             fulfillmentMethod = fulfillmentTypeAttr.value.trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
           }
         }
@@ -382,24 +536,31 @@
           <input id="afinity-zip" type="text" placeholder="Zip / Postal Code" style="flex:1;" value="${modalChanges.zip || zip}" />
         </div>
       `}
-      <div style="display:flex; justify-content:flex-end; margin-top:8px;">
-        <button id="afinity-save-method-btn" class="afinity-modal-save-btn" type="button" onclick="saveAddressAndMethod()">Save</button>
-      </div>
     `;
   }
 
   // Helper to format delivery date
   function formatDeliveryDate(dateStr) {
     if (!dateStr) return '';
-    // dateStr is already in ISO format (YYYY-MM-DD), just format it directly
+    // dateStr is in ISO format (YYYY-MM-DD), convert to MM-DD-YYYY for display
     const [year, month, day] = dateStr.split('-');
     const date = new Date(year, month - 1, day); // month is 0-indexed
     return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'long',
-      day: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
       year: 'numeric'
     });
+  }
+  
+  // Helper to format time for display (24-hour to 12-hour)
+  function formatTimeForDisplay(timeStr) {
+    if (!timeStr) return '';
+    // timeStr is in 24-hour format (HH:MM), convert to 12-hour for display
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
   }
   
   // Helper to convert state name to code
@@ -434,6 +595,30 @@
     }
     
     return deliveryDate; // final fallback
+  }
+  
+  // Helper to get fulfillment time from currentSubscription order attributes
+  function getFulfillmentTimeFromSubscription() {
+    if (!currentSubscription?.include?.address?.order_attributes) {
+      return fulfillmentTime; 
+    }
+    
+    const fulfillmentDateAttr = currentSubscription.include.address.order_attributes.find(attr => 
+      attr.name === 'Fulfillment Date' 
+    );
+    
+    if (fulfillmentDateAttr) {
+      const fulfillmentDateTime = fulfillmentDateAttr.value;
+      if (fulfillmentDateTime.includes('T')) {
+        // Extract time and convert to 24-hour format
+        const timePart = fulfillmentDateTime.split('T')[1];
+        const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+        const [hours, minutes] = timeWithOffset.split(':');
+        return `${hours}:${minutes}`;
+      }
+    }
+    
+    return fulfillmentTime; // fallback
   }
   // Optionally, set a price variable if you want to show price
   let price = '3.99'; // Replace with real price if available
@@ -538,11 +723,11 @@
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date" class="afinity-modal-select-label">Date</label>
-            <input id="afinity-date" type="date" value="${currentDeliveryDate}" />
+            <input id="afinity-date" type="text" placeholder="Select delivery date" value="${currentDeliveryDate}" readonly />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time" class="afinity-modal-select-label">Time</label>
-            <input id="afinity-time" type="time" value="${fulfillmentTime || '15:30'}" />
+            <input id="afinity-time" type="text" placeholder="Select delivery time" value="${formatTimeForDisplay(getFulfillmentTimeFromSubscription())}" readonly />
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
             <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()">Save</button>
@@ -563,6 +748,9 @@
               <button class="afinity-modal-save-btn" type="button">Save Changes</button>
             </div>
           </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+          <button id="afinity-save-all-btn" class="afinity-modal-save-btn" type="button" disabled>Save</button>
         </div>
       </div>
     `;
@@ -586,7 +774,7 @@
             </div>
             <div class="afinity-meals-date-select" style="font-size:16px;min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
               <label class="afinity-modal-select-label">Delivery Date</label>
-              <input id="afinity-meals-date" type="date" value="${currentDeliveryDate}" style="font-size:16px;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" />
+              <input id="afinity-meals-date" type="text" placeholder="Select delivery date" value="${currentDeliveryDate}" style="font-size:16px;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" readonly />
             </div>
           </div>
         </div>
@@ -760,95 +948,135 @@
     }, 0);
   }
 
-  // Dedicated function to save address and method
-  async function saveAddressAndMethod() {
-    const subscriptionId = currentSubscription?.id;
-    showModalLoading()
-    if (!subscriptionId) {
-      showToast('No subscription ID found', 'error');
-      return;
-    }
-
-    const addressFieldsChanged = (
-      modalChanges.address1 !== address1 ||
-      modalChanges.address2 !== address2 ||
-      modalChanges.city !== city ||
-      modalChanges.state !== state ||
-      modalChanges.zip !== zip
-    );
-
-    const prevMethod = fulfillmentMethod; // This is the method before the change
-    const newMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
-    const isDelivery = newMethod === 'Delivery';
-    const switchedToDelivery = prevMethod === 'Pickup' && newMethod === 'Delivery';
-
-    if ((isDelivery && addressFieldsChanged) || switchedToDelivery) {
-      // Call address update endpoint
-      const resp = await fetch(`${API_URL}/subscription/address`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscriptionId,
-          address1: modalChanges.address1,
-          address2: modalChanges.address2,
-          city: modalChanges.city,
-          state: modalChanges.state,
-          zip: modalChanges.zip
-        })
-      });
-      const data = await resp.json();
-      if (!data.success) {
-        showToast(data.error || (data.recharge && data.recharge.error) || 'Failed to update address', 'error');
-        hideModalLoading()
-        return; 
-      }
-    } else {
-      // Only update fulfillment type (call fulfillment endpoint or just update modal state)
-      const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fulfillmentMethod: modalChanges.fulfillmentMethod,
-          selectedPickupLocationId: modalChanges.selectedPickupLocationId,
-          deliveryDate: modalChanges.deliveryDate,
-          fulfillmentTime: modalChanges.fulfillmentTime,
-          selectedFrequency: modalChanges.selectedFrequency
-        })
-      });
-      const data = await resp.json();
-      if (!data.success) {
-        showToast(data.error || 'Failed to update delivery method', 'error');
-        hideModalLoading()
-        return; 
-      }
-    }
-    await refreshSubscriptionData(subscriptionId);
-    showToast('Address and delivery method updated successfully!', 'success');
-    hideModalLoading()
-  }
-
   // Dedicated function to save date
   async function saveDate() {
-    const subscriptionId = currentSubscription?.id;
-    if (!subscriptionId) {
-      showToast('No subscription ID found', 'error');
-      return;
-    }
-    const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    showModalLoading();
+    try {
+      const subscriptionId = currentSubscription?.id;
+      if (!subscriptionId) {
+        showToast('No subscription ID found', 'error');
+        hideModalLoading();
+        return;
+      }
+      // For Delivery, update address first
+      if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Delivery') {
+        const addressResp = await fetch(`${API_URL}/subscription/address`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscriptionId,
+            address1: modalChanges.address1,
+            address2: modalChanges.address2,
+            city: modalChanges.city,
+            state: modalChanges.state,
+            zip: modalChanges.zip
+          })
+        });
+        const addressData = await addressResp.json();
+        if (!addressData.success) {
+          showToast(addressData.error || (addressData.recharge && addressData.recharge.error) || 'Failed to update address', 'error');
+          hideModalLoading();
+          return;
+        }
+      }
+      console.log("Saved Address")
+      // Always update fulfillment/order attributes
+      const orderAttributesArr = [];
+      if (modalChanges.fulfillmentMethod || fulfillmentMethod) {
+        orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
+      }
+      
+      // Always include LocationID
+      let locationIdToSend = null;
+      if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
+        locationIdToSend = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+      } else {
+        // For Delivery, use the delivery location ID from subscription
+        locationIdToSend = currentSubscription?.deliveryLocation?.location_id;
+      }
+      
+      if (locationIdToSend) {
+        orderAttributesArr.push({ "LocationID": locationIdToSend });
+      }
+      
+      if (modalChanges.deliveryDate) {
+        orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
+      }
+      console.log("Computinig timezone date")
+      // Compute ISO string for Fulfillment Date
+      let timeZone = '';
+      if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
+        // Try to get from selected pickup location
+        const pickupLoc = (pickupLocations || []).find(loc => String(loc.id) === String(modalChanges.selectedPickupLocationId || selectedPickupLocationId));
+        timeZone = pickupLoc && pickupLoc.locationTimeZone ? pickupLoc.locationTimeZone : 'America/Los_Angeles';
+      } else {
+        // Delivery
+        timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
+      }
+      console.log("timeZone: ", timeZone)
+      
+      // If fulfillmentTime is empty, get it from the original subscription
+      let timeToUse = modalChanges.fulfillmentTime || fulfillmentTime;
+      console.log("timeToUse: ", timeToUse)
+      if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
+        const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
+          obj => obj.hasOwnProperty("Fulfillment Date")
+        );
+        const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
+        console.log("fulfillmentDateAttr: ", fulfillmentDateAttr)
+        if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
+          const timePart = fulfillmentDateAttr.split('T')[1];
+          const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+          const [hours, minutes] = timeWithOffset.split(':');
+          timeToUse = `${hours}:${minutes}`;
+          console.log("Time to use: ", timeToUse)
+        }
+      }
+      console.log("Final Time to use: ", timeToUse)
+      
+      let isoString = '';
+      try {
+        const timeStr = toAmPm(timeToUse);
+        console.log("toAMPM: ", timeStr)
+        isoString = getLocalISOFromDateAndTime(
+          modalChanges.deliveryDate,
+          timeStr,
+          currentTimeZone
+        );
+      } catch (e) {
+        showToast('Invalid date or time format', 'error');
+        hideModalLoading();
+        return;
+      }
+      if (isoString) {
+        orderAttributesArr.push({ "Fulfillment Date": isoString });
+      }
+      
+      const updatePayload = {
+        order_attributes: orderAttributesArr,
         deliveryDate: modalChanges.deliveryDate,
-        fulfillmentTime: modalChanges.fulfillmentTime
-      })
-    });
-    const data = await resp.json();
-    if (!data.success) {
-      showToast(data.error || 'Failed to update delivery date', 'error');
-      return;
+        fulfillmentTime: modalChanges.fulfillmentTime,
+        selectedFrequency: modalChanges.selectedFrequency
+      };
+      const subscriptionResp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+      const subscriptionData = await subscriptionResp.json();
+      if (!subscriptionData.success) {
+        showToast(subscriptionData.error || 'Failed to update subscription', 'error');
+        hideModalLoading();
+        return;
+      }
+      showToast('All changes saved successfully!', 'success');
+      await refreshSubscriptionData(subscriptionId);
+      // modalOverlay.style.display = 'none';
+    } catch (error) {
+      showToast('Error saving changes', 'error');
+    } finally {
+      hideModalLoading();
     }
-    await refreshSubscriptionData(subscriptionId);
-    showToast('Delivery date updated successfully!', 'success');
   }
 
   function attachModalEvents() {
@@ -922,9 +1150,78 @@
         }
 
         // Always update fulfillment type and related fields
-        const subscriptionData = {
-          fulfillmentMethod: modalChanges.fulfillmentMethod,
-          selectedPickupLocationId: modalChanges.selectedPickupLocationId,
+        const orderAttributesArr = [];
+        if (modalChanges.fulfillmentMethod || fulfillmentMethod) {
+          orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
+        }
+        
+        // Always include LocationID
+        let locationIdToSend = null;
+        if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
+          locationIdToSend = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+        } else {
+          // For Delivery, use the delivery location ID from subscription
+          locationIdToSend = currentSubscription?.deliveryLocation?.location_id;
+        }
+        
+        if (locationIdToSend) {
+          orderAttributesArr.push({ "LocationID": locationIdToSend });
+        }
+        
+        if (modalChanges.deliveryDate) {
+          orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
+        }
+        
+        // Compute ISO string for Fulfillment Date
+        let timeZone = '';
+        if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
+          // Try to get from selected pickup location
+          const pickupLoc = (pickupLocations || []).find(loc => String(loc.id) === String(modalChanges.selectedPickupLocationId || selectedPickupLocationId));
+          timeZone = pickupLoc && pickupLoc.locationTimeZone ? pickupLoc.locationTimeZone : 'America/Los_Angeles';
+        } else {
+          // Delivery
+          timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
+        }
+        
+        // If fulfillmentTime is empty, get it from the original subscription
+        let timeToUse = modalChanges.fulfillmentTime || fulfillmentTime;
+
+        if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
+          const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
+            obj => obj.hasOwnProperty("Fulfillment Date")
+          );
+          const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
+          if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
+            const timePart = fulfillmentDateAttr.split('T')[1];
+            const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+            const [hours, minutes] = timeWithOffset.split(':');
+            timeToUse = `${hours}:${minutes}`;
+          }
+        }
+        
+        let isoString = '';
+        console.log(modalChanges.deliveryDate, timeToUse, currentTimeZone)
+        try {
+          const timeStr = toAmPm(timeToUse || '15:30');
+          console.log( modalChanges.deliveryDate,
+            timeStr,
+            currentTimeZone)
+          isoString = getLocalISOFromDateAndTime(
+            modalChanges.deliveryDate,
+            timeStr,
+            currentTimeZone
+          );
+        } catch (e) {
+          showToast('Invalid date or time format', 'error');
+          hideModalLoading();
+          return;
+        }
+        if (isoString) {
+          orderAttributesArr.push({ "Fulfillment Date": isoString });
+        }
+        
+        const updatePayload = {
+          order_attributes: orderAttributesArr,
           deliveryDate: modalChanges.deliveryDate,
           fulfillmentTime: modalChanges.fulfillmentTime,
           selectedFrequency: modalChanges.selectedFrequency
@@ -935,7 +1232,7 @@
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(subscriptionData)
+          body: JSON.stringify(updatePayload)
         });
 
         const subscriptionResult = await subscriptionResponse.json();
@@ -1013,24 +1310,76 @@
       // TODO: Implement swap logic
       alert('Swap Items clicked');
     };
-    // Date input on main page
+    // Initialize Flatpickr for date inputs
     const mainDateInput = modalOverlay.querySelector('#afinity-date');
-    if (mainDateInput) mainDateInput.onchange = (e) => {
-      updateModalChanges('deliveryDate', e.target.value);
-      deliveryDate = e.target.value;
-    };
-    // Date input on meals page
+    if (mainDateInput && typeof flatpickr !== 'undefined') {
+      flatpickr(mainDateInput, {
+        dateFormat: "Y-m-d",
+        minDate: "today",
+        disable: [
+          function(date) {
+            // Disable weekends (0 = Sunday, 6 = Saturday)
+            return (date.getDay() === 0 || date.getDay() === 6);
+          }
+        ],
+        onChange: function(selectedDates, dateStr) {
+          updateModalChanges('deliveryDate', dateStr);
+          deliveryDate = dateStr;
+        }
+      });
+    }
+    
+    // Initialize Flatpickr for meals page date input
     const mealsDateInput = modalOverlay.querySelector('#afinity-meals-date');
-    if (mealsDateInput) mealsDateInput.onchange = (e) => {
-      updateModalChanges('deliveryDate', e.target.value);
-      deliveryDate = e.target.value;
-    };
-    // Time input
+    if (mealsDateInput && typeof flatpickr !== 'undefined') {
+      flatpickr(mealsDateInput, {
+        dateFormat: "Y-m-d",
+        minDate: "today",
+        disable: [
+          function(date) {
+            // Disable weekends (0 = Sunday, 6 = Saturday)
+            return (date.getDay() === 0 || date.getDay() === 6);
+          }
+        ],
+        onChange: function(selectedDates, dateStr) {
+          updateModalChanges('deliveryDate', dateStr);
+          deliveryDate = dateStr;
+        }
+      });
+    }
+    
+    // Initialize Flatpickr for time input
     const mainTimeInput = modalOverlay.querySelector('#afinity-time');
-    if (mainTimeInput) mainTimeInput.onchange = (e) => {
-      updateModalChanges('fulfillmentTime', e.target.value);
-      fulfillmentTime = e.target.value;
-    };
+    if (mainTimeInput && typeof flatpickr !== 'undefined') {
+      // Convert stored 24-hour time to Date object for Flatpickr
+      let defaultTime = new Date();
+      const currentFulfillmentTime = getFulfillmentTimeFromSubscription();
+      if (currentFulfillmentTime) {
+        const [hours, minutes] = currentFulfillmentTime.split(':');
+        defaultTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      } else {
+        defaultTime.setHours(15, 30, 0, 0); // Default to 3:30 PM
+      }
+      
+      flatpickr(mainTimeInput, {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: "h:i K", // 12-hour format with AM/PM for display
+        time_24hr: false,
+        defaultDate: defaultTime,
+        minuteIncrement: 15,
+        onChange: function(selectedDates, dateStr) {
+          // Convert 12-hour format to 24-hour format for storage
+          if (selectedDates[0]) {
+            const hours = selectedDates[0].getHours().toString().padStart(2, '0');
+            const minutes = selectedDates[0].getMinutes().toString().padStart(2, '0');
+            const time24Format = `${hours}:${minutes}`;
+            updateModalChanges('fulfillmentTime', time24Format);
+            fulfillmentTime = time24Format;
+          }
+        }
+      });
+    }
     
     // Frequency input
     const frequencyInput = modalOverlay.querySelector('#afinity-frequency');
@@ -1074,12 +1423,50 @@
         zip = e.target.value; 
       };
     }
-    // Save button for Delivery/Pickup/Address section
-    const saveMethodBtn = modalOverlay.querySelector('#afinity-save-method-btn');
-    if (saveMethodBtn) saveMethodBtn.onclick = saveAddressAndMethod;
     // Save button for Date section
     const saveDateBtn = modalOverlay.querySelector('#afinity-save-date-btn');
     if (saveDateBtn) saveDateBtn.onclick = saveDate;
+    // Listen for fulfillment method change
+    const methodSelect = modalOverlay.querySelector('#afinity-method');
+    if (methodSelect) {
+      methodSelect.onchange = async (e) => {
+        updateModalChanges('fulfillmentMethod', e.target.value);
+        fulfillmentMethod = e.target.value;
+        if (fulfillmentMethod === 'Pickup') {
+          // Use the selected pickup location, or default to the first one
+          let pickupId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+          if (!pickupId && pickupLocations && pickupLocations.length > 0) {
+            pickupId = pickupLocations[0].id;
+            updateModalChanges('selectedPickupLocationId', pickupId);
+            selectedPickupLocationId = pickupId;
+          }
+          await fetchAvailableDates(zip, pickupId);
+          setupDatePicker('Pickup');
+        } else {
+          await fetchAvailableDates(zip, null);
+          setupDatePicker('Delivery');
+        }
+      };
+    }
+    // Listen for pickup location change
+    const pickupRadios = modalOverlay.querySelectorAll('input[name="pickup-location"]');
+    pickupRadios.forEach(radio => {
+      radio.onchange = async (e) => {
+        updateModalChanges('selectedPickupLocationId', parseInt(e.target.value));
+        selectedPickupLocationId = parseInt(e.target.value);
+        // Refetch available dates and update picker
+        await fetchAvailableDates(zip, parseInt(e.target.value));
+        setupDatePicker(modalChanges.fulfillmentMethod || fulfillmentMethod || 'Pickup');
+        renderPickupLocationsSection();
+      };
+    });
+    // Initialize Flatpickr for date input (main)
+    setupDatePicker(modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery');
+
+    const saveAllBtn = modalOverlay.querySelector('#afinity-save-all-btn');
+    if (saveAllBtn) {
+      saveAllBtn.onclick = saveDate;
+    }
   }
 
   function attachMethodSectionEvents() {
@@ -1128,7 +1515,12 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
+    console.log("Recharge::click::manageSubscription")
     showModalLoading();
+    // When modal is closed, the style is set to none, so we need to set it to block
+    if(modalOverlay) {
+      modalOverlay.style.display = 'block';
+    }
     
     // Get subscription ID from the event
     const subscriptionId = event.detail?.payload?.subscriptionId || event.detail?.subscription_id || event.target?.getAttribute('data-subscription-id');
@@ -1137,7 +1529,7 @@
       // Fetch subscription data from API
       fetch(`${API_URL}/subscription/${subscriptionId}`)
         .then(response => response.json())
-        .then(data => {
+        .then(async data => {
           console.log('Subscription data:', data);
           const payload = data.data;
           currentSubscription = payload
@@ -1153,6 +1545,7 @@
           
           // Extract fulfillment date, time, and method from order attributes
           if (payload?.include?.address?.order_attributes) {
+            console.log("Paylod has order attributes");
             const fulfillmentDateAttr = payload.include.address.order_attributes.find(attr => 
               attr.name === 'Fulfillment Date' 
             );
@@ -1160,22 +1553,45 @@
               const fulfillmentDateTime = fulfillmentDateAttr.value;
               if (fulfillmentDateTime.includes('T')) {
                 // Format: "2025-07-03T20:15:00-07:00"
-                fulfillmentDate = fulfillmentDateTime.split('T')[0];
-                fulfillmentTime = fulfillmentDateTime.split('T')[1].split('-')[0];
+                const [datePart, timePart] = fulfillmentDateTime.split('T');
+                deliveryDate = datePart;
+                // Extract time and convert to 24-hour format
+                const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+                const [hours, minutes] = timeWithOffset.split(':');
+                fulfillmentTime = `${hours}:${minutes}`;
               } else {
                 // Format: "2025-07-03"
-                fulfillmentDate = fulfillmentDateTime;
+                deliveryDate = fulfillmentDateTime;
                 fulfillmentTime = '15:30'; // Default time
               }
             }
             
-            const fulfillmentTypeAttr = payload.include.address.order_attributes.find(attr => attr.name.toLowerCase() === 'fulfillment type');
-            if (fulfillmentTypeAttr && fulfillmentTypeAttr.value) {
+            let fulfillmentTypeAttr;
+            for (const attr of payload.include.address.order_attributes) {
+              if (attr && typeof attr === 'object') {
+                // If it's { name, value }
+                if ('name' in attr && 'value' in attr) {
+                  if (attr.name === 'Fulfillment Type') {
+                    fulfillmentTypeAttr = attr;
+                    break;
+                  }
+                } else {
+                  // If it's { "Fulfillment Type": "Delivery" }
+                  const key = Object.keys(attr)[0];
+                  if (key === 'Fulfillment Type') {
+                    fulfillmentTypeAttr = { name: key, value: attr[key] };
+                    break;
+                  }
+                }
+              }
+            }
+            if (fulfillmentTypeAttr) {
               fulfillmentMethod = fulfillmentTypeAttr.value.trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
             } else {
               fulfillmentMethod = 'Delivery';
             }
           }
+          console.log("Fulfillment Method:", fulfillmentMethod);
           
           // Update delivery date and price from subscription data
           // Use fulfillment date from order attributes as delivery date
@@ -1189,7 +1605,14 @@
             modalOverlay.style.display = '';
           }
           renderModal();
-          fetchSubscriptionAndPickup(subscriptionId, zip);
+          console.log("Before fetchSubscriptionAndPickup");
+          try {
+            await fetchSubscriptionAndPickup(subscriptionId, zip);
+            console.log("After fetchSubscriptionAndPickup");
+          } catch (err) {
+            console.error("Error in fetchSubscriptionAndPickup", err);
+          }
+          console.log("FEtchingSubscritpoinAndPicu");
           // Set current frequency from subscription data
           if (payload.subscription_preferences) {
             const intervalUnit = payload.subscription_preferences.interval_unit;
@@ -1233,14 +1656,23 @@
           let locationId = null;
           let locationName = null;
           if (payload && payload.include && payload.include.address && payload.include.address.order_attributes) {
-            const locationIdAttr = payload.include.address.order_attributes.find(attr => attr.name.toLowerCase() === 'locationid');
-            if (locationIdAttr) locationId = locationIdAttr.value;
-            const locationNameAttr = payload.include.address.order_attributes.find(attr => attr.name.toLowerCase() === 'location name');
-            if (locationNameAttr) locationName = locationNameAttr.value;
+            // Robustly extract LocationID and Location Name from both {name, value} and {"LocationID": value} formats
+            for (const attr of payload.include.address.order_attributes) {
+              if (attr && typeof attr === 'object') {
+                // Format: { name, value }
+                if ('name' in attr && 'value' in attr) {
+                  if (attr.name === 'LocationID') locationId = attr.value;
+                  if (attr.name === 'Location Name') locationName = attr.value;
+                } else {
+                  // Format: { "LocationID": value } or { "Location Name": value }
+                  const key = Object.keys(attr)[0];
+                  if (key === 'LocationID') locationId = attr[key];
+                  if (key === 'Location Name') locationName = attr[key];
+                }
+              }
+            }
           }
 
-          console.log('locationId:', locationId);
-          console.log('locationName:', locationName);
           if (locationId && zip) {
             fetchPickupLocations(zip).then(pickupLocations => {
               const matchedLocation = pickupLocations.find(loc => String(loc.id) === String(locationId));
@@ -1284,7 +1716,53 @@
               console.error('Failed to fetch pickup locations for zip:', zip, err);
             });
           } else {
-            currentCatalogPayload = null;
+            // If no LocationID, fetch pickup locations and select the first one by default
+            if (zip) {
+              fetchPickupLocations(zip).then(pickupLocations => {
+                if (pickupLocations && pickupLocations.length > 0) {
+                  const firstLocation = pickupLocations[0];
+                  locationId = firstLocation.id;
+                  locationName = firstLocation.name;
+                  console.log('No LocationID found, selected first pickup location:', locationId, locationName);
+                  
+                  // Load catalog for the first location
+                  fetch(`${API_URL}/location/catalog/${locationId}/${encodeURIComponent(locationName)}`)
+                    .then(resp => resp.json())
+                    .then(catalogPayload => {
+                      currentCatalogPayload = catalogPayload;
+                      console.log('Loaded catalog payload for first location:', catalogPayload);
+                      
+                      // Fetch variants for this catalog
+                      if (catalogPayload && catalogPayload.catalogId) {
+                        const catalogId = catalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '');
+                        fetch(`${API_URL}/subscriptions/${catalogId}/variants`)
+                          .then(resp => resp.json())
+                          .then(variantsData => {
+                            currentCatalogVariants = variantsData;
+                            rerenderModalCartList();
+                            renderModal();
+                          })
+                          .catch(err => {
+                            currentCatalogVariants = null;
+                            console.error('Failed to load catalog variants:', err);
+                          });
+                      }
+                    })
+                    .catch(err => {
+                      currentCatalogPayload = null;
+                      console.error('Failed to load catalog payload for first location:', err);
+                    });
+                } else {
+                  currentCatalogPayload = null;
+                  console.log('No pickup locations found for zip:', zip);
+                }
+              }).catch(err => {
+                currentCatalogPayload = null;
+                console.error('Failed to fetch pickup locations for zip:', zip, err);
+              });
+            } else {
+              currentCatalogPayload = null;
+            }
           }
         })
         .catch(error => {
@@ -1430,238 +1908,77 @@
           </option>`
         ).join('')
       ).join('');
-      
-      // Re-attach the change event
-      frequencySelect.onchange = (e) => {
-        updateModalChanges('selectedFrequency', e.target.value);
-        selectedFrequency = e.target.value;
-      };
     }
   }
 
-  // At the very end of the IIFE, before it closes, trigger sidebar/cart calculations immediately
-  rerenderSidebarMeals();
-  // At the end of the IIFE, expose the save functions to the global scope:
-  window.saveAddressAndMethod = saveAddressAndMethod;
-  window.saveDate = saveDate;
-})(); 
-
-// Toast logic
-function showToast(message, type = 'error') {
-  console.log('showToast called with:', { message, type });
-  
-  const toast = document.getElementById('afinity-toast'); 
-  console.log('Toast element found:', toast);
-  
-  if (!toast) {
-    console.log('showToast: No toast element found, creating one...');
-    // Try to create the toast element if it doesn't exist
-    const createToast = () => {
-      if (document.getElementById('afinity-toast')) return;
-      
-      if (!document.body) {
-        console.log('showToast: document.body not ready, retrying...');
-        setTimeout(createToast, 100);
-        return;
-      }
-      
-      const newToast = document.createElement('div');
-      newToast.id = 'afinity-toast';
-      newToast.className = 'afinity-toast';
-      newToast.style.display = 'none';
-      newToast.innerHTML = `
-        <div class="afinity-toast-message"></div>
-        <button class="afinity-toast-close" onclick="this.parentElement.style.display='none'">&times;</button>
-      `;
-      
-      try {
-        document.body.appendChild(newToast);
-        console.log('showToast: Created new toast element');
-        // Recursively call showToast with the new element
-        setTimeout(() => showToast(message, type), 50);
-      } catch (error) {
-        console.error('showToast: Failed to create toast element:', error);
-      }
-    };
-    createToast();
-    return;
+  // Helper to convert 24-hour time to 12-hour format for utility functions
+  function toAmPm(timeStr) {
+    if (!timeStr) return '3:30 PM'; // Default fallback
+    // timeStr is in 24-hour format (HH:MM), convert to 12-hour format
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
   }
   
-  console.log('showToast: Setting toast content and classes');
-  
-  // Set content and type
-  toast.className = `afinity-toast afinity-toast-${type}`;
-  console.log('showToast: Set toast className to:', toast.className);
-  
-  const messageElement = toast.querySelector('.afinity-toast-message');
-  console.log('showToast: Message element found:', messageElement);
-  
-  if (messageElement) {
-    messageElement.textContent = message;
-    console.log('showToast: Set message text to:', message);
-  } else {
-    console.error('showToast: Could not find message element');
-  }
-  
-  toast.style.display = 'flex';
-  console.log('showToast: Set toast display to flex');
-
-  // Auto-dismiss after 5 seconds
-  if (toast._timeout) {
-    console.log('showToast: Clearing existing timeout');
-    clearTimeout(toast._timeout);
-  }
-  
-  toast._timeout = setTimeout(() => {
-    console.log('showToast: Auto-dismissing toast');
-    toast.style.display = 'none';
-  }, 5000);
-  
-  console.log('showToast: Toast should now be visible');
-}
-
-// Create toast element if not present
-(function createToastElement() {
-  if (document.getElementById('afinity-toast')) return;
-  
-  // Check if document.body exists
-  if (!document.body) {
-    console.log('createToastElement: document.body not ready, retrying...');
-    setTimeout(createToastElement, 100);
-    return;
-  }
-  
-  const toast = document.createElement('div');
-  toast.id = 'afinity-toast';
-  toast.className = 'afinity-toast';
-  toast.style.display = 'none';
-  toast.innerHTML = `
-    <div class="afinity-toast-message"></div>
-    <button class="afinity-toast-close" onclick="this.parentElement.style.display='none'">&times;</button>
-  `;
-  
-  try {
-    document.body.appendChild(toast);
-    console.log('createToastElement: toast element created successfully');
-  } catch (error) {
-    console.error('createToastElement: failed to append toast element:', error);
-  }
-})();
-
-// Update saveAddressAndMethod to use showToast for errors
-async function saveAddressAndMethod() {
-  const subscriptionId = currentSubscription?.id;
-  if (!subscriptionId) {
-    showToast('No subscription ID found', 'error');
-    return;
-  }
-  
-  // Show loading state
-  showModalLoading();
-  
-  try {
-    const addressFieldsChanged = (
-      modalChanges.address1 !== address1 ||
-      modalChanges.address2 !== address2 ||
-      modalChanges.city !== city ||
-      modalChanges.state !== state ||
-      modalChanges.zip !== zip
+  // Helper to convert date and 12-hour time to ISO string with timezone
+  function getLocalISOFromDateAndTime(dateStr, timeStr, timeZone) {
+    // dateStr: "2025-07-03", timeStr: "4:30 PM", timeZone: "America/Los_Angeles"
+    const [yyyy, mm, dd] = dateStr.split("-");
+    
+    // Handle "4:30 PM" → { hour: "4", min: "30", period: "PM" }
+    const timeMatch = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!timeMatch) {
+      throw new Error(`Invalid time format: ${timeStr}`);
+    }
+    
+    let [, hourStr, minStr, period] = timeMatch;
+    let hour = parseInt(hourStr, 10);
+    const minute = parseInt(minStr, 10);
+    const isPM = period.toUpperCase() === "PM";
+    
+    // Convert to 24-hour time
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+    
+    const jsDate = new Date(
+      `${yyyy}-${mm}-${dd}T${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00`
     );
-
-    if (addressFieldsChanged) {
-      // Call address update endpoint
-      const resp = await fetch(`${API_URL}/subscription/address`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscriptionId,
-          address1: modalChanges.address1,
-          address2: modalChanges.address2,
-          city: modalChanges.city,
-          state: modalChanges.state,
-          zip: modalChanges.zip
-        })
-      });
-      const data = await resp.json();
-      if (!data.success) {
-        let errorMessage = 'Failed to update address';
-        
-        // Handle Recharge error formatting
-        if (data.recharge && data.recharge.error) {
-          try {
-            const rechargeError = JSON.parse(data.recharge.error);
-            if (rechargeError.errors && rechargeError.errors.all) {
-              errorMessage = `Failed to update address in Recharge: ${rechargeError.errors.all.toLowerCase()}`;
-            } else {
-              errorMessage = `Failed to update address in Recharge: ${data.recharge.error}`;
-            }
-          } catch (e) {
-            // If parsing fails, use the raw error
-            errorMessage = `Failed to update address in Recharge: ${data.recharge.error}`;
-          }
-        } else if (data.error) {
-          errorMessage = data.error;
-        }
-        
-        showToast(errorMessage, 'error');
-        return;
-      }
-    } else {
-      // Only update fulfillment type (call fulfillment endpoint or just update modal state)
-      const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fulfillmentMethod: modalChanges.fulfillmentMethod,
-          selectedPickupLocationId: modalChanges.selectedPickupLocationId,
-          deliveryDate: modalChanges.deliveryDate,
-          fulfillmentTime: modalChanges.fulfillmentTime,
-          selectedFrequency: modalChanges.selectedFrequency
-        })
-      });
-      const data = await resp.json();
-      if (!data.success) {
-        showToast(data.error || 'Failed to update delivery method', 'error');
-        return;
-      }
-    }
-    await refreshSubscriptionData(subscriptionId);
-    showToast('Address and delivery method updated successfully!', 'success');
-  } finally {
-    // Hide loading state
-    hideModalLoading();
-  }
-}
-
-// Update saveDate to use showToast for errors
-async function saveDate() {
-  const subscriptionId = currentSubscription?.id;
-  if (!subscriptionId) {
-    showToast('No subscription ID found', 'error');
-    return;
-  }
-  
-  // Show loading state
-  showModalLoading();
-  
-  try {
-    const resp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deliveryDate: modalChanges.deliveryDate,
-        fulfillmentTime: modalChanges.fulfillmentTime
-      })
+    
+    // Get offset for zone
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit'
     });
-    const data = await resp.json();
-    if (!data.success) {
-      showToast(data.error || 'Failed to update delivery date', 'error');
-      return;
-    }
-    await refreshSubscriptionData(subscriptionId);
-    showToast('Delivery date updated successfully!', 'success');
-  } finally {
-    // Hide loading state
-    hideModalLoading();
+    
+    const parts = dtf.formatToParts(jsDate);
+    const filled = {};
+    for (const { type, value } of parts) filled[type] = value;
+    
+    const asUTC = Date.UTC(
+      parseInt(filled.year), 
+      parseInt(filled.month) - 1, 
+      parseInt(filled.day),
+      parseInt(filled.hour), 
+      parseInt(filled.minute), 
+      parseInt(filled.second)
+    );
+    
+    const offsetMinutes = (asUTC - jsDate.getTime()) / 60000;
+    const sign = offsetMinutes <= 0 ? "+" : "-";
+    const abs = Math.abs(offsetMinutes);
+    const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+    const mmOff = String(abs % 60).padStart(2, "0");
+    const offset = `${sign}${hh}:${mmOff}`;
+    
+    return `${yyyy}-${mm}-${dd}T${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:00${offset}`;
   }
-} 
+
+})();
