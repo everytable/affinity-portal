@@ -361,6 +361,23 @@
     }
   }
 
+  // Helper function to generate dates for the next 3 days (today, tomorrow, day after tomorrow)
+  function getRestrictedDates() {
+    const today = new Date();
+    const restrictedDates = [];
+    
+    // Add today, tomorrow, and day after tomorrow
+    for (let i = 0; i < 3; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      restrictedDates.push(dateStr);
+    }
+    
+    console.log('Restricted dates (3 days out):', restrictedDates);
+    return restrictedDates;
+  }
+
   // Helper to (re)initialize the date picker with allowed dates
   function setupDatePicker(fulfillmentType) {
     console.log('=== SETUP DATE PICKER START ===');
@@ -393,16 +410,33 @@
       console.log('Unknown fulfillment type:', fulfillmentType);
     }
     
-    console.log('Configuring flatpickr with allowed dates:', allowedDates);
+    // Get restricted dates (3 days out)
+    const restrictedDates = getRestrictedDates();
+    
+    // Filter out restricted dates from allowed dates
+    const filteredAllowedDates = allowedDates.filter(date => !restrictedDates.includes(date));
+    console.log('Original allowed dates:', allowedDates);
+    console.log('Filtered allowed dates (excluding 3 days out):', filteredAllowedDates);
     
     // Get current date from subscription data
     const currentDate = modalChanges.deliveryDate || deliveryDate;
     console.log('Current date to set in picker:', currentDate);
     
+    // Check if current date is in restricted dates
+    if (currentDate && restrictedDates.includes(currentDate)) {
+      console.log('Current date is in restricted dates, clearing it');
+      updateModalChanges('deliveryDate', '');
+      deliveryDate = '';
+      // Clear the input field
+      if (input) {
+        input.value = '';
+      }
+    }
+    
     flatpickr(input, {
       dateFormat: "Y-m-d", // Keep ISO format for storage
-      enable: allowedDates,
-      defaultDate: currentDate || undefined, // Set default date if available
+      enable: filteredAllowedDates,
+      defaultDate: (currentDate && !restrictedDates.includes(currentDate)) ? currentDate : undefined, // Set default date if available and not restricted
       onChange: function(selectedDates, dateStr) {
         console.log('Date picker onChange triggered');
         console.log('Selected date:', dateStr);
@@ -1550,13 +1584,22 @@
     // Initialize Flatpickr for date inputs
     const mainDateInput = modalOverlay.querySelector('#afinity-date');
     if (mainDateInput && typeof flatpickr !== 'undefined') {
+      // Get restricted dates (3 days out)
+      const restrictedDates = getRestrictedDates();
+      
       flatpickr(mainDateInput, {
         dateFormat: "Y-m-d",
         minDate: "today",
         disable: [
           function(date) {
             // Disable weekends (0 = Sunday, 6 = Saturday)
-            return (date.getDay() === 0 || date.getDay() === 6);
+            const isWeekend = (date.getDay() === 0 || date.getDay() === 6);
+            
+            // Disable restricted dates (3 days out)
+            const dateStr = date.toISOString().split('T')[0];
+            const isRestricted = restrictedDates.includes(dateStr);
+            
+            return isWeekend || isRestricted;
           }
         ],
         onChange: function(selectedDates, dateStr) {
@@ -1569,13 +1612,22 @@
     // Initialize Flatpickr for meals page date input
     const mealsDateInput = modalOverlay.querySelector('#afinity-meals-date');
     if (mealsDateInput && typeof flatpickr !== 'undefined') {
+      // Get restricted dates (3 days out)
+      const restrictedDates = getRestrictedDates();
+      
       flatpickr(mealsDateInput, {
         dateFormat: "Y-m-d",
         minDate: "today",
         disable: [
           function(date) {
             // Disable weekends (0 = Sunday, 6 = Saturday)
-            return (date.getDay() === 0 || date.getDay() === 6);
+            const isWeekend = (date.getDay() === 0 || date.getDay() === 6);
+            
+            // Disable restricted dates (3 days out)
+            const dateStr = date.toISOString().split('T')[0];
+            const isRestricted = restrictedDates.includes(dateStr);
+            
+            return isWeekend || isRestricted;
           }
         ],
         onChange: function(selectedDates, dateStr) {
@@ -2360,6 +2412,13 @@
       return [];
     }
     
+    // Check if the selected date is in restricted dates (3 days out)
+    const restrictedDates = getRestrictedDates();
+    if (restrictedDates.includes(selectedDate)) {
+      console.log('Selected date is in restricted dates (3 days out), returning empty array');
+      return [];
+    }
+    
     const fulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
     console.log('Current fulfillment method:', fulfillmentMethod);
     
@@ -2504,13 +2563,24 @@
     // Set up date picker with allowed dates
     setupDatePicker(currentMethod);
     
-    // Set the date input value if we have a valid date
+    // Set the date input value if we have a valid date and it's not restricted
     const dateInput = document.getElementById('afinity-date');
     if (dateInput && finalDate) {
-      dateInput.value = finalDate;
-      console.log('Set date input value to:', finalDate);
-      // Add this:
-      reinitializeTimePicker();
+      // Check if the final date is in restricted dates (3 days out)
+      const restrictedDates = getRestrictedDates();
+      if (restrictedDates.includes(finalDate)) {
+        console.log('Final date is in restricted dates, clearing it');
+        dateInput.value = '';
+        updateModalChanges('deliveryDate', '');
+        deliveryDate = '';
+        updateModalChanges('fulfillmentTime', '');
+        fulfillmentTime = '';
+      } else {
+        dateInput.value = finalDate;
+        console.log('Set date input value to:', finalDate);
+        // Add this:
+        reinitializeTimePicker();
+      }
     }
     
     // Initialize time picker with current time
@@ -2526,6 +2596,16 @@
       // Remove existing timepicker if it exists
       if ($(timeInput).data('timepicker')) {
         $(timeInput).timepicker('remove');
+      }
+      
+      // Check if the final date is in restricted dates (3 days out)
+      const restrictedDates = getRestrictedDates();
+      if (finalDate && restrictedDates.includes(finalDate)) {
+        console.log('Final date is in restricted dates, clearing time picker');
+        timeInput.value = '';
+        updateModalChanges('fulfillmentTime', '');
+        fulfillmentTime = '';
+        return; // Don't initialize time picker for restricted dates
       }
       
       // Generate time options based on the current date
@@ -2898,6 +2978,16 @@
       let timeOptions = [];
       if (selectedDate) {
         timeOptions = generateTimeOptions(selectedDate);
+      }
+
+      // Check if the selected date is in restricted dates (3 days out)
+      const restrictedDates = getRestrictedDates();
+      if (selectedDate && restrictedDates.includes(selectedDate)) {
+        console.log('Selected date is in restricted dates, clearing time picker');
+        timeInput.value = '';
+        updateModalChanges('fulfillmentTime', '');
+        fulfillmentTime = '';
+        return; // Don't initialize time picker for restricted dates
       }
 
       // Fallback to default if empty
