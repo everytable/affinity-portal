@@ -827,6 +827,73 @@
     return (totalCents / 100).toFixed(2);
   }
 
+  // Calculate total for meals page based on current selections
+  function calculateMealsPageTotal() {
+    let totalCents = 0;
+    
+    console.log('=== CALCULATE MEALS PAGE TOTAL START ===');
+    console.log('selectedMeals:', selectedMeals);
+    
+    // Calculate total for all selected meals (both original and new selections)
+    selectedMeals.forEach(meal => {
+      if (meal.qty > 0) {
+        const variant = getVariantById(meal.id);
+        let price = 0;
+        
+        // Get price from variant if available, otherwise use meal price
+        if (variant && variant.price && variant.price.amount) {
+          price = parseFloat(variant.price.amount);
+        } else {
+          price = meal.price || 0;
+        }
+        
+        // Convert price to cents, multiply by quantity, then add
+        const priceCents = Math.round(price * 100);
+        const mealTotal = priceCents * meal.qty;
+        totalCents += mealTotal;
+        
+        console.log(`Meal ${meal.id} (${meal.title}): qty=${meal.qty}, price=$${price}, total=${mealTotal} cents`);
+      }
+    });
+    
+    const total = (totalCents / 100).toFixed(2);
+    console.log('Final total:', total);
+    console.log('=== CALCULATE MEALS PAGE TOTAL COMPLETE ===');
+    
+    // Convert back to dollars
+    return total;
+  }
+
+  // Get the appropriate total for meals page - use subscription total if no changes, otherwise use calculated total
+  function getMealsPageHeaderTotal() {
+    // Check if any changes have been made to the meals
+    const hasChanges = selectedMeals.some(meal => {
+      const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+      if (!originalMeal) {
+        // New meal added
+        return meal.qty > 0;
+      }
+      // Quantity changed
+      return meal.qty !== originalMeal.qty;
+    });
+    
+    // Also check if any original meals were removed (qty = 0)
+    const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+      const selectedMeal = selectedMeals.find(sel => String(sel.id) === String(origMeal.id));
+      return !selectedMeal || selectedMeal.qty === 0;
+    });
+    
+    if (hasChanges || hasRemovals) {
+      // User has made changes, show calculated total
+      console.log('Meals page: Changes detected, showing calculated total');
+      return calculateMealsPageTotal();
+    } else {
+      // No changes, show subscription total
+      console.log('Meals page: No changes detected, showing subscription total');
+      return calculateSubscriptionTotal();
+    }
+  }
+
   function renderMainPage() {
     const currentDeliveryDate = getDeliveryDateFromSubscription();
     // Calculate total price for header
@@ -931,10 +998,12 @@
   function renderMealsPage() {
     const catalogVariants = getCatalogVariants();
     const currentDeliveryDate = getDeliveryDateFromSubscription();
+    // Get appropriate total for header - subscription total if no changes, calculated total if changes made
+    const headerTotal = getMealsPageHeaderTotal();
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
-        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${price}</span></span>
+        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span> <span class="afinity-modal-price">$${headerTotal}</span></span>
       </div>
       <div class="afinity-modal-content">
         <div class="afinity-modal-card afinity-meals-header-card">
@@ -1115,9 +1184,29 @@
 
   // Helper function to calculate sidebar total
   function calculateSidebarTotal() {
-    return selectedMeals.reduce((total, meal) => {
-      return total + (meal.price * meal.qty);
-    }, 0);
+    let totalCents = 0;
+    
+    // Calculate total for all selected meals (both original and new selections)
+    selectedMeals.forEach(meal => {
+      if (meal.qty > 0) {
+        const variant = getVariantById(meal.id);
+        let price = 0;
+        
+        // Get price from variant if available, otherwise use meal price
+        if (variant && variant.price && variant.price.amount) {
+          price = parseFloat(variant.price.amount);
+        } else {
+          price = meal.price || 0;
+        }
+        
+        // Convert price to cents, multiply by quantity, then add
+        const priceCents = Math.round(price * 100);
+        totalCents += priceCents * meal.qty;
+      }
+    });
+    
+    // Convert back to dollars
+    return totalCents / 100;
   }
 
   // Dedicated function to save date
@@ -1324,12 +1413,28 @@
     if (editBtn) editBtn.onclick = () => {
       currentPage = 'meals';
       renderModal();
+      // Update header total when switching to meals page
+      setTimeout(() => {
+        const headerTotal = getMealsPageHeaderTotal();
+        const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
+        if (headerPriceElement) {
+          headerPriceElement.textContent = `$${headerTotal}`;
+        }
+      }, 100);
     };
     const addExtraMeal = modalOverlay.querySelector('.afinity-modal-add-extra');
     if (addExtraMeal) addExtraMeal.onclick = (e) => {
       e.preventDefault();
       currentPage = 'meals';
       renderModal();
+      // Update header total when switching to meals page
+      setTimeout(() => {
+        const headerTotal = getMealsPageHeaderTotal();
+        const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
+        if (headerPriceElement) {
+          headerPriceElement.textContent = `$${headerTotal}`;
+        }
+      }, 100);
     };
    
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
@@ -1545,7 +1650,16 @@
         } else {
           // Add or increment
           if (!sel) {
-            selectedMeals.push({ id: mealId, qty: 1 });
+            // Get meal details from variant or fallback data
+            const variant = getVariantById(mealId);
+            const mealData = {
+              id: mealId,
+              qty: 1,
+              title: variant ? (variant.product?.title || variant.sku || 'Meal') : 'Meal',
+              price: variant && variant.price && variant.price.amount ? parseFloat(variant.price.amount) : 0,
+              img: variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE
+            };
+            selectedMeals.push(mealData);
           } else {
             sel.qty++;
           }
@@ -2009,8 +2123,19 @@
                 qty: item.quantity || 1
               };
             });
+            
+            // Initialize selectedMeals with current subscription meals
+            selectedMeals = originalSubscriptionMeals.map(meal => ({
+              id: meal.id,
+              title: meal.title,
+              price: meal.price,
+              img: meal.img,
+              qty: meal.qty
+            }));
+            console.log('Initialized selectedMeals with current subscription meals:', selectedMeals);
           } else {
             originalSubscriptionMeals = [];
+            selectedMeals = [];
           }
           let locationId = null;
           let locationName = null;
@@ -2240,22 +2365,8 @@
         `;
       }).join('');
     }
-    // Calculate total
-    let total = 0;
-    // Current Meals
-    originalSubscriptionMeals.forEach(origMeal => {
-      const variant = getVariantById(origMeal.id);
-      const sel = selectedMeals.find(m => m.id === origMeal.id);
-      const qty = sel ? sel.qty : origMeal.qty;
-      const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
-      total += price * qty;
-    });
-    // Swap Meals
-    selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).forEach(meal => {
-      const variant = getVariantById(meal.id);
-      const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
-      total += price * meal.qty;
-    });
+    // Calculate total using the same logic as calculateSidebarTotal
+    const total = calculateSidebarTotal();
     // Update total in DOM
     const totalEl = document.querySelector('.afinity-meals-sidebar-total-price');
     if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
@@ -2263,6 +2374,15 @@
 
   function rerenderSidebarMeals() {
     renderSidebarMeals();
+    
+    // Also update the header total when sidebar is re-rendered
+    if (currentPage === 'meals') {
+      const headerTotal = getMealsPageHeaderTotal();
+      const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
+      if (headerPriceElement) {
+        headerPriceElement.textContent = `$${headerTotal}`;
+      }
+    }
   }
 
   function renderFrequencyDropdown() {
