@@ -283,6 +283,10 @@
   // Global arrays to store allowed dates
   let allowedDeliveryDates = [];
   let allowedPickupDates = [];
+  
+  // Menu data for meals page
+  let menuData = null;
+  let selectedMenuCategory = null;
 
   // Add global variable for current time zone
   let currentTimeZone = 'America/Los_Angeles'; // default fallback
@@ -434,14 +438,20 @@
     }
     
     flatpickr(input, {
-      dateFormat: "Y-m-d", // Keep ISO format for storage
+      dateFormat: "Y-m-d", // Keep ISO format for internal storage
       enable: filteredAllowedDates,
       defaultDate: (currentDate && !restrictedDates.includes(currentDate)) ? currentDate : undefined, // Set default date if available and not restricted
-      onChange: function(selectedDates, dateStr) {
+      onChange: function(selectedDates, dateStr, instance) {
         console.log('Date picker onChange triggered');
-        console.log('Selected date:', dateStr);
+        console.log('Selected date (ISO):', dateStr);
+        
         updateModalChanges('deliveryDate', dateStr);
         deliveryDate = dateStr;
+        
+        // Update the display value to show MM-DD-YYYY format
+        if (instance.input) {
+          instance.input.value = formatDeliveryDate(dateStr);
+        }
         
         // Re-initialize time picker with new date-specific time options
         reinitializeTimePicker();
@@ -478,6 +488,57 @@
     } catch (error) {
       console.error('Error fetching frequencies:', error);
       availableFrequencies = [];
+    }
+  }
+
+  async function fetchMenuData() {
+    try {
+      console.log('Fetching menu data from:', `${API_URL}/menu`);
+      showModalLoading();
+      
+      const response = await fetch(`${API_URL}/menu`);
+      const data = await response.json();
+      
+      console.log('Raw menu API response:', data);
+      
+      if (data.success && data.menu) {
+        menuData = data.menu;
+        console.log('Fetched menu data:', menuData);
+        console.log('Menu items count:', menuData.items ? menuData.items.length : 0);
+        
+        // Log each menu item and its collection
+        if (menuData.items) {
+          menuData.items.forEach((item, index) => {
+            console.log(`Menu item ${index}:`, {
+              title: item.title,
+              type: item.type,
+              resourceId: item.resourceId,
+              hasCollection: !!item.collection,
+              collectionProducts: item.collection?.products?.edges?.length || 0
+            });
+          });
+        }
+        
+        // Set the first category as default if none selected
+        if (!selectedMenuCategory && menuData.items && menuData.items.length > 0) {
+          selectedMenuCategory = menuData.items[0].id;
+          console.log('Set default selected category:', selectedMenuCategory);
+        }
+        
+        // Re-render the modal to show the menu data
+        if (currentPage === 'meals') {
+          console.log('Re-rendering meals page with new menu data');
+          renderModal();
+        }
+      } else {
+        console.error('Failed to fetch menu data:', data.error);
+        menuData = null;
+      }
+    } catch (error) {
+      console.error('Error fetching menu data:', error);
+      menuData = null;
+    } finally {
+      hideModalLoading();
     }
   }
 
@@ -686,13 +747,11 @@
   function formatDeliveryDate(dateStr) {
     if (!dateStr) return '';
     // dateStr is in ISO format (YYYY-MM-DD), convert to MM-DD-YYYY for display
+    console.log('formatDeliveryDate input:', dateStr);
     const [year, month, day] = dateStr.split('-');
-    const date = new Date(year, month - 1, day); // month is 0-indexed
-    return date.toLocaleDateString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric'
-    });
+    const formatted = `${month}-${day}-${year}`;
+    console.log('formatDeliveryDate output:', formatted);
+    return formatted;
   }
   
   // Helper to format time for display (24-hour to 12-hour)
@@ -715,9 +774,15 @@
   
   // Helper to get delivery date from currentSubscription order attributes
   function getDeliveryDateFromSubscription() {
+    console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION START ===');
+    console.log('currentSubscription:', currentSubscription);
+    
     if (!currentSubscription?.include?.address?.order_attributes) {
+      console.log('No order attributes found, returning deliveryDate:', deliveryDate);
       return deliveryDate; 
     }
+    
+    console.log('Order attributes:', currentSubscription.include.address.order_attributes);
     
     // Look for Fulfillment Date in order attributes
     let fulfillmentDateAttr = null;
@@ -728,6 +793,7 @@
         if ('name' in attr && 'value' in attr) {
           if (attr.name === 'Fulfillment Date') {
             fulfillmentDateAttr = attr;
+            console.log('Found fulfillment date attr (name/value format):', fulfillmentDateAttr);
             break;
           }
         } else {
@@ -735,6 +801,7 @@
           const key = Object.keys(attr)[0];
           if (key === 'Fulfillment Date') {
             fulfillmentDateAttr = { name: key, value: attr[key] };
+            console.log('Found fulfillment date attr (key/value format):', fulfillmentDateAttr);
             break;
           }
         }
@@ -743,14 +810,23 @@
     
     if (fulfillmentDateAttr) {
       const fulfillmentDateTime = fulfillmentDateAttr.value;
+      console.log('Raw fulfillment date time:', fulfillmentDateTime);
+      
       if (fulfillmentDateTime.includes('T')) {
-        return fulfillmentDateTime.split('T')[0]; 
+        const dateOnly = fulfillmentDateTime.split('T')[0];
+        console.log('Extracted date from ISO string:', dateOnly);
+        console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION COMPLETE ===');
+        return dateOnly; 
       } else {
+        console.log('Date is already in date-only format:', fulfillmentDateTime);
+        console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION COMPLETE ===');
         return fulfillmentDateTime; 
       }
     }
     
     // No Fulfillment Date found, return empty string to force user selection
+    console.log('No Fulfillment Date found in order attributes');
+    console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION COMPLETE ===');
     return '';
   }
   
@@ -833,18 +909,36 @@
     
     console.log('=== CALCULATE MEALS PAGE TOTAL START ===');
     console.log('selectedMeals:', selectedMeals);
+    console.log('currentCatalogVariants:', currentCatalogVariants);
     
     // Calculate total for all selected meals (both original and new selections)
     selectedMeals.forEach(meal => {
       if (meal.qty > 0) {
-        const variant = getVariantById(meal.id);
         let price = 0;
         
-        // Get price from variant if available, otherwise use meal price
-        if (variant && variant.price && variant.price.amount) {
-          price = parseFloat(variant.price.amount);
-        } else {
+        // Always use catalog variants data as the primary source
+        if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+          const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+          console.log('Found variant for meal calculation:', variant);
+          if (variant && variant.price) {
+            // Try different price formats
+            if (typeof variant.price === 'string') {
+              price = parseFloat(variant.price);
+            } else if (variant.price.amount) {
+              price = parseFloat(variant.price.amount);
+            } else if (typeof variant.price === 'number') {
+              price = variant.price;
+            }
+            console.log('Using variant price:', price);
+          } else {
+            console.log('No variant price found, using fallback');
+          }
+        }
+        
+        // Final fallback to meal price
+        if (price === 0) {
           price = meal.price || 0;
+          console.log('Using fallback meal price:', price);
         }
         
         // Convert price to cents, multiply by quantity, then add
@@ -896,6 +990,8 @@
 
   function renderMainPage() {
     const currentDeliveryDate = getDeliveryDateFromSubscription();
+    console.log('Main page - currentDeliveryDate:', currentDeliveryDate);
+    console.log('Main page - formatted date:', formatDeliveryDate(currentDeliveryDate));
     // Calculate total price for header
     const headerTotal = calculateSubscriptionTotal();
     // Determine method
@@ -965,7 +1061,7 @@
           <div class="afinity-modal-card-title">Update Subscription Date</div>
           <div class="afinity-modal-row">
             <label for="afinity-date" class="afinity-modal-select-label">Date</label>
-            <input id="afinity-date" type="text" placeholder="Select delivery date" value="${currentDeliveryDate}" readonly />
+            <input id="afinity-date" type="text" placeholder="Select delivery date" value="${formatDeliveryDate(currentDeliveryDate)}" readonly />
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time" class="afinity-modal-select-label">Time</label>
@@ -998,6 +1094,8 @@
   function renderMealsPage() {
     const catalogVariants = getCatalogVariants();
     const currentDeliveryDate = getDeliveryDateFromSubscription();
+    console.log('Meals page - currentDeliveryDate:', currentDeliveryDate);
+    console.log('Meals page - formatted date:', formatDeliveryDate(currentDeliveryDate));
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
     const headerTotal = getMealsPageHeaderTotal();
     return `
@@ -1015,14 +1113,31 @@
             </div>
             <div class="afinity-meals-date-select" style="font-size:16px;min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
               <label class="afinity-modal-select-label">Delivery Date</label>
-              <input id="afinity-meals-date" type="text" placeholder="Select delivery date" value="${currentDeliveryDate}" style="font-size:16px;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;" readonly />
+              <input id="afinity-meals-date" type="text" placeholder="Select delivery date" value="${formatDeliveryDate(currentDeliveryDate)}" style="font-size:16px;padding:6px 10px;border-radius:4px;border:1px solid #ccc;min-width:160px;background-color:#f5f5f5;cursor:not-allowed;" readonly disabled />
             </div>
           </div>
         </div>
         <div class="afinity-meals-layout">
           <div class="afinity-meals-main">
-            <h2 class="afinity-meals-section-title">All Meals</h2>
-            <ul class="afinity-meals-grid">${renderMealsGrid()}</ul>
+            ${menuData ? `
+              <div class="afinity-meals-categories">
+                <h2 class="afinity-meals-section-title">Menu Categories</h2>
+                <div class="afinity-meals-category-tabs">
+                  ${menuData.items.map(category => `
+                    <button class="afinity-meals-category-tab ${selectedMenuCategory === category.id ? 'active' : ''}" 
+                            data-category-id="${category.id}">
+                      ${category.title}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            ` : `
+              <div class="afinity-meals-loading">
+                <div class="afinity-meals-loading-spinner"></div>
+                <h2 class="afinity-meals-section-title">Loading Menu Data...</h2>
+              </div>
+            `}
+            <div class="afinity-meals-content">${renderMealsGrid()}</div>
           </div>
           <div class="afinity-modal-card afinity-meals-sidebar">
             <h3>Current Meals in Subscription</h3>
@@ -1053,10 +1168,29 @@
             <h3>Swap Meals to your Subscription</h3>
             <ul class="afinity-meals-sidebar-list swap-meals">
               ${selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => {
-                const variant = getVariantById(meal.id);
-                const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
-                const title = variant ? (variant.product?.title || variant.sku || 'Meal') : meal.title;
-                const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+                let variant = null;
+                let img = MEAL_IMAGE;
+                let title = 'Meal';
+                let price = 0;
+                if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+                  variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+                  if (variant) {
+                    img = getVariantImageFromVariantsData(variant);
+                    title = variant.title || variant.product?.title || 'Meal';
+                    if (variant.price) {
+                      if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                      else if (typeof variant.price === 'number') price = variant.price;
+                      else if (variant.price.amount) price = parseFloat(variant.price.amount);
+                    }
+                    price = isNaN(price) ? 0 : price;
+                  } else {
+                    title = meal.title || 'Meal';
+                    price = meal.price || 0;
+                  }
+                } else {
+                  title = meal.title || 'Meal';
+                  price = meal.price || 0;
+                }
                 return `
                   <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
                     <img src="${img}" alt="${title}" />
@@ -1089,41 +1223,255 @@
   }
 
   function renderMealsGrid() {
-    const catalogVariants = getCatalogVariants();
-    if (!catalogVariants.length) {
-      return '<div class="afinity-meals-grid-loading">Loading meals…</div>';
+    console.log('=== RENDER MEALS GRID START ===');
+    console.log('menuData:', menuData);
+    console.log('selectedMenuCategory:', selectedMenuCategory);
+    console.log('currentCatalogVariants:', currentCatalogVariants);
+    
+    if (!menuData || !menuData.items || menuData.items.length === 0) {
+      console.log('No menu data available');
+      return '<div class="afinity-meals-grid-loading">Loading menu data…</div>';
     }
-    return catalogVariants.map(variant => renderMealCard(variant)).join('');
+
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
+      console.log('No variants data available');
+      return '<div class="afinity-meals-grid-loading">Loading meal details…</div>';
+    }
+
+    console.log('Menu items count:', menuData.items.length);
+    console.log('Variants count:', currentCatalogVariants.variants.length);
+
+    // If a specific category is selected, show only that collection
+    if (selectedMenuCategory) {
+      console.log('Category selected, filtering to:', selectedMenuCategory);
+      const selectedCategory = menuData.items.find(cat => cat.id === selectedMenuCategory);
+      console.log('Selected category found:', selectedCategory);
+      
+      if (selectedCategory && selectedCategory.collection) {
+        console.log('Rendering single collection:', selectedCategory.title);
+        return renderCollectionMealsWithVariants(selectedCategory.collection, selectedCategory.title);
+      } else {
+        console.log('Selected category has no collection data');
+      }
+    }
+
+    // Show all collections
+    console.log('Rendering all collections');
+    const collectionsWithProducts = menuData.items.filter(item => item.collection && item.collection.products);
+    console.log('Collections with products:', collectionsWithProducts.length);
+    
+    const allCollectionsHtml = collectionsWithProducts
+      .map(item => renderCollectionSectionWithVariants(item.collection, item.title))
+      .join('');
+    
+    console.log('All collections HTML length:', allCollectionsHtml.length);
+    console.log('=== RENDER MEALS GRID COMPLETE ===');
+    
+    return allCollectionsHtml;
   }
 
-  // Add helper to get image for a variant
-  function getVariantImageByCatalog(variant) {
-    // Robust image selection for meals grid
-    return (
-      variant?.product?.featuredMedia?.preview?.image?.url ||
-      variant?.product?.featuredMedia?.preview?.url ||
-      variant?.image?.url ||
-      MEAL_IMAGE
-    );
+  function renderCollectionSection(collection, collectionTitle) {
+    console.log('Rendering collection section:', { collectionTitle, collection });
+    
+    if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
+      console.log('No products found in collection:', collectionTitle);
+      return '';
+    }
+
+    const products = collection.products.edges.map(edge => edge.node);
+    console.log(`Found ${products.length} products in collection:`, collectionTitle);
+    
+    const productMealsHtml = products.map(product => renderProductMeals(product)).join('');
+    console.log('Product meals HTML length:', productMealsHtml.length);
+    
+    return `
+      <div class="afinity-collection-section">
+        <h3 class="afinity-collection-title">${collectionTitle}</h3>
+        <div class="afinity-meals-grid">
+          ${productMealsHtml}
+        </div>
+      </div>
+    `;
   }
 
-  // Helper to get all catalog variants for the current catalog
-  function getCatalogVariants() {
-    if (!currentCatalogVariants || !currentCatalogVariants.variants || !currentCatalogPayload) return [];
-    return currentCatalogVariants.variants.filter(
-      v => v.metafield && String(v.metafield.value) === String(currentCatalogPayload.catalogId.toString().split('gid://shopify/MarketCatalog/')[1])
-    );
+  function renderCollectionSectionWithVariants(collection, collectionTitle) {
+    console.log('Rendering collection section with variants:', { collectionTitle, collection });
+    
+    if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
+      console.log('No products found in collection:', collectionTitle);
+      return '';
+    }
+
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
+      console.log('No variants data available for collection:', collectionTitle);
+      return '';
+    }
+
+    const products = collection.products.edges.map(edge => edge.node);
+    console.log(`Found ${products.length} products in collection:`, collectionTitle);
+    
+    const productMealsHtml = products.map(product => renderProductMealsWithVariants(product)).join('');
+    console.log('Product meals HTML length:', productMealsHtml.length);
+    
+    return `
+      <div class="afinity-collection-section">
+        <h3 class="afinity-collection-title">${collectionTitle}</h3>
+        <div class="afinity-meals-grid">
+          ${productMealsHtml}
+        </div>
+      </div>
+    `;
   }
 
-  // Update renderMealCard to use variant data
-  function renderMealCard(variant) {
-    const img = getVariantImageByCatalog(variant);
-    const title = variant.product?.title || variant.sku || 'Meal';
-    const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
-    // Preselect if in originalSubscriptionMeals or selectedMeals with qty > 0
-    const isActive =
-      originalSubscriptionMeals.some(m => String(m.id) === String(variant.id)) ||
-      selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
+  function renderCollectionMeals(collection, collectionTitle) {
+    console.log('Rendering single collection meals:', { collectionTitle, collection });
+    
+    if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
+      console.log('No products found in single collection:', collectionTitle);
+      return '<div class="afinity-meals-grid-empty">No meals found in this collection.</div>';
+    }
+
+    const products = collection.products.edges.map(edge => edge.node);
+    console.log(`Found ${products.length} products in single collection:`, collectionTitle);
+    
+    const productMealsHtml = products.map(product => renderProductMeals(product)).join('');
+    
+    return `
+      <div class="afinity-collection-section">
+        <h3 class="afinity-collection-title">${collectionTitle}</h3>
+        <div class="afinity-meals-grid">
+          ${productMealsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCollectionMealsWithVariants(collection, collectionTitle) {
+    console.log('Rendering single collection meals with variants:', { collectionTitle, collection });
+    
+    if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
+      console.log('No products found in single collection:', collectionTitle);
+      return '<div class="afinity-meals-grid-empty">No meals found in this collection.</div>';
+    }
+
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
+      console.log('No variants data available for single collection:', collectionTitle);
+      return '<div class="afinity-meals-grid-empty">Loading meal details...</div>';
+    }
+
+    const products = collection.products.edges.map(edge => edge.node);
+    console.log(`Found ${products.length} products in single collection:`, collectionTitle);
+    
+    const productMealsHtml = products.map(product => renderProductMealsWithVariants(product)).join('');
+    
+    return `
+      <div class="afinity-collection-section">
+        <h3 class="afinity-collection-title">${collectionTitle}</h3>
+        <div class="afinity-meals-grid">
+          ${productMealsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderProductMeals(product) {
+    console.log('Rendering product meals:', { productId: product.id, title: product.title });
+    
+    if (!product.variants || !product.variants.edges || product.variants.edges.length === 0) {
+      console.log('No variants found for product:', product.title);
+      return '';
+    }
+
+    const variants = product.variants.edges.map(edge => edge.node);
+    console.log(`Found ${variants.length} variants for product:`, product.title);
+    
+    const variantCardsHtml = variants.map(edge => {
+      const variant = edge.node;
+      return renderMealCardFromVariant(variant, product);
+    }).join('');
+    
+    console.log('Variant cards HTML length:', variantCardsHtml.length);
+    return variantCardsHtml;
+  }
+
+  function renderProductMealsWithVariants(product) {
+    console.log('Rendering product meals with variants data:', { productId: product.id, title: product.title });
+    
+    if (!product.variants || !product.variants.edges || product.variants.edges.length === 0) {
+      console.log('No variants found for product:', product.title);
+      return '';
+    }
+
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
+      console.log('No variants data available for product:', product.title);
+      return '';
+    }
+
+    // Get the catalog ID from currentCatalogPayload
+    const catalogId = currentCatalogPayload?.catalogId ? 
+      currentCatalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '') : null;
+    
+    console.log('Current catalog ID for filtering:', catalogId);
+
+    const collectionVariants = product.variants.edges.map(edge => edge.node);
+    console.log(`Found ${collectionVariants.length} collection variants for product:`, product.title);
+    
+    // Filter variants to only include those that match the catalog ID
+    const filteredVariants = collectionVariants.filter(collectionVariant => {
+      if (!catalogId) {
+        console.log('No catalog ID available, showing all variants');
+        return true;
+      }
+      
+      const variantCatalogId = collectionVariant.metafield?.value;
+      console.log('Variant catalog ID:', variantCatalogId, 'for variant:', collectionVariant.id);
+      
+      const matches = variantCatalogId === catalogId;
+      if (!matches) {
+        console.log('Filtering out variant:', collectionVariant.id, 'catalog ID mismatch:', variantCatalogId, '!=', catalogId);
+      }
+      return matches;
+    });
+    
+    console.log(`Filtered to ${filteredVariants.length} variants that match catalog ID ${catalogId}`);
+    
+    // Use catalog variants data as the primary source for all meal information
+    const variantCardsHtml = filteredVariants.map(collectionVariant => {
+      // Find matching variant in currentCatalogVariants
+      const matchingVariant = currentCatalogVariants.variants.find(variant => 
+        String(variant.id) === String(collectionVariant.id)
+      );
+      
+      if (matchingVariant) {
+        console.log('Found matching variant for collection variant:', {
+          collectionVariantId: collectionVariant.id,
+          matchingVariantId: matchingVariant.id,
+          title: matchingVariant.title,
+          price: matchingVariant.price
+        });
+        // Use catalog variant data as the primary source
+        return renderMealCardFromVariantsData(matchingVariant, product);
+      } else {
+        console.log('No matching variant found for collection variant:', collectionVariant.id);
+        // If no matching catalog variant, skip this variant entirely
+        return '';
+      }
+    }).join('');
+    
+    console.log('Variant cards HTML length:', variantCardsHtml.length);
+    return variantCardsHtml;
+  }
+
+  function renderMealCardFromVariant(variant, product) {
+    const img = getVariantImageFromCollection(variant, product);
+    const title = product.title || variant.title || 'Meal';
+    const price = variant.price ? parseFloat(variant.price) : 0;
+    
+    // Check if this variant is in selectedMeals
+    const isActive = selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
+    
+    console.log('Rendering meal card:', { variantId: variant.id, title, price, isActive });
+    
     return `
       <li class="afinity-r-meals-grid__item" style="display: block;"
         data-product-start-date="2025-01-01"
@@ -1133,7 +1481,7 @@
         <div class="afinity-r-card${isActive ? ' afinity-r-card--active' : ''}" 
           data-variant-id="${variant.id}"
           data-collection-id="1"
-          data-product-id="${variant.id}"
+          data-product-id="${product.id}"
           data-catalog-id="demo-catalog-id"
           data-selling-plan-groups="[]">
           <div class="afinity-r-card__container">
@@ -1182,6 +1530,139 @@
     `;
   }
 
+  function renderMealCardFromVariantsData(variant, product) {
+    // Use variants data for actual details (price, image, etc.)
+    const img = getVariantImageFromVariantsData(variant);
+    const title = variant.title || variant.product?.title || product?.title || 'Meal';
+    
+    // Try different price formats
+    let price = 0;
+    if (variant.price) {
+      if (typeof variant.price === 'string') {
+        price = parseFloat(variant.price);
+      } else if (variant.price.amount) {
+        price = parseFloat(variant.price.amount);
+      } else if (typeof variant.price === 'number') {
+        price = variant.price;
+      }
+    }
+    
+    // Check if this variant is in selectedMeals
+    const isActive = selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
+    
+    console.log('Rendering meal card from variants data:', { 
+      variantId: variant.id, 
+      title, 
+      price, 
+      isActive,
+      variantData: variant 
+    });
+    
+    return `
+      <li class="afinity-r-meals-grid__item" style="display: block;"
+        data-product-start-date="2025-01-01"
+        data-product-end-date="2025-12-31"
+        data-is-first-variant="true"
+      >
+        <div class="afinity-r-card${isActive ? ' afinity-r-card--active' : ''}" 
+          data-variant-id="${variant.id}"
+          data-collection-id="1"
+          data-product-id="${product.id}"
+          data-catalog-id="demo-catalog-id"
+          data-selling-plan-groups="[]">
+          <div class="afinity-r-card__container">
+            <div class="afinity-r-card__image-link">
+              <img
+                src="${img}"
+                alt="${title}"
+                class="afinity-r-card__image"
+                loading="lazy"
+                width="220"
+                height="200"
+              >
+            </div>
+            <div class="afinity-r-card__details">
+              <h3 class="afinity-r-card__title">
+                <span class="afinity-r-card__title-link">
+                  ${title}
+                </span>
+              </h3>
+              <div class="afinity-r-card__footer">
+                <div class="price__container price-block" data-variant-id="${variant.id}">
+                  <span class="afinity-r-card__price--discount price-item--regular" data-variant-id="${variant.id}">
+                    $${price.toFixed(2)}
+                  </span>
+                </div>
+                <div class="price-action-wrapper" data-variant-id="${variant.id}">
+                  ${isActive ? `
+                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart afinity-r-card__remove-btn" type="button" data-meal-id="${variant.id}" style="background:#c0392b;">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
+                      </svg>
+                    </button>
+                  ` : `
+                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart" type="button" data-meal-id="${variant.id}">
+                      <svg width="20" height="20" class="icon icon-add-to-cart" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 0C15.5228 0 20 4.47715 20 10C20 15.5228 15.5228 20 10 20C4.47715 20 0 15.5228 0 10C0 4.47715 4.47715 0 10 0ZM10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 5C10.5523 5 11 5.44772 11 6V9H14C14.5523 9 15 9.44772 15 10C15 10.5523 14.5523 11 14 11H11V14C11 14.5523 10.5523 15 10 15C9.44772 15 9 14.5523 9 14V11H6C5.44772 11 5 10.5523 5 10C5 9.44772 5.44772 9 6 9H9V6C9 5.44772 9.44772 5 10 5Z" fill="white"/>
+                      </svg>
+                    </button>
+                  `}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </li>
+    `;
+  }
+
+  function getVariantImageFromCollection(variant, product) {
+    // Try variant image first
+    if (variant?.image?.url) {
+      return variant.image.url;
+    }
+    
+    // Try product featured media
+    if (variant?.product?.featuredMedia?.preview?.image?.url) {
+      return variant.product.featuredMedia.preview.image.url;
+    }
+    
+    // Try product featured media preview URL
+    if (variant?.product?.featuredMedia?.preview?.url) {
+      return variant.product.featuredMedia.preview.url;
+    }
+    
+    // Fallback to default meal image
+    return MEAL_IMAGE;
+  }
+
+  function getVariantImageFromVariantsData(variant) {
+    console.log("variantvariantvariantvariant::", variant);
+    if (variant?.image?.url) return variant.image.url;
+    if (variant?.product?.featuredMedia?.preview?.image?.url) return variant.product.featuredMedia.preview.image.url;
+    if (variant?.product?.featuredMedia?.preview?.url) return variant.product.featuredMedia.preview.url;
+    return MEAL_IMAGE;
+  }
+
+  // Add helper to get image for a variant
+  function getVariantImageByCatalog(variant) {
+    // Robust image selection for meals grid
+    return (
+      variant?.product?.featuredMedia?.preview?.image?.url ||
+      variant?.product?.featuredMedia?.preview?.url ||
+      variant?.image?.url ||
+      MEAL_IMAGE
+    );
+  }
+
+  // Helper to get all catalog variants for the current catalog
+  function getCatalogVariants() {
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || !currentCatalogPayload) return [];
+    return currentCatalogVariants.variants.filter(
+      v => v.metafield && String(v.metafield.value) === String(currentCatalogPayload.catalogId.toString().split('gid://shopify/MarketCatalog/')[1])
+    );
+  }
+
   // Helper function to calculate sidebar total
   function calculateSidebarTotal() {
     let totalCents = 0;
@@ -1189,13 +1670,25 @@
     // Calculate total for all selected meals (both original and new selections)
     selectedMeals.forEach(meal => {
       if (meal.qty > 0) {
-        const variant = getVariantById(meal.id);
         let price = 0;
         
-        // Get price from variant if available, otherwise use meal price
-        if (variant && variant.price && variant.price.amount) {
-          price = parseFloat(variant.price.amount);
-        } else {
+        // Always use catalog variants data as the primary source
+        if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+          const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+          if (variant && variant.price) {
+            // Try different price formats
+            if (typeof variant.price === 'string') {
+              price = parseFloat(variant.price);
+            } else if (variant.price.amount) {
+              price = parseFloat(variant.price.amount);
+            } else if (typeof variant.price === 'number') {
+              price = variant.price;
+            }
+          }
+        }
+        
+        // Final fallback to meal price
+        if (price === 0) {
           price = meal.price || 0;
         }
         
@@ -1410,9 +1903,13 @@
     };
     // Edit contents or add extra meal
     const editBtn = modalOverlay.querySelector('.afinity-modal-update-meals');
-    if (editBtn) editBtn.onclick = () => {
+    if (editBtn) editBtn.onclick = async () => {
       currentPage = 'meals';
       renderModal();
+      
+      // Fetch menu data when switching to meals page
+      await fetchMenuData();
+      
       // Update header total when switching to meals page
       setTimeout(() => {
         const headerTotal = getMealsPageHeaderTotal();
@@ -1423,10 +1920,14 @@
       }, 100);
     };
     const addExtraMeal = modalOverlay.querySelector('.afinity-modal-add-extra');
-    if (addExtraMeal) addExtraMeal.onclick = (e) => {
+    if (addExtraMeal) addExtraMeal.onclick = async (e) => {
       e.preventDefault();
       currentPage = 'meals';
       renderModal();
+      
+      // Fetch menu data when switching to meals page
+      await fetchMenuData();
+      
       // Update header total when switching to meals page
       setTimeout(() => {
         const headerTotal = getMealsPageHeaderTotal();
@@ -1635,60 +2136,34 @@
         modalOverlay.style.display = 'none';
       };
     };
-    // Meal add/remove
-    modalOverlay.querySelectorAll('.afinity-r-card__add-btn').forEach(btn => {
-      btn.onclick = (e) => {
-        const mealId = btn.getAttribute('data-meal-id');
-        let sel = selectedMeals.find(m => String(m.id) === String(mealId));
-        if (btn.classList.contains('afinity-r-card__remove-btn')) {
-          // Remove from selectedMeals
-          if (sel) {
-            sel.qty = 0;
-            // Optionally remove from array entirely:
-            // selectedMeals = selectedMeals.filter(m => String(m.id) !== String(mealId));
-          }
-        } else {
-          // Add or increment
-          if (!sel) {
-            // Get meal details from variant or fallback data
-            const variant = getVariantById(mealId);
-            const mealData = {
-              id: mealId,
-              qty: 1,
-              title: variant ? (variant.product?.title || variant.sku || 'Meal') : 'Meal',
-              price: variant && variant.price && variant.price.amount ? parseFloat(variant.price.amount) : 0,
-              img: variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE
-            };
-            selectedMeals.push(mealData);
-          } else {
-            sel.qty++;
-          }
-        }
-        updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
-        rerenderSidebarMeals();
-      };
-    });
-    // Sidebar quantity controls
-    modalOverlay.querySelectorAll('.afinity-meals-sidebar-qty-btn').forEach(btn => {
-      btn.onclick = (e) => {
-        const action = btn.getAttribute('data-action');
-        const mealId = parseInt(btn.getAttribute('data-meal-id'));
-        const idx = selectedMeals.findIndex(m => m.id === mealId);
+    // Attach meal card events
+    attachMealCardEvents();
+    // Attach sidebar quantity controls
+    attachSidebarQuantityEvents();
+    
+    // Menu category tabs
+    modalOverlay.querySelectorAll('.afinity-meals-category-tab').forEach(tab => {
+      tab.onclick = (e) => {
+        const categoryId = e.target.getAttribute('data-category-id');
+        selectedMenuCategory = categoryId;
         
-        if (idx !== -1) {
-          if (action === 'increment') {
-            selectedMeals[idx].qty++;
-          } else if (action === 'decrement') {
-            selectedMeals[idx].qty--;
-            if (selectedMeals[idx].qty <= 0) {
-              selectedMeals[idx].qty = 0;
-            }
-          }
-          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
-          rerenderSidebarMeals();
+        // Update active tab
+        modalOverlay.querySelectorAll('.afinity-meals-category-tab').forEach(t => 
+          t.classList.remove('active')
+        );
+        e.target.classList.add('active');
+        
+        // Re-render the meals grid
+        const mealsGrid = modalOverlay.querySelector('.afinity-meals-content');
+        if (mealsGrid) {
+          mealsGrid.innerHTML = renderMealsGrid();
         }
+        
+        // Re-attach meal card events
+        attachMealCardEvents();
       };
     });
+    
     // Swap Items
     const swapBtn = modalOverlay.querySelector('.afinity-meals-swap-btn');
     if (swapBtn) swapBtn.onclick = () => {
@@ -1702,7 +2177,7 @@
       const restrictedDates = getRestrictedDates();
       
       flatpickr(mainDateInput, {
-        dateFormat: "Y-m-d",
+        dateFormat: "Y-m-d", // Keep ISO format for internal storage
         minDate: "today",
         disable: [
           function(date) {
@@ -1716,40 +2191,22 @@
             return isWeekend || isRestricted;
           }
         ],
-        onChange: function(selectedDates, dateStr) {
+        onChange: function(selectedDates, dateStr, instance) {
+          console.log('Main page date picker onChange triggered');
+          console.log('Selected date (ISO):', dateStr);
+          
           updateModalChanges('deliveryDate', dateStr);
           deliveryDate = dateStr;
+          
+          // Update the display value to show MM-DD-YYYY format
+          if (instance.input) {
+            instance.input.value = formatDeliveryDate(dateStr);
+          }
         }
       });
     }
     
-    // Initialize Flatpickr for meals page date input
-    const mealsDateInput = modalOverlay.querySelector('#afinity-meals-date');
-    if (mealsDateInput && typeof flatpickr !== 'undefined') {
-      // Get restricted dates (3 days out)
-      const restrictedDates = getRestrictedDates();
-      
-      flatpickr(mealsDateInput, {
-        dateFormat: "Y-m-d",
-        minDate: "today",
-        disable: [
-          function(date) {
-            // Disable weekends (0 = Sunday, 6 = Saturday)
-            const isWeekend = (date.getDay() === 0 || date.getDay() === 6);
-            
-            // Disable restricted dates (3 days out)
-            const dateStr = date.toISOString().split('T')[0];
-            const isRestricted = restrictedDates.includes(dateStr);
-            
-            return isWeekend || isRestricted;
-          }
-        ],
-        onChange: function(selectedDates, dateStr) {
-          updateModalChanges('deliveryDate', dateStr);
-          deliveryDate = dateStr;
-        }
-      });
-    }
+    // Meals page date input is locked/disabled - no flatpickr initialization needed
     
     // Frequency input
     const frequencyInput = modalOverlay.querySelector('#afinity-frequency');
@@ -2315,16 +2772,62 @@
 
   // Update rerenderSidebarMeals and renderSidebarMeals to recalculate and update the cart total
   function renderSidebarMeals() {
+    console.log('=== RENDER SIDEBAR MEALS START ===');
+    console.log('originalSubscriptionMeals:', originalSubscriptionMeals);
+    console.log('selectedMeals:', selectedMeals);
+    console.log('currentCatalogVariants:', currentCatalogVariants);
+    
     // Current Meals in Subscription
     const sidebarList = document.querySelector('.afinity-meals-sidebar-list.current-meals');
     if (sidebarList) {
       sidebarList.innerHTML = originalSubscriptionMeals.map(origMeal => {
-        const variant = getVariantById(origMeal.id);
-        const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
-        const title = variant ? (variant.product?.title || variant.sku || 'Meal') : origMeal.title;
-        const sel = selectedMeals.find(m => m.id === origMeal.id);
+        console.log('Processing original meal:', origMeal);
+        
+        // Always use catalog variants data as the primary source
+        let variant = null;
+        let img = MEAL_IMAGE; // Default fallback image
+        let title = 'Meal'; // Default title
+        let price = 0;
+        
+        if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+          console.log("origMeal.idorigMeal.idorigMeal.idorigMeal.id::::::", origMeal.id)
+          variant = currentCatalogVariants.variants.find(v => {
+            return String(v.id.replace('gid://shopify/ProductVariant/', '')) === String(origMeal.id.replace('gid://shopify/ProductVariant/', ''));
+          });
+          console.log('Found variant for original meal:', variant);
+          
+          if (variant) {
+            img = getVariantImageFromVariantsData(variant);
+            // Use product title as primary, fallback to variant title, then default
+            title = variant.product?.title || variant.title || 'Meal';
+            // Try different price formats
+            if (variant.price) {
+              if (typeof variant.price === 'string') {
+                price = parseFloat(variant.price);
+              } else if (variant.price.amount) {
+                price = parseFloat(variant.price.amount);
+              } else if (typeof variant.price === 'number') {
+                price = variant.price;
+              }
+            }
+            console.log('Using variant data - title:', title, 'price:', price);
+          } else {
+            console.log('No variant found for original meal ID:', origMeal.id);
+            // Fallback to original meal data
+            title = origMeal.title || 'Meal';
+            price = origMeal.price || 0;
+          }
+        } else {
+          console.log('No catalog variants available, using original meal data');
+          title = origMeal.title || 'Meal';
+          price = origMeal.price || 0;
+        }
+        
+        const sel = selectedMeals.find(m => String(m.id) === String(origMeal.id));
         const qty = sel ? sel.qty : origMeal.qty;
-        const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+        
+        console.log('Final meal data - title:', title, 'price:', price, 'qty:', qty);
+        
         return `
           <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
             <img src="${img}" alt="${title}" />
@@ -2341,14 +2844,35 @@
         `;
       }).join('');
     }
+    
     // Swap Meals
     const swapList = document.querySelector('.afinity-meals-sidebar-list.swap-meals');
     if (swapList) {
-      swapList.innerHTML = selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => {
-        const variant = getVariantById(meal.id);
-        const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
-        const title = variant ? (variant.product?.title || variant.sku || 'Meal') : meal.title;
-        const price = (variant && variant.price && variant.price.amount) ? parseFloat(variant.price.amount) : 0;
+      swapList.innerHTML = selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+        let variant = null;
+        let img = MEAL_IMAGE; // Default fallback image
+        let title = 'Meal';
+        let price = 0;
+        if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+          variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+          if (variant) {
+            img = getVariantImageFromVariantsData(variant);
+            // Use product title as primary, fallback to variant title, then default
+            title = variant.product?.title || variant.title || 'Meal';
+            if (variant.price) {
+              if (typeof variant.price === 'string') price = parseFloat(variant.price);
+              else if (typeof variant.price === 'number') price = variant.price;
+              else if (variant.price.amount) price = parseFloat(variant.price.amount);
+            }
+            price = isNaN(price) ? 0 : price;
+          } else {
+            title = meal.title || 'Meal';
+            price = meal.price || 0;
+          }
+        } else {
+          title = meal.title || 'Meal';
+          price = meal.price || 0;
+        }
         return `
           <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
             <img src="${img}" alt="${title}" />
@@ -2365,15 +2889,23 @@
         `;
       }).join('');
     }
+    
     // Calculate total using the same logic as calculateSidebarTotal
     const total = calculateSidebarTotal();
+    console.log('Calculated sidebar total:', total);
+    
     // Update total in DOM
     const totalEl = document.querySelector('.afinity-meals-sidebar-total-price');
     if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
+    
+    console.log('=== RENDER SIDEBAR MEALS COMPLETE ===');
   }
 
   function rerenderSidebarMeals() {
     renderSidebarMeals();
+    
+    // Re-attach event handlers to the new sidebar quantity buttons
+    attachSidebarQuantityEvents();
     
     // Also update the header total when sidebar is re-rendered
     if (currentPage === 'meals') {
@@ -2382,6 +2914,145 @@
       if (headerPriceElement) {
         headerPriceElement.textContent = `$${headerTotal}`;
       }
+    }
+  }
+
+  // Function to attach event handlers to meal cards
+  function attachMealCardEvents() {
+    console.log('Attaching meal card events...');
+    
+    // Meal add/remove
+    const mealButtons = modalOverlay && modalOverlay.querySelectorAll('.afinity-r-card__add-btn');
+    console.log('Found meal buttons:', mealButtons ? mealButtons.length : 0);
+    
+    if (mealButtons) {
+      mealButtons.forEach(btn => {
+        btn.onclick = (e) => {
+          const mealId = btn.getAttribute('data-meal-id');
+          let sel = selectedMeals.find(m => String(m.id) === String(mealId));
+          if (btn.classList.contains('afinity-r-card__remove-btn')) {
+            // Remove from selectedMeals
+            if (sel) {
+              sel.qty = 0;
+              // Optionally remove from array entirely:
+              // selectedMeals = selectedMeals.filter(m => String(m.id) !== String(mealId));
+            }
+          } else {
+            // Add or increment
+            if (!sel) {
+              // Get the meal card element to find product information
+              const mealCard = btn.closest('.afinity-r-card');
+              let product = null;
+              
+              if (mealCard) {
+                const productId = mealCard.getAttribute('data-product-id');
+                // Try to find product information from menuData
+                if (menuData && menuData.items) {
+                  for (const category of menuData.items) {
+                    if (category.collection && category.collection.products) {
+                      const productNode = category.collection.products.edges.find(edge => 
+                        String(edge.node.id) === String(productId)
+                      );
+                      if (productNode) {
+                        product = productNode.node;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+              
+              // Always use catalog variants data as the primary source
+              const mealData = getMealDataFromVariantsData(mealId, product);
+              selectedMeals.push(mealData);
+            } else {
+              sel.qty++;
+            }
+          }
+          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+          rerenderSidebarMeals();
+        };
+      });
+    }
+  }
+
+  // Helper function to get meal data from variants data
+  function getMealDataFromVariantsData(variantId, product = null) {
+    if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
+      return {
+        id: variantId,
+        qty: 1,
+        title: 'Meal',
+        price: 0,
+        img: MEAL_IMAGE
+      };
+    }
+    const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(variantId));
+    if (variant) {
+      let price = 0;
+      if (variant.price) {
+        if (typeof variant.price === 'string') price = parseFloat(variant.price);
+        else if (typeof variant.price === 'number') price = variant.price;
+        else if (variant.price.amount) price = parseFloat(variant.price.amount);
+      }
+      
+      // Use product title as primary, fallback to variant title, then product parameter, then default
+      const title = variant.product?.title || variant.title || (product ? product.title : null) || 'Meal';
+      
+      return {
+        id: variantId,
+        qty: 1,
+        title: title,
+        price: isNaN(price) ? 0 : price,
+        img: getVariantImageFromVariantsData(variant)
+      };
+    }
+    return {
+      id: variantId,
+      qty: 1,
+      title: 'Meal',
+      price: 0,
+      img: MEAL_IMAGE
+    };
+  }
+
+  // Function to attach event handlers to sidebar quantity controls
+  function attachSidebarQuantityEvents() {
+    console.log('Attaching sidebar quantity events...');
+    
+    // Sidebar quantity controls
+    const quantityButtons = modalOverlay && modalOverlay.querySelectorAll('.afinity-meals-sidebar-qty-btn');
+    console.log('Found quantity buttons:', quantityButtons ? quantityButtons.length : 0);
+    
+    if (quantityButtons) {
+      quantityButtons.forEach(btn => {
+        btn.onclick = (e) => {
+          console.log('Quantity button clicked:', btn.getAttribute('data-action'), btn.getAttribute('data-meal-id'));
+          
+          const action = btn.getAttribute('data-action');
+          const mealId = btn.getAttribute('data-meal-id'); // Don't parse as integer, keep as string
+          const idx = selectedMeals.findIndex(m => String(m.id) === String(mealId));
+          
+          console.log('Action:', action, 'Meal ID:', mealId, 'Index:', idx);
+          
+          if (idx !== -1) {
+            // Preserve existing meal data and only update quantity
+            let updatedMeal = { ...selectedMeals[idx] };
+            if (action === 'increment') {
+              updatedMeal.qty++;
+            } else if (action === 'decrement') {
+              updatedMeal.qty--;
+              if (updatedMeal.qty < 0) updatedMeal.qty = 0;
+            }
+            selectedMeals[idx] = updatedMeal;
+            updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+            rerenderSidebarMeals();
+          } else {
+            console.log('Meal not found in selectedMeals array');
+            console.log('Available meal IDs:', selectedMeals.map(m => m.id));
+          }
+        };
+      });
     }
   }
 
@@ -2696,8 +3367,18 @@
         updateModalChanges('fulfillmentTime', '');
         fulfillmentTime = '';
       } else {
-        dateInput.value = finalDate;
-        console.log('Set date input value to:', finalDate);
+        // Set display value as MM-DD-YYYY but keep actual value as YYYY-MM-DD for backend
+        const displayValue = formatDeliveryDate(finalDate);
+        dateInput.value = displayValue;
+        console.log('Set date input display value to:', displayValue, '(actual value:', finalDate, ')');
+        
+        // Also update the flatpickr instance if it exists to ensure consistency
+        if (dateInput._flatpickr) {
+          dateInput._flatpickr.setDate(finalDate, false, 'Y-m-d');
+          // Force the display value
+          dateInput._flatpickr.input.value = displayValue;
+        }
+        
         // Add this:
         reinitializeTimePicker();
       }
