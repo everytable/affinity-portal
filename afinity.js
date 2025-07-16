@@ -103,9 +103,77 @@
   // Global object to store all requested changes
   let modalChanges = {};
   
+  // Add request tracking to prevent concurrent API calls
+  let isUpdatingSubscription = false;
+  let updateRequestQueue = [];
+  
   // Helper function to update modalChanges with logging
   function updateModalChanges(key, value) {
     modalChanges[key] = value;
+  }
+  
+  // Centralized function to update subscription with request debouncing
+  async function updateSubscriptionSafely(subscriptionId, updatePayload) {
+    // If already updating, queue this request
+    if (isUpdatingSubscription) {
+      console.log('Subscription update already in progress, queuing request');
+      return new Promise((resolve, reject) => {
+        updateRequestQueue.push({ updatePayload, resolve, reject });
+      });
+    }
+    
+    isUpdatingSubscription = true;
+    console.log('Starting subscription update for ID:', subscriptionId);
+    
+    try {
+      const response = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+      
+      const result = await response.json();
+      console.log('Subscription update completed:', result);
+      
+      // Process any queued requests
+      while (updateRequestQueue.length > 0) {
+        const queuedRequest = updateRequestQueue.shift();
+        try {
+          const queuedResult = await updateSubscriptionSafely(subscriptionId, queuedRequest.updatePayload);
+          queuedRequest.resolve(queuedResult);
+        } catch (error) {
+          queuedRequest.reject(error);
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+      
+      // Handle specific Recharge API errors
+      if (error.message && error.message.includes('already in progress')) {
+        console.log('Subscription update already in progress, retrying in 2 seconds...');
+        // Wait 2 seconds and retry once
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          const retryResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatePayload)
+          });
+          const retryResult = await retryResponse.json();
+          console.log('Retry successful:', retryResult);
+          return retryResult;
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+          throw retryError;
+        }
+      }
+      
+      throw error;
+    } finally {
+      isUpdatingSubscription = false;
+    }
   }
 
   // Toast notification function
@@ -1177,19 +1245,18 @@
         selectedFrequency: modalChanges.selectedFrequency,
         ...(frequencyData && { subscription_preferences: frequencyData })
       };
-      const subscriptionResp = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
-      });
-      const subscriptionData = await subscriptionResp.json();
+      
+      const subscriptionData = await updateSubscriptionSafely(subscriptionId, updatePayload);
       if (!subscriptionData.success) {
         showToast(subscriptionData.error || 'Failed to update subscription', 'error');
         hideModalLoading();
         return;
       }
       showToast('All changes saved successfully!', 'success');
-      await refreshSubscriptionData(subscriptionId);
+      // Add a small delay before refreshing to ensure the update has processed
+      setTimeout(async () => {
+        await refreshSubscriptionData(subscriptionId);
+      }, 1000);
       // modalOverlay.style.display = 'none';
     } catch (error) {
       showToast('Error saving changes', 'error');
@@ -1395,19 +1462,13 @@
           ...(frequencyData && { subscription_preferences: frequencyData })
         };
 
-        const subscriptionResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(updatePayload)
-        });
-
-        const subscriptionResult = await subscriptionResponse.json();
+        const subscriptionResult = await updateSubscriptionSafely(subscriptionId, updatePayload);
         if (subscriptionResult.success) {
           showToast('All changes saved successfully!', 'success');
-          // Refresh subscription data to show updated information
-          await refreshSubscriptionData(subscriptionId);
+          // Add a small delay before refreshing to ensure the update has processed
+          setTimeout(async () => {
+            await refreshSubscriptionData(subscriptionId);
+          }, 1000);
           modalOverlay.style.display = 'none';
         } else {
           console.error('Failed to save subscription changes:', subscriptionResult);
