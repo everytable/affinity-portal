@@ -1173,11 +1173,25 @@
                 
                 // Look for variant in catalog data using external_variant_id
                 if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
-                  variant = currentCatalogVariants.variants.find(v => 
-                    String(v.id) === String(onetime.external_variant_id) ||
-                    String(v.id) === String(onetime.external_variant_id).replace('gid://shopify/ProductVariant/', '') ||
-                    String(v.id).replace('gid://shopify/ProductVariant/', '') === String(onetime.external_variant_id)
-                  );
+                  // Extract the variant ID from the one-time item data
+                  let variantId = null;
+                  if (onetime.external_variant_id) {
+                    if (typeof onetime.external_variant_id === 'object' && onetime.external_variant_id.ecommerce) {
+                      // Format: {ecommerce: "44637278863417"}
+                      variantId = onetime.external_variant_id.ecommerce;
+                    } else if (typeof onetime.external_variant_id === 'string') {
+                      // Format: "44637278863417" or "gid://shopify/ProductVariant/44637278863417"
+                      variantId = onetime.external_variant_id.replace('gid://shopify/ProductVariant/', '');
+                    }
+                  }
+                  
+                  if (variantId) {
+                    variant = currentCatalogVariants.variants.find(v => 
+                      String(v.id) === String(variantId) ||
+                      String(v.id) === String(variantId).replace('gid://shopify/ProductVariant/', '') ||
+                      String(v.id).replace('gid://shopify/ProductVariant/', '') === String(variantId)
+                    );
+                  }
                 }
                 
                 if (variant) {
