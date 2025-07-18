@@ -2257,7 +2257,7 @@
     } catch (error) {
       showToast('Error saving changes', 'error');
     } finally {
-      
+      hideModalLoading();
     }
   }
 
@@ -2543,7 +2543,9 @@
       } catch (error) {
         console.error('Error saving changes:', error);
         showToast('Error saving changes', 'error');
-      } 
+      } finally {
+        hideModalLoading();
+      }
     };
     
     // Handle the Cancel button to close the modal
