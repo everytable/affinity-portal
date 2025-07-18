@@ -1,6 +1,28 @@
 // affinity.js - Standalone modal widget
 (function() {
 
+  // Initialize Recharge client
+  if (typeof recharge === 'undefined') {
+    // Load Recharge client script
+    const script = document.createElement('script');
+    script.src = 'https://static.rechargecdn.com/assets/storefront/recharge-client-1.36.0.min.js';
+    script.onload = function() {
+      if (typeof apiToken !== 'undefined') {
+        recharge.init({storefrontAccessToken: apiToken});
+      } else {
+        console.error('apiToken is not defined. Please ensure it is available globally.');
+      }
+    };
+    document.head.appendChild(script);
+  } else {
+    // Recharge client already loaded, just initialize
+    if (typeof apiToken !== 'undefined') {
+      recharge.init({storefrontAccessToken: apiToken});
+    } else {
+      console.error('apiToken is not defined. Please ensure it is available globally.');
+    }
+  }
+
   const originalDispatchEvent = EventTarget.prototype.dispatchEvent;
 
   EventTarget.prototype.dispatchEvent = function(event) {
@@ -124,10 +146,70 @@
   let isUpdatingSubscription = false;
   let updateRequestQueue = [];
   
+  // Recharge API integration for cancel subscription
+  const rechargeAPI = {
+    session: null,
+
+    async authenticate() {
+      try {
+        if (this.session) {
+          return this.session;
+        }
+        this.session = await recharge.auth.loginCustomerPortal();
+        return this.session;
+      } catch (error) {
+        console.error("Could not authenticate:", error);
+        throw error;
+      }
+    },
+
+    async getActiveChurnLandingPageURL(subscriptionId) {
+      try {
+        const response = await recharge.customer.getActiveChurnLandingPageURL(this.session, subscriptionId, window.location.href);
+        return response;
+      } catch (error) {
+        console.error("Could not get churn landing page URL:", error);
+        throw error;
+      }
+    }
+  };
+  
   // Helper function to update modalChanges with logging
   function updateModalChanges(key, value) {
     modalChanges[key] = value;
   }
+  
+  // Cancel subscription functionality
+  async function handleCancelSubscription() {
+    try {
+      const subscriptionId = currentSubscription?.id;
+      if (!subscriptionId) {
+        showToast('No subscription found', 'error');
+        return;
+      }
+
+      showModalLoading();
+      await rechargeAPI.authenticate();
+      await redirectToChurnPage(subscriptionId);
+    } catch (error) {
+      console.error('Failed to handle cancel subscription:', error);
+      showToast('Unable to process cancellation. Please try again or contact support.', 'error');
+    } finally {
+      hideModalLoading();
+    }
+  }
+
+  async function redirectToChurnPage(subscriptionId) {
+    try {
+      const churnUrl = await rechargeAPI.getActiveChurnLandingPageURL(subscriptionId);
+      window.location.href = churnUrl;
+    } catch (error) {
+      console.error('Failed to redirect to churn page:', error);
+      showToast('Unable to process cancellation. Please try again or contact support.', 'error');
+    }
+  }
+
+
   
   // Function to fetch offset days from API
   async function fetchOffsetDays() {
@@ -2470,17 +2552,9 @@
     };
     
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
-    if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
+    if (cancelSubBtn) cancelSubBtn.onclick = async (e) => {
       e.preventDefault();
-      const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
-      if (cancelBtn) cancelBtn.onclick = () => {
-        // Dispatch custom event for cancel
-        const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow');
-        document.dispatchEvent(cancelEvent);
-        
-        // Hide the modal
-        modalOverlay.style.display = 'none';
-      };
+      await handleCancelSubscription();
     };
     // Attach meal card events
     attachMealCardEvents();
