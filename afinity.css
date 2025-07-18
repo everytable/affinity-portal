@@ -1422,3 +1422,32 @@
     height: 14px;
   }
 }
+
+/* Checkbox styling for Update All Future Orders */
+.afinity-modal-checkbox-label {
+  font-size: 14px;
+  color: #1a5f7a;
+  user-select: none;
+  font-weight: 500;
+}
+
+.afinity-modal-checkbox-label span {
+  font-weight: 600;
+}
+
+.afinity-modal-checkbox-label input[type="checkbox"] {
+  accent-color: #1a5f7a;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.afinity-modal-checkbox-label input[type="checkbox"]:checked {
+  background-color: #1a5f7a;
+  border-color: #1a5f7a;
+}
+
+.afinity-modal-checkbox-label:hover {
+  color: #1a5f7a;
+}
