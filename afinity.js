@@ -900,7 +900,6 @@
         // Final fallback to meal price
         if (price === 0) {
           price = meal.price || 0;
-          console.log('Using fallback meal price:', price);
         }
         
         // Use original price for total calculation (no discount applied to total)
