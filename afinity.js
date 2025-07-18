@@ -962,6 +962,8 @@
       return '0.00';
     }
     let totalCents = 0;
+    
+    // Add subscription items
     currentSubscription.include.bundle_selections.items.forEach(item => {
       // Convert price to cents, multiply, then add
       const price = Number(item.price) || 0;
@@ -969,6 +971,17 @@
       const qty = parseInt(item.quantity) || 1;
       totalCents += priceCents * qty;
     });
+    
+    // Add one-time items
+    if (currentSubscription.include.onetimes && Array.isArray(currentSubscription.include.onetimes)) {
+      currentSubscription.include.onetimes.forEach(onetime => {
+        const price = Number(onetime.price) || 0;
+        const priceCents = Math.round(price * 100);
+        const qty = parseInt(onetime.quantity) || 1;
+        totalCents += priceCents * qty;
+      });
+    }
+    
     // Convert back to dollars
     return (totalCents / 100).toFixed(2);
   }
