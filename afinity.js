@@ -2536,7 +2536,6 @@
           setTimeout(async () => {
             await refreshSubscriptionData(subscriptionId);
           }, 1000);
-          modalOverlay.style.display = 'none';
         } else {
           console.error('Failed to save subscription changes:', subscriptionResult);
           showToast('Failed to save changes', 'error');
