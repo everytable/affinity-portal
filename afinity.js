@@ -5,7 +5,7 @@
 
   EventTarget.prototype.dispatchEvent = function(event) {
     if (event.type.includes("Recharge")) {
-      console.log("Custom Event Fired:", event.type, event);
+      // Event handling for debugging
     }
     return originalDispatchEvent.call(this, event);
   };
@@ -130,14 +130,12 @@
   async function updateSubscriptionSafely(subscriptionId, updatePayload) {
     // If already updating, queue this request
     if (isUpdatingSubscription) {
-      console.log('Subscription update already in progress, queuing request');
       return new Promise((resolve, reject) => {
         updateRequestQueue.push({ updatePayload, resolve, reject });
       });
     }
     
     isUpdatingSubscription = true;
-    console.log('Starting subscription update for ID:', subscriptionId);
     
     try {
       const response = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
@@ -147,7 +145,6 @@
       });
       
       const result = await response.json();
-      console.log('Subscription update completed:', result);
       
       // Process any queued requests
       while (updateRequestQueue.length > 0) {
@@ -166,7 +163,6 @@
       
       // Handle specific Recharge API errors
       if (error.message && error.message.includes('already in progress')) {
-        console.log('Subscription update already in progress, retrying in 2 seconds...');
         // Wait 2 seconds and retry once
         await new Promise(resolve => setTimeout(resolve, 2000));
         try {
@@ -176,7 +172,6 @@
             body: JSON.stringify(updatePayload)
           });
           const retryResult = await retryResponse.json();
-          console.log('Retry successful:', retryResult);
           return retryResult;
         } catch (retryError) {
           console.error('Retry failed:', retryError);
@@ -310,75 +305,52 @@
 
   // Update fetchAvailableDates to store the time zone from the payload
   async function fetchAvailableDates(zip, selectedPickupLocationId) {
-    console.log('=== FETCH AVAILABLE DATES START ===');
-    console.log('Fetching availability for zip:', zip);
-    console.log('Selected pickup location ID:', selectedPickupLocationId);
     
     try {
       const url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
-      console.log('Fetching from URL:', url);
       
       const resp = await fetch(url);
       const data = await resp.json();
-      console.log('Raw availability data:', data);
       
       // Store delivery days data globally for time options
       window.deliveryDaysData = data.deliveryDays || [];
       window.pickupLocationsData = data.pickupLocations || [];
-      console.log('Stored deliveryDaysData:', window.deliveryDaysData);
-      console.log('Stored pickupLocationsData:', window.pickupLocationsData);
       
       // Delivery dates
       allowedDeliveryDates = (data.deliveryDays || [])
         .filter(day => !day.isclosed)
         .map(day => day.date);
-      console.log('Filtered delivery dates:', allowedDeliveryDates);
       
       // Pickup dates for the selected location
       if (selectedPickupLocationId) {
-        console.log('Looking for pickup location with ID:', selectedPickupLocationId);
         const pickupLocation = (data.pickupLocations || []).find(
           loc => String(loc.location_id) === String(selectedPickupLocationId)
         );
-        console.log('Found pickup location:', pickupLocation);
         
         if (pickupLocation && pickupLocation.pickupDates) {
-          console.log('Pickup location has pickupDates:', pickupLocation.pickupDates);
           allowedPickupDates = pickupLocation.pickupDates
             .filter(day => !day.isclosed)
             .map(day => day.date);
-          console.log('Filtered pickup dates:', allowedPickupDates);
         } else {
-          console.log('No pickup dates found for location');
           allowedPickupDates = [];
         }
       } else {
-        console.log('No selectedPickupLocationId provided');
         allowedPickupDates = [];
       }
       
       // Store the time zone from the payload
       if (data.locationTimeZone) {
         currentTimeZone = data.locationTimeZone;
-        console.log('Set timezone from locationTimeZone:', currentTimeZone);
       } else if (data.time_zone) {
         currentTimeZone = data.time_zone;
-        console.log('Set timezone from time_zone:', currentTimeZone);
-      } else {
-        console.log('No timezone found in data, keeping current:', currentTimeZone);
-      }
+      } 
       
-      console.log('Final allowedDeliveryDates:', allowedDeliveryDates);
-      console.log('Final allowedPickupDates:', allowedPickupDates);
-      console.log('Final currentTimeZone:', currentTimeZone);
-      console.log('=== FETCH AVAILABLE DATES COMPLETE ===');
     } catch (e) {
       console.error('Error in fetchAvailableDates:', e);
       allowedDeliveryDates = [];
       allowedPickupDates = [];
       window.deliveryDaysData = [];
       window.pickupLocationsData = [];
-      console.log('Reset all dates to empty arrays due to error');
     }
   }
 
@@ -395,57 +367,42 @@
       restrictedDates.push(dateStr);
     }
     
-    console.log('Restricted dates (3 days out):', restrictedDates);
     return restrictedDates;
   }
 
   // Helper to (re)initialize the date picker with allowed dates
   function setupDatePicker(fulfillmentType) {
-    console.log('=== SETUP DATE PICKER START ===');
-    console.log('Setting up date picker for fulfillment type:', fulfillmentType);
     
     const input = document.getElementById('afinity-date');
     if (!input) {
-      console.log('Date input element not found');
       return;
     }
     if (typeof flatpickr === 'undefined') {
-      console.log('Flatpickr not loaded yet');
       return;
     }
     
     // Destroy any previous instance
     if (input._flatpickr) {
-      console.log('Destroying previous flatpickr instance');
       input._flatpickr.destroy();
     }
     
     let allowedDates = [];
     if (fulfillmentType === 'Delivery') {
       allowedDates = allowedDeliveryDates;
-      console.log('Using delivery dates:', allowedDates);
     } else if (fulfillmentType === 'Pickup') {
       allowedDates = allowedPickupDates;
-      console.log('Using pickup dates:', allowedDates);
-    } else {
-      console.log('Unknown fulfillment type:', fulfillmentType);
     }
-    
     // Get restricted dates (3 days out)
     const restrictedDates = getRestrictedDates();
     
     // Filter out restricted dates from allowed dates
     const filteredAllowedDates = allowedDates.filter(date => !restrictedDates.includes(date));
-    console.log('Original allowed dates:', allowedDates);
-    console.log('Filtered allowed dates (excluding 3 days out):', filteredAllowedDates);
     
     // Get current date from subscription data
     const currentDate = modalChanges.deliveryDate || deliveryDate;
-    console.log('Current date to set in picker:', currentDate);
     
     // Check if current date is in restricted dates
     if (currentDate && restrictedDates.includes(currentDate)) {
-      console.log('Current date is in restricted dates, clearing it');
       updateModalChanges('deliveryDate', '');
       deliveryDate = '';
       // Clear the input field
@@ -459,8 +416,6 @@
       enable: filteredAllowedDates,
       defaultDate: (currentDate && !restrictedDates.includes(currentDate)) ? currentDate : undefined, // Set default date if available and not restricted
       onChange: function(selectedDates, dateStr, instance) {
-        console.log('Date picker onChange triggered');
-        console.log('Selected date (ISO):', dateStr);
         
         updateModalChanges('deliveryDate', dateStr);
         deliveryDate = dateStr;
@@ -487,7 +442,6 @@
       ]);
       // Fetch available dates for the current fulfillment type and pickup location
       const pickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
-      console.log('Fetching available dates with pickup location ID:', pickupLocationId);
       await fetchAvailableDates(zip, pickupLocationId);
       setupDatePicker(modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery');
     }catch(error){
@@ -497,11 +451,9 @@
 
   async function fetchFrequencies() {
     try {
-      console.log('Fetching frequencies from:', `${API_URL}/subscription/frequencies`);
       const response = await fetch(`${API_URL}/subscription/frequencies`);
       const data = await response.json();
       availableFrequencies = data.frequencies || [];
-      console.log('Fetched frequencies:', availableFrequencies);
     } catch (error) {
       console.error('Error fetching frequencies:', error);
       availableFrequencies = [];
@@ -510,41 +462,20 @@
 
   async function fetchMenuData() {
     try {
-      console.log('Fetching menu data from:', `${API_URL}/menu`);
       showModalLoading();
       
       const response = await fetch(`${API_URL}/menu`);
       const data = await response.json();
       
-      console.log('Raw menu API response:', data);
-      
       if (data.success && data.menu) {
         menuData = data.menu;
-        console.log('Fetched menu data:', menuData);
-        console.log('Menu items count:', menuData.items ? menuData.items.length : 0);
-        
-        // Log each menu item and its collection
-        if (menuData.items) {
-          menuData.items.forEach((item, index) => {
-            console.log(`Menu item ${index}:`, {
-              title: item.title,
-              type: item.type,
-              resourceId: item.resourceId,
-              hasCollection: !!item.collection,
-              collectionProducts: item.collection?.products?.edges?.length || 0
-            });
-          });
-        }
-        
         // Set the first category as default if none selected
         if (!selectedMenuCategory && menuData.items && menuData.items.length > 0) {
           selectedMenuCategory = menuData.items[0].id;
-          console.log('Set default selected category:', selectedMenuCategory);
         }
         
         // Re-render the modal to show the menu data
         if (currentPage === 'meals') {
-          console.log('Re-rendering meals page with new menu data');
           renderModal();
         }
       } else {
@@ -567,7 +498,6 @@
       
       // Ensure catalog variants are loaded for meal data mapping
       if (!currentCatalogVariants || !currentCatalogVariants.variants) {
-        console.log('Catalog variants not loaded, fetching...');
         await getCatalogVariants();
       }
       
@@ -616,7 +546,6 @@
         const orderIntervalFrequency = payload.order_interval_frequency;
         if (intervalUnit && orderIntervalFrequency) {
           selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
-          console.log('Set selectedFrequency from subscription data:', selectedFrequency);
         }
         
         // Update originalSubscriptionMeals with fresh bundle selections data
@@ -654,7 +583,6 @@
               img: img
             };
           });
-          console.log('Updated originalSubscriptionMeals with fresh data:', originalSubscriptionMeals);
         }
         
         // Update modalChanges with fresh data
@@ -712,7 +640,6 @@
   }
 
   function renderPickupLocationsSection() {
-    console.log('Rendering pickup locations section');
     const section = modalOverlay && modalOverlay.querySelector('#afinity-method-section');
     if (section) {
       section.innerHTML = renderMethodSection();
@@ -721,7 +648,6 @@
       if (methodSelect) {
         methodSelect.value = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
         methodSelect.addEventListener('change', async (e) => {
-          console.log('Fulfillment method changed to:', e.target.value);
           updateModalChanges('fulfillmentMethod', e.target.value);
           fulfillmentMethod = e.target.value;
           if (fulfillmentMethod === 'Pickup') {
@@ -808,10 +734,8 @@
   function formatDeliveryDate(dateStr) {
     if (!dateStr) return '';
     // dateStr is in ISO format (YYYY-MM-DD), convert to MM-DD-YYYY for display
-    console.log('formatDeliveryDate input:', dateStr);
     const [year, month, day] = dateStr.split('-');
     const formatted = `${month}-${day}-${year}`;
-    console.log('formatDeliveryDate output:', formatted);
     return formatted;
   }
   
@@ -835,15 +759,9 @@
   
   // Helper to get delivery date from currentSubscription order attributes
   function getDeliveryDateFromSubscription() {
-    console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION START ===');
-    console.log('currentSubscription:', currentSubscription);
-    
     if (!currentSubscription?.include?.address?.order_attributes) {
-      console.log('No order attributes found, returning deliveryDate:', deliveryDate);
       return deliveryDate; 
     }
-    
-    console.log('Order attributes:', currentSubscription.include.address.order_attributes);
     
     // Look for Fulfillment Date in order attributes
     let fulfillmentDateAttr = null;
@@ -854,7 +772,6 @@
         if ('name' in attr && 'value' in attr) {
           if (attr.name === 'Fulfillment Date') {
             fulfillmentDateAttr = attr;
-            console.log('Found fulfillment date attr (name/value format):', fulfillmentDateAttr);
             break;
           }
         } else {
@@ -862,7 +779,6 @@
           const key = Object.keys(attr)[0];
           if (key === 'Fulfillment Date') {
             fulfillmentDateAttr = { name: key, value: attr[key] };
-            console.log('Found fulfillment date attr (key/value format):', fulfillmentDateAttr);
             break;
           }
         }
@@ -871,23 +787,16 @@
     
     if (fulfillmentDateAttr) {
       const fulfillmentDateTime = fulfillmentDateAttr.value;
-      console.log('Raw fulfillment date time:', fulfillmentDateTime);
       
       if (fulfillmentDateTime.includes('T')) {
         const dateOnly = fulfillmentDateTime.split('T')[0];
-        console.log('Extracted date from ISO string:', dateOnly);
-        console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION COMPLETE ===');
         return dateOnly; 
       } else {
-        console.log('Date is already in date-only format:', fulfillmentDateTime);
-        console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION COMPLETE ===');
         return fulfillmentDateTime; 
       }
     }
     
     // No Fulfillment Date found, return empty string to force user selection
-    console.log('No Fulfillment Date found in order attributes');
-    console.log('=== GET DELIVERY DATE FROM SUBSCRIPTION COMPLETE ===');
     return '';
   }
   
@@ -914,8 +823,6 @@
     
     return fulfillmentTime; // fallback
   }
-  // Optionally, set a price variable if you want to show price
-  let price = '3.99'; // Replace with real price if available
 
   function renderModal() {
     // Create overlay if not present
@@ -969,10 +876,6 @@
   function calculateMealsPageTotal() {
     let totalCents = 0;
     
-    console.log('=== CALCULATE MEALS PAGE TOTAL START ===');
-    console.log('selectedMeals:', selectedMeals);
-    console.log('currentCatalogVariants:', currentCatalogVariants);
-    
     // Calculate total for all selected meals (both original and new selections)
     const currentMeals = getCurrentMealsArray();
     currentMeals.forEach(meal => {
@@ -982,7 +885,6 @@
         // Always use catalog variants data as the primary source
         if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
           const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
-          console.log('Found variant for meal calculation:', variant);
           if (variant && variant.price) {
             // Try different price formats
             if (typeof variant.price === 'string') {
@@ -992,10 +894,7 @@
             } else if (typeof variant.price === 'number') {
               price = variant.price;
             }
-            console.log('Using variant price:', price);
-          } else {
-            console.log('No variant price found, using fallback');
-          }
+          } 
         }
         
         // Final fallback to meal price
@@ -1010,14 +909,10 @@
         const mealTotal = priceCents * meal.qty;
         totalCents += mealTotal;
         
-        console.log(`Meal ${meal.id} (${meal.title}): qty=${meal.qty}, price=$${price}, total=${mealTotal} cents`);
       }
     });
     
     const total = (totalCents / 100).toFixed(2);
-    console.log('Final total:', total);
-    console.log('=== CALCULATE MEALS PAGE TOTAL COMPLETE ===');
-    
     // Convert back to dollars
     return total;
   }
@@ -1044,19 +939,15 @@
     
     if (hasChanges || hasRemovals) {
       // User has made changes, show calculated total
-      console.log('Meals page: Changes detected, showing calculated total');
       return calculateMealsPageTotal();
     } else {
       // No changes, show subscription total
-      console.log('Meals page: No changes detected, showing subscription total');
       return calculateSubscriptionTotal();
     }
   }
 
   function renderMainPage() {
     const currentDeliveryDate = getDeliveryDateFromSubscription();
-    console.log('Main page - currentDeliveryDate:', currentDeliveryDate);
-    console.log('Main page - formatted date:', formatDeliveryDate(currentDeliveryDate));
     // Calculate total price for header
     const headerTotal = calculateSubscriptionTotal();
     // Determine method
@@ -1164,10 +1055,32 @@
             <div class="afinity-modal-card-title">Add One off item to order</div>
             <div class="afinity-modal-onetime-list">
               ${currentSubscription.include.onetimes.map(onetime => {
-                const img = MEAL_IMAGE; // Default image
-                const title = onetime.product_title || 'One-time Item';
-                const price = parseFloat(onetime.price) || 0;
+                // Try to find variant in catalog data to get proper image and title
+                let variant = null;
+                let img = MEAL_IMAGE; // Default fallback
+                let title = onetime.product_title || 'One-time Item';
+                let price = parseFloat(onetime.price) || 0;
                 const qty = onetime.quantity || 1;
+                
+                // Look for variant in catalog data using external_variant_id
+                if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+                  variant = currentCatalogVariants.variants.find(v => 
+                    String(v.id) === String(onetime.external_variant_id) ||
+                    String(v.id) === String(onetime.external_variant_id).replace('gid://shopify/ProductVariant/', '') ||
+                    String(v.id).replace('gid://shopify/ProductVariant/', '') === String(onetime.external_variant_id)
+                  );
+                }
+                
+                if (variant) {
+                  img = getVariantImageFromVariantsData(variant);
+                  title = variant.title || variant.product?.title || onetime.product_title || 'One-time Item';
+                  if (variant.price) {
+                    if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                    else if (typeof variant.price === 'number') price = variant.price;
+                    else if (variant.price.amount) price = parseFloat(variant.price.amount);
+                  }
+                  price = isNaN(price) ? parseFloat(onetime.price) || 0 : price;
+                }
                 
                 return `
                   <div class="afinity-modal-onetime-item" data-onetime-id="${onetime.id}">
@@ -1207,9 +1120,6 @@
   function renderMealsPage() {
     const catalogVariants = getCatalogVariants();
     const currentDeliveryDate = getDeliveryDateFromSubscription();
-    console.log('Meals page - currentDeliveryDate:', currentDeliveryDate);
-    console.log('Meals page - formatted date:', formatDeliveryDate(currentDeliveryDate));
-    console.log('Meals page mode:', mealsPageMode);
     
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
     const headerTotal = getMealsPageHeaderTotal();
@@ -1535,49 +1445,26 @@
   }
 
   function renderMealsGrid() {
-    console.log('=== RENDER MEALS GRID START ===');
-    console.log('menuData:', menuData);
-    console.log('selectedMenuCategory:', selectedMenuCategory);
-    console.log('currentCatalogVariants:', currentCatalogVariants);
-    
     if (!menuData || !menuData.items || menuData.items.length === 0) {
-      console.log('No menu data available');
       return '<div class="afinity-meals-grid-loading">Loading menu data…</div>';
     }
 
     if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
-      console.log('No variants data available');
       return '<div class="afinity-meals-grid-loading">Loading meal details…</div>';
     }
-
-    console.log('Menu items count:', menuData.items.length);
-    console.log('Variants count:', currentCatalogVariants.variants.length);
-
     // If a specific category is selected, show only that collection
     if (selectedMenuCategory) {
-      console.log('Category selected, filtering to:', selectedMenuCategory);
       const selectedCategory = menuData.items.find(cat => cat.id === selectedMenuCategory);
-      console.log('Selected category found:', selectedCategory);
       
       if (selectedCategory && selectedCategory.collection) {
-        console.log('Rendering single collection:', selectedCategory.title);
         return renderCollectionMealsWithVariants(selectedCategory.collection, selectedCategory.title);
-      } else {
-        console.log('Selected category has no collection data');
       }
     }
-
-    // Show all collections
-    console.log('Rendering all collections');
     const collectionsWithProducts = menuData.items.filter(item => item.collection && item.collection.products);
-    console.log('Collections with products:', collectionsWithProducts.length);
     
     const allCollectionsHtml = collectionsWithProducts
       .map(item => renderCollectionSectionWithVariants(item.collection, item.title))
       .join('');
-    
-    console.log('All collections HTML length:', allCollectionsHtml.length);
-    console.log('=== RENDER MEALS GRID COMPLETE ===');
     
     return allCollectionsHtml;
   }
@@ -1591,10 +1478,8 @@
     }
 
     const products = collection.products.edges.map(edge => edge.node);
-    console.log(`Found ${products.length} products in collection:`, collectionTitle);
     
     const productMealsHtml = products.map(product => renderProductMeals(product)).join('');
-    console.log('Product meals HTML length:', productMealsHtml.length);
     
     return `
       <div class="afinity-collection-section">
@@ -1607,46 +1492,16 @@
   }
 
   function renderCollectionSectionWithVariants(collection, collectionTitle) {
-    console.log('Rendering collection section with variants:', { collectionTitle, collection });
-    
     if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
-      console.log('No products found in collection:', collectionTitle);
       return '';
     }
 
     if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
-      console.log('No variants data available for collection:', collectionTitle);
       return '';
     }
 
     const products = collection.products.edges.map(edge => edge.node);
-    console.log(`Found ${products.length} products in collection:`, collectionTitle);
-    
     const productMealsHtml = products.map(product => renderProductMealsWithVariants(product)).join('');
-    console.log('Product meals HTML length:', productMealsHtml.length);
-    
-    return `
-      <div class="afinity-collection-section">
-        <h3 class="afinity-collection-title">${collectionTitle}</h3>
-        <div class="afinity-meals-grid">
-          ${productMealsHtml}
-        </div>
-      </div>
-    `;
-  }
-
-  function renderCollectionMeals(collection, collectionTitle) {
-    console.log('Rendering single collection meals:', { collectionTitle, collection });
-    
-    if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
-      console.log('No products found in single collection:', collectionTitle);
-      return '<div class="afinity-meals-grid-empty">No meals found in this collection.</div>';
-    }
-
-    const products = collection.products.edges.map(edge => edge.node);
-    console.log(`Found ${products.length} products in single collection:`, collectionTitle);
-    
-    const productMealsHtml = products.map(product => renderProductMeals(product)).join('');
     
     return `
       <div class="afinity-collection-section">
@@ -1659,20 +1514,15 @@
   }
 
   function renderCollectionMealsWithVariants(collection, collectionTitle) {
-    console.log('Rendering single collection meals with variants:', { collectionTitle, collection });
-    
     if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
-      console.log('No products found in single collection:', collectionTitle);
       return '<div class="afinity-meals-grid-empty">No meals found in this collection.</div>';
     }
 
     if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
-      console.log('No variants data available for single collection:', collectionTitle);
       return '<div class="afinity-meals-grid-empty">Loading meal details...</div>';
     }
 
     const products = collection.products.edges.map(edge => edge.node);
-    console.log(`Found ${products.length} products in single collection:`, collectionTitle);
     
     const productMealsHtml = products.map(product => renderProductMealsWithVariants(product)).join('');
     
@@ -1687,35 +1537,25 @@
   }
 
   function renderProductMeals(product) {
-    console.log('Rendering product meals:', { productId: product.id, title: product.title });
-    
     if (!product.variants || !product.variants.edges || product.variants.edges.length === 0) {
-      console.log('No variants found for product:', product.title);
       return '';
     }
 
     const variants = product.variants.edges.map(edge => edge.node);
-    console.log(`Found ${variants.length} variants for product:`, product.title);
-    
     const variantCardsHtml = variants.map(edge => {
       const variant = edge.node;
       return renderMealCardFromVariant(variant, product);
     }).join('');
-    
-    console.log('Variant cards HTML length:', variantCardsHtml.length);
     return variantCardsHtml;
   }
 
   function renderProductMealsWithVariants(product) {
-    console.log('Rendering product meals with variants data:', { productId: product.id, title: product.title });
     
     if (!product.variants || !product.variants.edges || product.variants.edges.length === 0) {
-      console.log('No variants found for product:', product.title);
       return '';
     }
 
     if (!currentCatalogVariants || !currentCatalogVariants.variants || currentCatalogVariants.variants.length === 0) {
-      console.log('No variants data available for product:', product.title);
       return '';
     }
 
@@ -1723,29 +1563,21 @@
     const catalogId = currentCatalogPayload?.catalogId ? 
       currentCatalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '') : null;
     
-    console.log('Current catalog ID for filtering:', catalogId);
-
     const collectionVariants = product.variants.edges.map(edge => edge.node);
-    console.log(`Found ${collectionVariants.length} collection variants for product:`, product.title);
     
     // Filter variants to only include those that match the catalog ID
     const filteredVariants = collectionVariants.filter(collectionVariant => {
       if (!catalogId) {
-        console.log('No catalog ID available, showing all variants');
         return true;
       }
       
       const variantCatalogId = collectionVariant.metafield?.value;
-      console.log('Variant catalog ID:', variantCatalogId, 'for variant:', collectionVariant.id);
       
       const matches = variantCatalogId === catalogId;
       if (!matches) {
-        console.log('Filtering out variant:', collectionVariant.id, 'catalog ID mismatch:', variantCatalogId, '!=', catalogId);
       }
       return matches;
     });
-    
-    console.log(`Filtered to ${filteredVariants.length} variants that match catalog ID ${catalogId}`);
     
     // Use catalog variants data as the primary source for all meal information
     const variantCardsHtml = filteredVariants.map(collectionVariant => {
@@ -1755,12 +1587,6 @@
       );
       
       if (matchingVariant) {
-        console.log('Found matching variant for collection variant:', {
-          collectionVariantId: collectionVariant.id,
-          matchingVariantId: matchingVariant.id,
-          title: matchingVariant.title,
-          price: matchingVariant.price
-        });
         // Use catalog variant data as the primary source
         return renderMealCardFromVariantsData(matchingVariant, product);
       } else {
@@ -1770,7 +1596,6 @@
       }
     }).join('');
     
-    console.log('Variant cards HTML length:', variantCardsHtml.length);
     return variantCardsHtml;
   }
 
@@ -1781,8 +1606,6 @@
     
     // Check if this variant is in selectedMeals
     const isActive = selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
-    
-    console.log('Rendering meal card:', { variantId: variant.id, title, price, isActive });
     
     return `
       <li class="afinity-r-meals-grid__item" style="display: block;"
@@ -1864,16 +1687,6 @@
     
     // Check if this variant is in selectedMeals
     const isActive = selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
-    
-    console.log('Rendering meal card from variants data:', { 
-      variantId: variant.id, 
-      title, 
-      originalPrice: price,
-      discountedPrice: discountedPrice,
-      isActive,
-      variantData: variant 
-    });
-    
     return `
       <li class="afinity-r-meals-grid__item" style="display: block;"
         data-product-start-date="2025-01-01"
@@ -1953,7 +1766,6 @@
   }
 
   function getVariantImageFromVariantsData(variant) {
-    console.log("variantvariantvariantvariant::", variant);
     if (variant?.image?.url) return variant.image.url;
     if (variant?.product?.featuredMedia?.preview?.image?.url) return variant.product.featuredMedia.preview.image.url;
     if (variant?.product?.featuredMedia?.preview?.url) return variant.product.featuredMedia.preview.url;
@@ -2240,7 +2052,6 @@
       // Fetch fresh subscription data and update originalSubscriptionMeals
       const subscriptionId = currentSubscription?.id;
       if (subscriptionId) {
-        console.log('Refreshing subscription data for meals page...');
         await refreshSubscriptionData(subscriptionId);
         
         // Initialize update mode meals with fresh original subscription meals
@@ -2273,7 +2084,6 @@
       // Fetch fresh subscription data to get updated one-time meals
       const subscriptionId = currentSubscription?.id;
       if (subscriptionId) {
-        console.log('Refreshing subscription data for one-time meals page...');
         await refreshSubscriptionData(subscriptionId);
         
         // Clear one-time meals when switching to one-time mode
@@ -2488,7 +2298,6 @@
         // Dispatch custom event for cancel
         const cancelEvent = new CustomEvent('Recharge::click::cancellation_flow');
         document.dispatchEvent(cancelEvent);
-        console.log('Dispatched Recharge::click::cancel event');
         
         // Hide the modal
         modalOverlay.style.display = 'none';
@@ -2524,20 +2333,10 @@
     
     // Swap Items
     const swapBtn = modalOverlay.querySelector('.afinity-meals-swap-btn');
-    console.log('Found swap button:', swapBtn);
     if (swapBtn) {
-      console.log('Attaching click handler to swap button');
       swapBtn.onclick = async () => {
-      console.log('=== SWAP ITEMS CLICKED ===');
-      console.log('mealsPageMode:', mealsPageMode);
-      console.log('selectedMeals:', selectedMeals);
-      console.log('updateModeMeals:', updateModeMeals);
-      console.log('currentMeals:', getCurrentMealsArray());
-      console.log('currentSubscription:', currentSubscription);
-      
       if (mealsPageMode === 'update') {
         // Handle subscription meal updates
-        console.log('=== UPDATING SUBSCRIPTION MEALS ===');
         
         // Check if there are any changes to save
         const currentMeals = getCurrentMealsArray();
@@ -2609,8 +2408,6 @@
             };
           });
           
-          console.log('Prepared subscription items:', items);
-          
           // Validate that all items have required fields
           const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
           if (invalidItems.length > 0) {
@@ -2621,7 +2418,6 @@
           }
           
           // Call the bundle selections endpoint
-          console.log('Calling bundle selections endpoint with items:', items);
           const response = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
             method: 'POST',
             headers: {
@@ -2631,7 +2427,6 @@
           });
           
           const result = await response.json();
-          console.log('Bundle selections response:', result);
           
           if (result.success) {
             showToast('Subscription meals updated successfully!', 'success');
@@ -2655,7 +2450,6 @@
         }
       } else {
         // Handle one-time meal additions
-        console.log('=== ADDING ONE-TIME MEALS ===');
         
         // Check if there are any one-time meals to add
         const currentMeals = getCurrentMealsArray();
@@ -2739,16 +2533,6 @@
             }
           }
           
-          console.log('Mapped one-time meal:', {
-            mealId: meal.id,
-            collectionId,
-            externalProductId,
-            productTitle,
-            variantTitle,
-            price,
-            quantity: meal.qty
-          });
-          
           return {
             collection_id: collectionId,
             external_product_id: externalProductId,
@@ -2760,8 +2544,6 @@
           };
         });
         
-        console.log('Prepared one-time items:', items);
-         
         // Validate that all items have required fields
         const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
         if (invalidItems.length > 0) {
@@ -2771,8 +2553,6 @@
           return;
         }
         
-        // Call the one-time meals endpoint
-        console.log('Calling one-time meals endpoint with items:', items);
         const response = await fetch(`${API_URL}/subscription/${subscriptionId}/onetime-meals`, {
           method: 'POST',
           headers: {
@@ -2782,8 +2562,6 @@
         });
        
        const result = await response.json();
-       console.log('One-time meals response:', result);
-        
         if (result.success) {
           showToast('One-time meals added successfully!', 'success');
           
@@ -2829,8 +2607,6 @@
           }
         ],
         onChange: function(selectedDates, dateStr, instance) {
-          console.log('Main page date picker onChange triggered');
-          console.log('Selected date (ISO):', dateStr);
           
           updateModalChanges('deliveryDate', dateStr);
           deliveryDate = dateStr;
@@ -2842,9 +2618,6 @@
         }
       });
     }
-    
-    // Meals page date input is locked/disabled - no flatpickr initialization needed
-    
     // Frequency input
     const frequencyInput = modalOverlay.querySelector('#afinity-frequency');
     if (frequencyInput) frequencyInput.onchange = (e) => {
@@ -2940,15 +2713,11 @@
     if (methodSelect) {
       methodSelect.onchange = async (e) => {
         const newMethod = e.target.value;
-        console.log('=== FULFILLMENT METHOD CHANGE START ===');
-        console.log('Changing fulfillment method to:', newMethod);
-        console.log('Previous fulfillment method:', fulfillmentMethod);
         
         updateModalChanges('fulfillmentMethod', newMethod);
         fulfillmentMethod = newMethod;
         
         // Clear delivery date and time when switching methods to force new selection
-        console.log('Clearing delivery date and time fields...');
         updateModalChanges('deliveryDate', '');
         updateModalChanges('fulfillmentTime', '');
         deliveryDate = '';
@@ -2958,18 +2727,15 @@
         const dateInput = document.getElementById('afinity-date');
         if (dateInput) {
           dateInput.value = '';
-          console.log('Cleared date input field');
         }
         
         if (fulfillmentMethod === 'Pickup') {
-          console.log('Switching to Pickup method');
           // Use the selected pickup location, or default to the first one
           let pickupId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
           if (!pickupId && pickupLocations && pickupLocations.length > 0) {
             pickupId = pickupLocations[0].id;
             updateModalChanges('selectedPickupLocationId', pickupId);
             selectedPickupLocationId = pickupId;
-            console.log('Defaulted to first pickup location ID:', pickupId);
             // Also clear and reset date/time for this location
             await clearAndResetDateTimeForPickupLocation(pickupId);
           } else if (pickupId) {
@@ -2987,47 +2753,15 @@
           setupDatePicker('Delivery');
           
           // Re-initialize time picker for delivery
-          console.log('Re-initializing time picker for delivery...');
           if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
             // Destroy existing timepicker instance
             if ($(timeInput).data('timepicker')) {
               $(timeInput).timepicker('remove');
-              console.log('Destroyed existing timepicker instance');
             }
-            
-            // Re-initialize timepicker with default options
-            // $(timeInput).timepicker({
-            //   interval: 15,
-            //   minTime: '9:00 AM',
-            //   maxTime: '5:00 PM',
-            //   defaultTime: '3:30 PM',
-            //   startTime: '9:00 AM',
-            //   dynamic: false,
-            //   dropdown: true,
-            //   scrollbar: true,
-            //   change: function(time) {
-            //     if (time) {
-            //       // Convert 12-hour format to 24-hour format for storage
-            //       const [timeStr, period] = time.split(' ');
-            //       const [hour, minute] = timeStr.split(':');
-            //       let hour24 = parseInt(hour);
-            //       if (period === 'PM' && hour24 < 12) hour24 += 12;
-            //       if (period === 'AM' && hour24 === 12) hour24 = 0;
-            //       const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
-            //       updateModalChanges('fulfillmentTime', time24Format);
-            //       fulfillmentTime = time24Format;
-            //       console.log('Time picker changed to:', time24Format);
-            //     }
-            //   }
-            // });
-            // console.log('Re-initialized time picker for delivery');
           }
         }
-        
         // Re-render the modal to show cleared date/time fields
-        console.log('Re-rendering modal...');
         renderModal();
-        console.log('=== FULFILLMENT METHOD CHANGE COMPLETE ===');
       };
     }
     // Listen for pickup location change
@@ -3193,14 +2927,9 @@
           // Set current frequency from subscription data
           const intervalUnit = payload.order_interval_unit;
           const orderIntervalFrequency = payload.order_interval_frequency;
-          console.log('Raw subscription frequency data:', { intervalUnit, orderIntervalFrequency });
           if (intervalUnit && orderIntervalFrequency) {
             selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
-            console.log('Set selectedFrequency from subscription data (initial load):', selectedFrequency);
-          } else {
-            console.log('Missing order_interval_unit or order_interval_frequency:', { intervalUnit, orderIntervalFrequency });
-          }
-          
+          } 
           // Initialize modalChanges from subscription data
           modalChanges = {};
           updateModalChanges('address1', address1);
@@ -3272,7 +3001,6 @@
               img: meal.img,
               qty: meal.qty
             }));
-            console.log('Initialized selectedMeals with current subscription meals:', selectedMeals);
           } else {
             originalSubscriptionMeals = [];
             selectedMeals = [];
@@ -3473,16 +3201,10 @@
 
   // Update rerenderSidebarMeals and renderSidebarMeals to recalculate and update the cart total
   function renderSidebarMeals() {
-    console.log('=== RENDER SIDEBAR MEALS START ===');
-    console.log('originalSubscriptionMeals:', originalSubscriptionMeals);
-    console.log('selectedMeals:', selectedMeals);
-    console.log('currentCatalogVariants:', currentCatalogVariants);
-    
     // Current Meals in Subscription (Read Only)
     const sidebarList = document.querySelector('.afinity-meals-sidebar-list.current-meals');
     if (sidebarList) {
       sidebarList.innerHTML = originalSubscriptionMeals.map(origMeal => {
-        console.log('Processing original meal:', origMeal);
         
         // Always use catalog variants data as the primary source
         let variant = null;
@@ -3491,11 +3213,9 @@
         let price = 0;
         
         if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
-          console.log("origMeal.idorigMeal.idorigMeal.idorigMeal.id::::::", origMeal.id)
           variant = currentCatalogVariants.variants.find(v => {
             return String(v.id.replace('gid://shopify/ProductVariant/', '')) === String(origMeal.id.replace('gid://shopify/ProductVariant/', ''));
           });
-          console.log('Found variant for original meal:', variant);
           
           if (variant) {
             img = getVariantImageFromVariantsData(variant);
@@ -3511,15 +3231,11 @@
                 price = variant.price;
               }
             }
-            console.log('Using variant data - title:', title, 'price:', price);
           } else {
-            console.log('No variant found for original meal ID:', origMeal.id);
-            // Fallback to original meal data
             title = origMeal.title || 'Meal';
             price = origMeal.price || 0;
           }
         } else {
-          console.log('No catalog variants available, using original meal data');
           title = origMeal.title || 'Meal';
           price = origMeal.price || 0;
         }
@@ -3529,8 +3245,6 @@
         
         const sel = selectedMeals.find(m => String(m.id) === String(origMeal.id));
         const qty = sel ? sel.qty : origMeal.qty;
-        
-        console.log('Final meal data - title:', title, 'originalPrice:', price, 'discountedPrice:', discountedPrice, 'qty:', qty);
         
         return `
           <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
@@ -3599,13 +3313,9 @@
     
     // Calculate total using the same logic as calculateSidebarTotal
     const total = calculateSidebarTotal();
-    console.log('Calculated sidebar total:', total);
-    
     // Update total in DOM
     const totalEl = document.querySelector('.afinity-meals-sidebar-total-price');
     if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
-    
-    console.log('=== RENDER SIDEBAR MEALS COMPLETE ===');
   }
 
   // Helper function to render just the sidebar content for meals page
@@ -3906,18 +3616,8 @@
       // Re-attach swap button event handler
       const swapBtn = modalOverlay.querySelector('.afinity-meals-swap-btn');
       if (swapBtn) {
-        console.log('Re-attaching click handler to swap button after sidebar update');
         swapBtn.onclick = async () => {
-          console.log('=== SWAP ITEMS CLICKED ===');
-          console.log('mealsPageMode:', mealsPageMode);
-          console.log('selectedMeals:', selectedMeals);
-          console.log('updateModeMeals:', updateModeMeals);
-          console.log('currentMeals:', getCurrentMealsArray());
-          console.log('currentSubscription:', currentSubscription);
-          
           if (mealsPageMode === 'update') {
-            // Handle subscription meal updates
-            console.log('=== UPDATING SUBSCRIPTION MEALS ===');
             
             // Check if there are any changes to save
             const currentMeals = getCurrentMealsArray();
@@ -3989,8 +3689,6 @@
                 };
               });
               
-              console.log('Prepared subscription items:', items);
-              
               // Validate that all items have required fields
               const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
               if (invalidItems.length > 0) {
@@ -4001,7 +3699,6 @@
               }
               
               // Call the bundle selections endpoint
-              console.log('Calling bundle selections endpoint with items:', items);
               const response = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
                 method: 'POST',
                 headers: {
@@ -4011,7 +3708,6 @@
               });
               
               const result = await response.json();
-              console.log('Bundle selections response:', result);
               
               if (result.success) {
                 showToast('Subscription meals updated successfully!', 'success');
@@ -4035,7 +3731,6 @@
             }
           } else {
             // Handle one-time meal additions
-            console.log('=== ADDING ONE-TIME MEALS ===');
             
             // Check if there are any one-time meals to add
             const currentMeals = getCurrentMealsArray();
@@ -4120,7 +3815,6 @@
                 };
               });
               
-              console.log('Prepared one-time items:', items);
               
               // Validate that all items have required fields
               const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
@@ -4132,7 +3826,6 @@
               }
               
               // Call the one-time meals endpoint
-              console.log('Calling one-time meals endpoint with items:', items);
               const response = await fetch(`${API_URL}/subscription/${subscriptionId}/onetime-meals`, {
                 method: 'POST',
                 headers: {
@@ -4142,7 +3835,6 @@
               });
              
              const result = await response.json();
-             console.log('One-time meals response:', result);
               
               if (result.success) {
                 showToast('One-time meals added successfully!', 'success');
@@ -4176,11 +3868,8 @@
 
   // Function to attach event handlers to meal cards
   function attachMealCardEvents() {
-    console.log('Attaching meal card events...');
-    
     // Meal add/remove
     const mealButtons = modalOverlay && modalOverlay.querySelectorAll('.afinity-r-card__add-btn');
-    console.log('Found meal buttons:', mealButtons ? mealButtons.length : 0);
     
     if (mealButtons) {
       mealButtons.forEach(btn => {
@@ -4287,23 +3976,17 @@
 
   // Function to attach event handlers to sidebar quantity controls
   function attachSidebarQuantityEvents() {
-    console.log('Attaching sidebar quantity events...');
     
     // Attach event handlers to quantity buttons in both subscription-meals and swap-meals sections
     const quantityButtons = modalOverlay && modalOverlay.querySelectorAll('.afinity-meals-sidebar-list .afinity-meals-sidebar-qty-btn:not([disabled])');
-    console.log('Found quantity buttons:', quantityButtons ? quantityButtons.length : 0);
     
     if (quantityButtons) {
       quantityButtons.forEach(btn => {
         btn.onclick = (e) => {
-          console.log('Quantity button clicked:', btn.getAttribute('data-action'), btn.getAttribute('data-meal-id'));
-          
           const action = btn.getAttribute('data-action');
           const mealId = btn.getAttribute('data-meal-id'); // Don't parse as integer, keep as string
           const currentMeals = getCurrentMealsArray();
           const idx = currentMeals.findIndex(m => String(m.id) === String(mealId));
-          
-          console.log('Action:', action, 'Meal ID:', mealId, 'Index:', idx);
           
           if (idx !== -1) {
             // Preserve existing meal data and only update quantity
@@ -4328,21 +4011,13 @@
   }
 
   function renderFrequencyDropdown() {
-    console.log('=== RENDER FREQUENCY DROPDOWN START ===');
-    console.log('selectedFrequency:', selectedFrequency);
-    console.log('availableFrequencies:', availableFrequencies);
-    console.log('modalChanges.selectedFrequency:', modalChanges.selectedFrequency);
-    console.log('Current subscription data:', currentSubscription?.subscription_preferences);
-    
     const frequencySelect = modalOverlay && modalOverlay.querySelector('#afinity-frequency');
-    console.log('Frequency select element found:', !!frequencySelect);
     
     if (frequencySelect && availableFrequencies.length > 0 && selectedFrequency) {
       const optionsHtml = availableFrequencies.map(freq => 
         freq.options.map(option => {
           const optionValue = `${freq.unit}-${option}`;
           const isSelected = selectedFrequency === optionValue;
-          console.log(`Option ${optionValue}: selected = ${isSelected}`);
           return `<option value="${optionValue}" ${isSelected ? 'selected' : ''}>
             ${option} ${freq.unit}${option > 1 ? 's' : ''} subscription
           </option>`;
@@ -4350,17 +4025,12 @@
       ).join('');
       
       frequencySelect.innerHTML = optionsHtml;
-      console.log('Frequency dropdown HTML updated');
       
       // Also set the value programmatically to ensure it's selected
       if (selectedFrequency) {
         frequencySelect.value = selectedFrequency;
-        console.log('Set frequency select value to:', selectedFrequency);
       }
-    } else {
-      console.log('Frequency select not found or no frequencies available');
-    }
-    console.log('=== RENDER FREQUENCY DROPDOWN COMPLETE ===');
+    } 
   }
 
   // Helper to convert 24-hour time to 12-hour format for utility functions
@@ -4466,70 +4136,51 @@
   
   // Helper to generate time options based on open/close times
   function generateTimeOptions(selectedDate) {
-    console.log('=== GENERATE TIME OPTIONS START ===');
-    console.log('Generating time options for date:', selectedDate);
     
     if (!selectedDate) {
-      console.log('No selected date provided, returning empty array');
       return [];
     }
     
     // Check if the selected date is in restricted dates (3 days out)
     const restrictedDates = getRestrictedDates();
     if (restrictedDates.includes(selectedDate)) {
-      console.log('Selected date is in restricted dates (3 days out), returning empty array');
       return [];
     }
     
     const fulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
-    console.log('Current fulfillment method:', fulfillmentMethod);
     
     // Find the delivery day data for the selected date
     let dayData = null;
     if (fulfillmentMethod === 'Delivery') {
-      console.log('Looking for delivery day data');
       dayData = (window.deliveryDaysData || []).find(day => day.date === selectedDate);
-      console.log('Found delivery day data:', dayData);
     } else {
       // For pickup, find the selected location's pickup dates
       const selectedLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
-      console.log('Looking for pickup location with ID:', selectedLocationId);
       
       const selectedLocation = (window.pickupLocationsData || []).find(
         loc => String(loc.location_id) === String(selectedLocationId)
       );
-      console.log('Found selected location:', selectedLocation);
       
       if (selectedLocation && selectedLocation.pickupDates) {
-        console.log('Location has pickup dates:', selectedLocation.pickupDates);
         dayData = selectedLocation.pickupDates.find(day => day.date === selectedDate);
-        console.log('Found pickup day data for selected date:', dayData);
-      } else {
-        console.log('No pickup dates found for selected location');
-      }
+      } 
     }
     
     if (!dayData) {
-      console.log('No day data found for selected date');
       return [];
     }
     
     if (dayData.isClosed) {
-      console.log('Day is closed');
       return [];
     }
     
     if (!dayData.open || !dayData.close) {
-      console.log('No open/close times found in day data');
       return [];
     }
     
-    console.log('Day data found - open:', dayData.open, 'close:', dayData.close);
     
     const [startHour, startMin] = parseTimeString(dayData.open);
     const [endHour, endMin] = parseTimeString(dayData.close);
-    console.log('Parsed start time:', startHour + ':' + startMin);
-    console.log('Parsed end time:', endHour + ':' + endMin);
     
     const slots = [];
     let currentHour = startHour;
@@ -4541,8 +4192,6 @@
     const isToday = selectedDate === todayStr;
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
-    console.log('Is today:', isToday);
-    console.log('Current time in minutes:', currentTime);
     
     while (
       currentHour < endHour ||
@@ -4554,8 +4203,6 @@
       if (!isToday || slotTime > currentTime + 30) {
         const timeStr = `${currentHour % 12 || 12}:${currentMin.toString().padStart(2, '0')} ${currentHour >= 12 ? 'PM' : 'AM'}`;
         slots.push(timeStr);
-      } else {
-        console.log('Skipping past time slot:', `${currentHour}:${currentMin}`);
       }
       
       currentMin += 15;
@@ -4565,8 +4212,6 @@
       }
     }
     
-    console.log('Generated time slots:', slots);
-    console.log('=== GENERATE TIME OPTIONS COMPLETE ===');
     return slots;
   }
 
@@ -4578,7 +4223,6 @@
     updateModalChanges('fulfillmentTime', '');
     deliveryDate = '';
     fulfillmentTime = '';
-    console.log('Changing from ehre');
 
     // 2. Clear the input fields in the UI
     const dateInput = document.getElementById('afinity-date');
@@ -4596,7 +4240,6 @@
 
   // Add this new function to initialize date and time pickers with current values
   async function initializeDateAndTimePickers() {
-    console.log('=== INITIALIZE DATE AND TIME PICKERS START ===');
     
     // Get current values from subscription data - ALWAYS prioritize order_attributes
     const currentDate = modalChanges.deliveryDate || deliveryDate;
@@ -4611,17 +4254,6 @@
     const finalDate = orderAttributesDate || currentDate;
     const finalTime = orderAttributesTime || currentTime;
     
-    console.log('=== DATE/TIME SOURCE PRIORITY ===');
-    console.log('Order attributes date:', orderAttributesDate);
-    console.log('Order attributes time:', orderAttributesTime);
-    console.log('ModalChanges date:', modalChanges.deliveryDate);
-    console.log('ModalChanges time:', modalChanges.fulfillmentTime);
-    console.log('Global deliveryDate:', deliveryDate);
-    console.log('Global fulfillmentTime:', fulfillmentTime);
-    console.log('Final selected date:', finalDate);
-    console.log('Final selected time:', finalTime);
-    console.log('Current method from subscription:', currentMethod);
-    
     // Set up date picker with allowed dates
     setupDatePicker(currentMethod);
     
@@ -4631,7 +4263,6 @@
       // Check if the final date is in restricted dates (3 days out)
       const restrictedDates = getRestrictedDates();
       if (restrictedDates.includes(finalDate)) {
-        console.log('Final date is in restricted dates, clearing it');
         dateInput.value = '';
         updateModalChanges('deliveryDate', '');
         deliveryDate = '';
@@ -4641,7 +4272,6 @@
         // Set display value as MM-DD-YYYY but keep actual value as YYYY-MM-DD for backend
         const displayValue = formatDeliveryDate(finalDate);
         dateInput.value = displayValue;
-        console.log('Set date input display value to:', displayValue, '(actual value:', finalDate, ')');
         
         // Also update the flatpickr instance if it exists to ensure consistency
         if (dateInput._flatpickr) {
@@ -4657,12 +4287,6 @@
     
     // Initialize time picker with current time
     const timeInput = document.getElementById('timepicker');
-    console.log('Time input element found:', !!timeInput);
-    console.log('jQuery available:', typeof jQuery !== 'undefined');
-    console.log('jQuery timepicker plugin available:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker);
-    console.log('jQuery version:', typeof jQuery !== 'undefined' ? jQuery.fn.jquery : 'not available');
-    console.log('Timepicker plugin methods:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker ? Object.keys(jQuery.fn.timepicker) : 'not available');
-    console.log('Timepicker plugin prototype:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker ? Object.keys(jQuery.fn.timepicker.prototype || {}) : 'not available');
     
     if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
       // Remove existing timepicker if it exists
@@ -4673,7 +4297,6 @@
       // Check if the final date is in restricted dates (3 days out)
       const restrictedDates = getRestrictedDates();
       if (finalDate && restrictedDates.includes(finalDate)) {
-        console.log('Final date is in restricted dates, clearing time picker');
         timeInput.value = '';
         updateModalChanges('fulfillmentTime', '');
         fulfillmentTime = '';
@@ -4718,13 +4341,9 @@
         if (displayHour === 0) displayHour = 12;
         const currentTime12 = `${displayHour}:${minute} ${ampm}`;
         
-        console.log('Current time in 12-hour format:', currentTime12);
-        console.log('Available time options:', timeOptions);
-        
         // Try to find an exact match first
         if (timeOptions.includes(currentTime12)) {
           defaultTime12 = currentTime12;
-          console.log('Found exact match for current time:', defaultTime12);
         } else {
           // Find the closest available time
           const currentTimeMinutes = hour * 60 + parseInt(minute);
@@ -4749,28 +4368,13 @@
       
       // Set the time input value BEFORE initializing timepicker
       timeInput.value = defaultTime12;
-      console.log('Set time input value to:', defaultTime12);
-      
       // Update the modalChanges with the selected time (convert back to 24-hour format)
       if (defaultTime12 !== minTime || currentTime) {
         const [h, m] = parseTimeString(defaultTime12);
         const selectedTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
         updateModalChanges('fulfillmentTime', selectedTime);
         fulfillmentTime = selectedTime;
-        console.log('Updated modalChanges.fulfillmentTime to:', selectedTime);
       }
-      
-      console.log('About to initialize timepicker with:', {
-        interval: 15,
-        minTime,
-        maxTime,
-        defaultTime: defaultTime12,
-        startTime: minTime,
-        timeOptions: timeOptions
-      });
-      console.log('Time options array:', timeOptions);
-      console.log('Default time to set:', defaultTime12);
-      console.log('Is default time in options?', timeOptions.includes(defaultTime12));
       
       // Initialize timepicker
       $(timeInput).timepicker({
@@ -4798,24 +4402,12 @@
         }
       });
       
-      console.log('Timepicker initialized. Current input value:', timeInput.value);
-      console.log('Timepicker data:', $(timeInput).data('timepicker'));
-      console.log('Timepicker options:', $(timeInput).data('timepicker') ? $(timeInput).data('timepicker').options : 'not available');
-      
       // Force the timepicker to show the selected time
       try {
         $(timeInput).timepicker('setTime', defaultTime12);
-        console.log('Forced timepicker to set time:', defaultTime12);
-        console.log('Timepicker instance exists:', $(timeInput).data('timepicker'));
-        
-              // Alternative approach: trigger the change event
-      $(timeInput).trigger('change');
-      console.log('Triggered change event on timepicker');
-      
-      // Also try to trigger the timepicker's show method to force it to update
+        $(timeInput).trigger('change');
       try {
         $(timeInput).timepicker('show');
-        console.log('Triggered timepicker show method');
       } catch (error) {
         console.log('Could not trigger timepicker show method:', error);
       }
@@ -4823,7 +4415,6 @@
       // Also try to trigger the timepicker's hide method to force it to update
       try {
         $(timeInput).timepicker('hide');
-        console.log('Triggered timepicker hide method');
       } catch (error) {
         console.log('Could not trigger timepicker hide method:', error);
       }
@@ -4832,15 +4423,8 @@
         const timepickerInstance = $(timeInput).data('timepicker');
         if (timepickerInstance && timepickerInstance.setTime) {
           timepickerInstance.setTime(defaultTime12);
-          console.log('Called setTime on timepicker instance');
         }
         
-        // Check what methods are available on the timepicker instance
-        if (timepickerInstance) {
-          console.log('Available timepicker methods:', Object.keys(timepickerInstance));
-          console.log('Timepicker time property:', timepickerInstance.time);
-          console.log('Timepicker options:', timepickerInstance.options);
-        }
       } catch (error) {
         console.error('Error setting timepicker time:', error);
         // Fallback: just set the input value directly
@@ -4850,19 +4434,12 @@
       
       // Ensure the time value is set after timepicker initialization
       setTimeout(() => {
-        console.log('100ms timeout - checking timepicker state');
-        console.log('Input value at 100ms:', timeInput.value);
-        console.log('Expected value:', defaultTime12);
-        console.log('Timepicker instance at 100ms:', $(timeInput).data('timepicker'));
-        
         if (timeInput.value !== defaultTime12) {
           timeInput.value = defaultTime12;
-          console.log('Re-set time input value to:', defaultTime12);
         }
         // Also try to trigger the timepicker to update its display
         try {
           $(timeInput).timepicker('setTime', defaultTime12);
-          console.log('Re-forced timepicker to set time:', defaultTime12);
         } catch (error) {
           console.error('Error in 100ms timeout setTime:', error);
         }
@@ -4870,44 +4447,27 @@
       
       // Additional timeout to ensure the timepicker is fully initialized
       setTimeout(() => {
-        console.log('Final time input value:', timeInput.value);
-        console.log('Expected time value:', defaultTime12);
-        console.log('Timepicker instance at 300ms:', $(timeInput).data('timepicker'));
         if (timeInput.value !== defaultTime12) {
           timeInput.value = defaultTime12;
           $(timeInput).timepicker('setTime', defaultTime12);
-          console.log('Final attempt to set time:', defaultTime12);
         }
         
         // Try to force the timepicker to update its display
         const timepickerInstance = $(timeInput).data('timepicker');
         if (timepickerInstance) {
-          console.log('Timepicker instance found at 300ms');
-          console.log('Timepicker time property:', timepickerInstance.time);
-          console.log('Timepicker options:', timepickerInstance.options);
           
           // Try to manually update the timepicker's display
           if (timepickerInstance.time !== defaultTime12) {
             timepickerInstance.time = defaultTime12;
-            console.log('Manually set timepicker.time to:', defaultTime12);
           }
         }
       }, 300);
-      
-      console.log('Time picker initialized with', timeOptions.length, 'time options. Default:', defaultTime12);
-      console.log('Final timepicker state check:');
-      console.log('- Input value:', timeInput.value);
-      console.log('- Timepicker instance:', $(timeInput).data('timepicker'));
-      console.log('- Timepicker time:', $(timeInput).data('timepicker') ? $(timeInput).data('timepicker').time : 'not available');
     } else {
-      console.log('Timepicker plugin not available, will retry in 500ms');
       // Retry after a short delay in case the plugin is still loading
       setTimeout(() => {
         if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
-          console.log('Retrying timepicker initialization...');
           initializeDateAndTimePickers();
                  } else {
-           console.log('Timepicker plugin still not available after retry');
            // Set the time value directly in the input as fallback
            if (timeInput && finalTime) {
                         // Generate time options for the current date
@@ -4947,7 +4507,6 @@
              // Try to find an exact match first
              if (timeOptions.includes(currentTime12)) {
                selectedTime12 = currentTime12;
-               console.log('Fallback: Found exact match for current time:', selectedTime12);
              } else {
                // Find the closest available time
                const currentTimeMinutes = hour * 60 + parseInt(minute);
@@ -4966,24 +4525,19 @@
                }
                
                selectedTime12 = closestTime;
-               console.log('Fallback: Using closest available time:', selectedTime12, '(difference:', minDifference, 'minutes)');
              }
              
              timeInput.value = selectedTime12;
-             console.log('Set time input value directly (fallback):', selectedTime12);
              
              // Update the modalChanges with the selected time
              const [selHour, selMin] = parseTimeString(selectedTime12);
              const selectedTime24 = `${selHour.toString().padStart(2, '0')}:${selMin.toString().padStart(2, '0')}`;
              updateModalChanges('fulfillmentTime', selectedTime24);
              fulfillmentTime = selectedTime24;
-             console.log('Fallback: Updated modalChanges.fulfillmentTime to:', selectedTime24);
            }
          }
       }, 500);
     }
-    
-    console.log('=== INITIALIZE DATE AND TIME PICKERS COMPLETE ===');
     
     // Also ensure the frequency dropdown is properly set
     await loadInitialFrequency();
@@ -4991,11 +4545,8 @@
 
   // New function to load initial frequency from currentSubscription
   async function loadInitialFrequency() {
-    console.log('=== LOAD INITIAL FREQUENCY START ===');
-    console.log('currentSubscription:', currentSubscription);
     
     if (!currentSubscription) {
-      console.log('No currentSubscription available');
       return;
     }
     
@@ -5004,37 +4555,22 @@
     const intervalUnit = currentSubscription.order_interval_unit;
     const orderIntervalFrequency = currentSubscription.order_interval_frequency;
     
-    console.log('Subscription root level frequency data:');
-    console.log('order_interval_unit:', intervalUnit);
-    console.log('order_interval_frequency:', orderIntervalFrequency);
-    
     if (intervalUnit && orderIntervalFrequency) {
       frequencyFromSubscription = `${intervalUnit}-${orderIntervalFrequency}`;
-      console.log('Calculated frequency from subscription:', frequencyFromSubscription);
-    } else {
-      console.log('Missing order_interval_unit or order_interval_frequency in subscription');
-    }
-    
+    } 
     // Set the global selectedFrequency
     if (frequencyFromSubscription) {
       selectedFrequency = frequencyFromSubscription;
       updateModalChanges('selectedFrequency', frequencyFromSubscription);
-      console.log('Set selectedFrequency to:', selectedFrequency);
     }
     
     // Ensure frequencies are loaded
     if (availableFrequencies.length === 0) {
-      console.log('No frequencies available, fetching them first...');
       await fetchFrequencies();
     }
     
-    console.log('Available frequencies:', availableFrequencies);
-    console.log('Final selectedFrequency:', selectedFrequency);
-    
     // Render the frequency dropdown
     renderFrequencyDropdown();
-    
-    console.log('=== LOAD INITIAL FREQUENCY COMPLETE ===');
   }
 
   // Add this new function near other helpers
@@ -5055,7 +4591,6 @@
       // Check if the selected date is in restricted dates (3 days out)
       const restrictedDates = getRestrictedDates();
       if (selectedDate && restrictedDates.includes(selectedDate)) {
-        console.log('Selected date is in restricted dates, clearing time picker');
         timeInput.value = '';
         updateModalChanges('fulfillmentTime', '');
         fulfillmentTime = '';
@@ -5124,7 +4659,6 @@
           }
         }
       });
-      console.log('Time picker re-initialized with', timeOptions.length, 'time options. Default:', defaultTime12);
     }
   }
 })();
