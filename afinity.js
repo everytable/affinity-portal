@@ -633,6 +633,8 @@
       }
     } catch (error) {
       console.error('Error refreshing subscription data:', error);
+    } finally {
+      hideModalLoading();
     }
   }
 
