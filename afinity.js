@@ -1423,7 +1423,7 @@
               </ul>
             ` : `
               <!-- One-time Mode: Show current meals as read-only and one-time meals as editable -->
-              <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription (Read Only)</h3>
+              <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription</h3>
               <ul class="afinity-meals-sidebar-list current-meals" style="opacity: 0.6; pointer-events: none;">
                 ${originalSubscriptionMeals.map(origMeal => {
                   const variant = getVariantById(origMeal.id);
@@ -1465,7 +1465,7 @@
                   `;
                 }).join('')}
               </ul>
-              <h3>Add one time Meals to your next subscription charge</h3>
+              <h3>Add one time items to your next subscription charge</h3>
               <ul class="afinity-meals-sidebar-list swap-meals">
                 ${selectedMeals.filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
                   let variant = null;
@@ -2235,14 +2235,7 @@
       // Fetch menu data when switching to meals page
       await fetchMenuData();
       
-      // Update header total when switching to meals page
-      setTimeout(() => {
-        const headerTotal = getMealsPageHeaderTotal();
-        const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
-        if (headerPriceElement) {
-          headerPriceElement.textContent = `$${headerTotal}`;
-        }
-      }, 100);
+      // Header total is set when page initially renders and stays static
     };
     const addExtraMeal = modalOverlay.querySelector('.afinity-modal-add-extra');
     if (addExtraMeal) addExtraMeal.onclick = async (e) => {
@@ -2267,14 +2260,7 @@
       // Fetch menu data when switching to meals page
       await fetchMenuData();
       
-      // Update header total when switching to meals page
-      setTimeout(() => {
-        const headerTotal = getMealsPageHeaderTotal();
-        const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
-        if (headerPriceElement) {
-          headerPriceElement.textContent = `$${headerTotal}`;
-        }
-      }, 100);
+      // Header total is set when page initially renders and stays static
     };
    
     const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
@@ -3671,7 +3657,7 @@
         </ul>
       ` : `
         <!-- One-time Mode: Show current meals as read-only and one-time meals as editable -->
-        <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription (Read Only)</h3>
+        <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription</h3>
         <ul class="afinity-meals-sidebar-list current-meals" style="opacity: 0.6; pointer-events: none;">
           ${originalSubscriptionMeals.map(origMeal => {
             const variant = getVariantById(origMeal.id);
@@ -3835,12 +3821,7 @@
         sidebar.innerHTML = sidebarContent;
       }
       
-      // Update the header total
-      const headerTotal = getMealsPageHeaderTotal();
-      const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
-      if (headerPriceElement) {
-        headerPriceElement.textContent = `$${headerTotal}`;
-      }
+      // Header total stays static and doesn't update during meal selection
       
       // Re-attach sidebar quantity events
       attachSidebarQuantityEvents();
