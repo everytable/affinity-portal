@@ -136,6 +136,7 @@
     }
     
     try {
+      showModalLoading();
       const response = await fetch(`${API_URL}/subscription/offset-days`);
       const data = await response.json();
       
@@ -152,6 +153,8 @@
       // Fallback to default value
       cachedOffsetDays = 2;
       return cachedOffsetDays;
+    } finally {
+      hideModalLoading();
     }
   }
   
@@ -336,6 +339,7 @@
   async function fetchAvailableDates(zip, selectedPickupLocationId) {
     
     try {
+      showModalLoading();
       const url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
       
       const resp = await fetch(url);
@@ -380,6 +384,8 @@
       allowedPickupDates = [];
       window.deliveryDaysData = [];
       window.pickupLocationsData = [];
+    } finally {
+      hideModalLoading();
     }
   }
 
@@ -522,6 +528,7 @@
   async function refreshSubscriptionData(subscriptionId) {
     try {
       // Fetch updated subscription data
+      showModalLoading();
       const response = await fetch(`${API_URL}/subscription/${subscriptionId}`);
       const data = await response.json();
       
@@ -632,6 +639,8 @@
       }
     } catch (error) {
       console.error('Error refreshing subscription data:', error);
+    } finally {
+      hideModalLoading();
     }
   }
 
@@ -3308,8 +3317,6 @@
                     .then(resp => resp.json())
                     .then(catalogPayload => {
                       currentCatalogPayload = catalogPayload;
-                      
-                      // Fetch variants for this catalog
                       if (catalogPayload && catalogPayload.catalogId) {
                         const catalogId = catalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '');
                         fetch(`${API_URL}/subscriptions/${catalogId}/variants`)
@@ -3318,20 +3325,19 @@
                             currentCatalogVariants = variantsData;
                             rerenderModalCartList();
                             await renderModal();
-                            hideModalLoading();
-                            // <-- Place the picker initialization here!
                             initializeDateAndTimePickers();
                           })
                           .catch(err => {
                             currentCatalogVariants = null;
                             console.error('Failed to load catalog variants:', err);
-                            hideModalLoading();
-                          });
+                          })
                       }
                     })
                     .catch(err => {
                       currentCatalogPayload = null;
                       console.error('Failed to load catalog payload for first location:', err);
+                      hideModalLoading();
+                    }).finally(() => {
                       hideModalLoading();
                     });
                 } else {
@@ -3341,6 +3347,8 @@
               }).catch(err => {
                 currentCatalogPayload = null;
                 console.error('Failed to fetch pickup locations for zip:', zip, err);
+              }).finally(() => {
+                hideModalLoading();
               });
             } else {
               currentCatalogPayload = null;
