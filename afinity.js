@@ -491,7 +491,7 @@
 
   async function fetchMenuData() {
     try {
-      showLoadingSpinner();
+      showModalLoading();
       
       const response = await fetch(`${API_URL}/menu`);
       const data = await response.json();
