@@ -136,7 +136,6 @@
     }
     
     try {
-      showModalLoading();
       const response = await fetch(`${API_URL}/subscription/offset-days`);
       const data = await response.json();
       
@@ -153,9 +152,7 @@
       // Fallback to default value
       cachedOffsetDays = 2;
       return cachedOffsetDays;
-    } finally {
-      hideModalLoading();
-    }
+    } 
   }
   
   // Centralized function to update subscription with request debouncing
@@ -339,7 +336,6 @@
   async function fetchAvailableDates(zip, selectedPickupLocationId) {
     
     try {
-      showModalLoading();
       const url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
       
       const resp = await fetch(url);
@@ -384,8 +380,6 @@
       allowedPickupDates = [];
       window.deliveryDaysData = [];
       window.pickupLocationsData = [];
-    } finally {
-      hideModalLoading();
     }
   }
 
@@ -497,7 +491,7 @@
 
   async function fetchMenuData() {
     try {
-      showModalLoading();
+      showLoadingSpinner();
       
       const response = await fetch(`${API_URL}/menu`);
       const data = await response.json();
@@ -639,8 +633,6 @@
       }
     } catch (error) {
       console.error('Error refreshing subscription data:', error);
-    } finally {
-      hideModalLoading();
     }
   }
 
@@ -2471,10 +2463,7 @@
       } catch (error) {
         console.error('Error saving changes:', error);
         showToast('Error saving changes', 'error');
-      } finally {
-        // Hide loading state
-        hideModalLoading();
-      }
+      } 
     };
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
@@ -2631,8 +2620,6 @@
         } catch (error) {
           console.error('Error updating subscription meals:', error);
           showToast('Error updating subscription meals', 'error');
-        } finally {
-          hideModalLoading();
         }
       } else {
         // Handle one-time meal additions
@@ -3067,6 +3054,7 @@
     
     if (subscriptionId) {
       // Fetch subscription data from API
+      showModalLoading();
       fetch(`${API_URL}/subscription/${subscriptionId}`)
         .then(response => response.json())
         .then(async data => {
@@ -3261,6 +3249,7 @@
               const matchedLocation = pickupLocations.find(loc => String(loc.id) === String(locationId));
               const locationName = matchedLocation ? matchedLocation.name : null;
               if (locationName) {
+                showModalLoading();
                 fetch(`${API_URL}/location/catalog/${locationId}/${encodeURIComponent(locationName)}`)
                   .then(resp => resp.json())
                   .then(catalogPayload => {
@@ -3276,32 +3265,25 @@
                           currentCatalogVariants = variantsData;
                           rerenderModalCartList();
                           await renderModal();
-                          hideModalLoading();
-                          // <-- Place the picker initialization here!
                           initializeDateAndTimePickers();
                         })
                         .catch(err => {
                           currentCatalogVariants = null;
                           console.error('Failed to load catalog variants:', err);
-                          hideModalLoading();
                         });
-                    } else {
-                    }
+                    } 
                   })
                   .catch(err => {
                     currentCatalogPayload = null;
                     console.error('Failed to load catalog payload:', err);
-                    hideModalLoading();
                   });
               } else {
                 currentCatalogPayload = null;
                 console.error('No matching locationName found for locationId:', locationId);
-                hideModalLoading();
               }
             }).catch(err => {
               currentCatalogPayload = null;
               console.error('Failed to fetch pickup locations for zip:', zip, err);
-              hideModalLoading();
             });
           } else {
             // If no LocationID, fetch pickup locations and select the first one by default
@@ -3336,20 +3318,14 @@
                     .catch(err => {
                       currentCatalogPayload = null;
                       console.error('Failed to load catalog payload for first location:', err);
-                      hideModalLoading();
-                    }).finally(() => {
-                      hideModalLoading();
-                    });
+                    })
                 } else {
                   currentCatalogPayload = null;
-                  hideModalLoading();
                 }
               }).catch(err => {
                 currentCatalogPayload = null;
                 console.error('Failed to fetch pickup locations for zip:', zip, err);
-              }).finally(() => {
-                hideModalLoading();
-              });
+              })
             } else {
               currentCatalogPayload = null;
             }
@@ -3362,14 +3338,13 @@
             modalOverlay.style.display = '';
           }
           renderModal();
-        });
+        })
     } else {
       currentPage = 'main';
       if (modalOverlay) {
         modalOverlay.style.display = '';
       }
       renderModal();
-      hideModalLoading();
     }
   });
 
@@ -4465,7 +4440,6 @@
     setupDatePicker(fulfillmentType);
     // Always re-initialize the time picker after everything else
     reinitializeTimePicker();
-    hideModalLoading();
   }
 
   // Add this new function to initialize date and time pickers with current values
