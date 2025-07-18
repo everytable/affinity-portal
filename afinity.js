@@ -1252,7 +1252,7 @@
             </div>
             <div>
               <button class="afinity-modal-cancel-btn" type="button">Cancel</button>
-              <button class="afinity-modal-save-btn" type="button">Save Changes</button>
+                              <button class="afinity-modal-save-btn afinity-modal-footer-save-btn" type="button">Save Changes</button>
             </div>
           </div>
         </div>
@@ -2247,7 +2247,7 @@
       // Header total is set when page initially renders and stays static
     };
    
-    const saveBtn = modalOverlay.querySelector('.afinity-modal-save-btn');
+    const saveBtn = modalOverlay.querySelector('.afinity-modal-footer-save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
       
       // Show loading state
@@ -2307,7 +2307,6 @@
           const chargeDateResult = await chargeDateResponse.json();
           if (!chargeDateResult.success) {
             showToast(chargeDateResult.error || 'Failed to update charge date', 'error');
-            
             return;
           }
 
@@ -2316,7 +2315,6 @@
           setTimeout(async () => {
             await refreshSubscriptionData(subscriptionId);
           }, 1000);
-          modalOverlay.style.display = 'none';
           return;
         }
 
@@ -2462,6 +2460,15 @@
         showToast('Error saving changes', 'error');
       } 
     };
+    
+    // Handle the Cancel button to close the modal
+    const cancelBtn = modalOverlay.querySelector('.afinity-modal-cancel-btn');
+    if (cancelBtn) cancelBtn.onclick = () => {
+      modalOverlay.style.display = 'none';
+      // Refresh the window when modal is closed
+      window.location.reload();
+    };
+    
     const cancelSubBtn = modalOverlay.querySelector('.afinity-cancel-subscription');
     if (cancelSubBtn) cancelSubBtn.onclick = (e) => {
       e.preventDefault();
