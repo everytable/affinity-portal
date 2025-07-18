@@ -431,7 +431,7 @@
       
       // Delivery dates
       allowedDeliveryDates = (data.deliveryDays || [])
-        .filter(day => !day.isclosed)
+        .filter(day => !day.isclosed && !day.isClosed)
         .map(day => day.date);
       
       // Pickup dates for the selected location
@@ -442,7 +442,7 @@
         
         if (pickupLocation && pickupLocation.pickupDates) {
           allowedPickupDates = pickupLocation.pickupDates
-            .filter(day => !day.isclosed)
+            .filter(day => !day.isclosed && !day.isClosed)
             .map(day => day.date);
         } else {
           allowedPickupDates = [];
@@ -464,6 +464,8 @@
       allowedPickupDates = [];
       window.deliveryDaysData = [];
       window.pickupLocationsData = [];
+    }finally{
+      hideModalLoading();
     }
   }
 
@@ -752,6 +754,8 @@
         pickupLocationsLoading = false;
         renderPickupLocationsSection();
         return [];
+      }).finally(() => {
+        hideModalLoading();
       });
     return pickupLocationsPromise;
   }
@@ -4427,7 +4431,7 @@
       return [];
     }
     
-    if (dayData.isClosed) {
+    if (dayData.isClosed || dayData.isclosed) {
       return [];
     }
     
