@@ -761,7 +761,7 @@
 
   // Helper to format delivery date
   function formatDeliveryDate(dateStr) {
-    if (!dateStr) return '';
+    if (!dateStr) return 'Loading...';
     // dateStr is in ISO format (YYYY-MM-DD), convert to MM-DD-YYYY - DayOfWeek for display
     const [year, month, day] = dateStr.split('-');
     const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
@@ -805,14 +805,11 @@
     // Get offset days from API
     const offsetDays = await fetchOffsetDays();
     
-    // Calculate delivery date by adding offset days
+    // Simple date calculation: just add the offset days
     const dateObj = new Date(dateStr);
     dateObj.setDate(dateObj.getDate() + offsetDays);
     
-    const yyyy = dateObj.getFullYear();
-    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const dd = String(dateObj.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    return dateObj.toISOString().split('T')[0];
   }
   
   // Helper to get delivery date from currentSubscription order attributes
@@ -1213,7 +1210,7 @@
         ` : ''}
         <div class="afinity-modal-card afinity-modal-footer-card">
           <div class="afinity-modal-footer-actions">
-            <div>
+            <div style="display:flex;">
               <a href="#" class="afinity-cancel-subscription">
                 Cancel subscription
               </a>
@@ -2979,6 +2976,32 @@
         nextOrderElement.textContent = 'Date not set';
       });
     }
+    
+    // Update all date input fields with properly formatted dates
+    const dateInputs = modalOverlay.querySelectorAll('#afinity-date, #afinity-meals-date');
+    dateInputs.forEach(async (input) => {
+      try {
+        const deliveryDate = await getNextChargeDateFromSubscription();
+        if (deliveryDate) {
+          input.value = formatDeliveryDate(deliveryDate);
+        }
+      } catch (error) {
+        console.error('Error updating date input:', error);
+      }
+    });
+    
+    // Update date labels in headers
+    const dateLabels = modalOverlay.querySelectorAll('.afinity-modal-date-label');
+    dateLabels.forEach(async (label) => {
+      try {
+        const deliveryDate = await getNextChargeDateFromSubscription();
+        if (deliveryDate) {
+          label.textContent = formatDeliveryDate(deliveryDate);
+        }
+      } catch (error) {
+        console.error('Error updating date label:', error);
+      }
+    });
   }
 
   function attachMethodSectionEvents() {
@@ -3240,10 +3263,10 @@
                       const catalogId = catalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '');
                       fetch(`${API_URL}/subscriptions/${catalogId}/variants`)
                         .then(resp => resp.json())
-                        .then(variantsData => {
+                        .then(async (variantsData) => {
                           currentCatalogVariants = variantsData;
                           rerenderModalCartList();
-                          renderModal();
+                          await renderModal();
                           hideModalLoading();
                           // <-- Place the picker initialization here!
                           initializeDateAndTimePickers();
@@ -3291,10 +3314,10 @@
                         const catalogId = catalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '');
                         fetch(`${API_URL}/subscriptions/${catalogId}/variants`)
                           .then(resp => resp.json())
-                          .then(variantsData => {
+                          .then(async (variantsData) => {
                             currentCatalogVariants = variantsData;
                             rerenderModalCartList();
-                            renderModal();
+                            await renderModal();
                             hideModalLoading();
                             // <-- Place the picker initialization here!
                             initializeDateAndTimePickers();

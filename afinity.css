@@ -449,7 +449,6 @@
   align-items: center;
   font-size: 16px;
   transition: color 0.2s;
-  margin-bottom: 0.5rem;
 }
 .afinity-cancel-subscription:hover {
   color: #004f4d;
