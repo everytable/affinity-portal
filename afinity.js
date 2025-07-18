@@ -249,6 +249,7 @@
   }
 
   function showModalLoading() {
+    console.log('showModalLoading');
     // Try to find modalOverlay if it doesn't exist
     if (!modalOverlay) {
       modalOverlay = document.getElementById('afinity-modal-overlay');
@@ -300,6 +301,7 @@
   }
   
   function hideModalLoading() {
+    console.log('hideModalLoading');
     // Try to find modalOverlay if it doesn't exist
     if (!modalOverlay) {
       modalOverlay = document.getElementById('afinity-modal-overlay');
@@ -491,6 +493,7 @@
 
   async function fetchMenuData() {
     try {
+      
       showModalLoading();
       
       const response = await fetch(`${API_URL}/menu`);
@@ -634,7 +637,7 @@
     } catch (error) {
       console.error('Error refreshing subscription data:', error);
     } finally {
-      hideModalLoading();
+      hideModalLoading(); 
     }
   }
 
@@ -946,7 +949,6 @@
       renderFrequencyDropdown();
     }
     attachMethodSectionEvents();
-    if (modalLoading) showModalLoading(); else hideModalLoading();
   }
 
   async function renderModalContent() {
@@ -1965,7 +1967,7 @@
       const subscriptionId = currentSubscription?.id;
       if (!subscriptionId) {
         showToast('No subscription ID found', 'error');
-        hideModalLoading();
+        
         return;
       }
 
@@ -1989,7 +1991,7 @@
           const chargeDateResult = await chargeDateResponse.json();
           if (!chargeDateResult.success) {
             showToast(chargeDateResult.error || 'Failed to update charge date', 'error');
-            hideModalLoading();
+            
             return;
           }
         }
@@ -2020,7 +2022,7 @@
         const addressData = await addressResp.json();
         if (!addressData.success) {
           showToast(addressData.error || (addressData.recharge && addressData.recharge.error) || 'Failed to update address', 'error');
-          hideModalLoading();
+          
           return;
         }
       }
@@ -2125,7 +2127,7 @@
         );
       } catch (e) {
         showToast('Invalid date or time format', 'error');
-        hideModalLoading();
+        
         return;
       }
       if (isoString) {
@@ -2158,7 +2160,7 @@
       const subscriptionData = await updateSubscriptionSafely(subscriptionId, updatePayload);
       if (!subscriptionData.success) {
         showToast(subscriptionData.error || 'Failed to update subscription', 'error');
-        hideModalLoading();
+        
         return;
       }
       showToast('All changes saved successfully!', 'success');
@@ -2169,7 +2171,7 @@
     } catch (error) {
       showToast('Error saving changes', 'error');
     } finally {
-      hideModalLoading();
+      
     }
   }
 
@@ -2196,6 +2198,7 @@
     // Edit contents or add extra meal
     const editBtn = modalOverlay.querySelector('.afinity-modal-update-meals');
     if (editBtn) editBtn.onclick = async () => {
+      showModalLoading();
       mealsPageMode = 'update'; // Set mode to update subscription meals
       
       currentPage = 'meals';
@@ -2280,7 +2283,7 @@
           if (!addressResult.success) {
             console.error('Failed to update address:', addressResult);
             showToast(addressResult.error || 'Failed to update address', 'error');
-            hideModalLoading();
+            
             return;
           }
         }
@@ -2304,7 +2307,7 @@
           const chargeDateResult = await chargeDateResponse.json();
           if (!chargeDateResult.success) {
             showToast(chargeDateResult.error || 'Failed to update charge date', 'error');
-            hideModalLoading();
+            
             return;
           }
 
@@ -2420,7 +2423,7 @@
           );
         } catch (e) {
           showToast('Invalid date or time format', 'error');
-          hideModalLoading();
+          
           return;
         }
         if (isoString) {
@@ -2536,7 +2539,7 @@
           const subscriptionId = currentSubscription?.id;
           if (!subscriptionId) {
             showToast('No subscription ID found', 'error');
-            hideModalLoading();
+            
             return;
           }
           
@@ -2582,7 +2585,7 @@
           if (invalidItems.length > 0) {
             console.error('Invalid subscription items found:', invalidItems);
             showToast('Some meals could not be mapped to collections. Please try again.', 'error');
-            hideModalLoading();
+            
             return;
           }
           
@@ -2633,7 +2636,7 @@
           const subscriptionId = currentSubscription?.id;
           if (!subscriptionId) {
             showToast('No subscription ID found', 'error');
-            hideModalLoading();
+            
             return;
           }
           
@@ -2716,7 +2719,7 @@
         if (invalidItems.length > 0) {
           console.error('Invalid one-time items found:', invalidItems);
           showToast('Some one-time meals could not be mapped to collections. Please try again.', 'error');
-          hideModalLoading();
+          
           return;
         }
         
@@ -2747,7 +2750,7 @@
         console.error('Error adding one-time meals:', error);
         showToast('Error adding one-time meals', 'error');
               } finally {
-          hideModalLoading();
+          
         }
       }
     };
@@ -2870,7 +2873,7 @@
             console.error('Error deleting one-time item:', error);
             showToast('Error removing one-time item', 'error');
           } finally {
-            hideModalLoading();
+            
           }
         }
       };
@@ -3037,7 +3040,7 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
-    showModalLoading();
+    showModalLoading
     // When modal is closed, the style is set to none, so we need to set it to block
     if(modalOverlay) {
       modalOverlay.style.display = 'block';
@@ -3264,6 +3267,8 @@
                         .catch(err => {
                           currentCatalogVariants = null;
                           console.error('Failed to load catalog variants:', err);
+                        }).finally(() => {
+                          hideModalLoading();
                         });
                     } 
                   })
@@ -3340,6 +3345,7 @@
       }
       renderModal();
     }
+
   });
 
   // Helper to get variant by id
@@ -3818,7 +3824,7 @@
               const subscriptionId = currentSubscription?.id;
               if (!subscriptionId) {
                 showToast('No subscription ID found', 'error');
-                hideModalLoading();
+                
                 return;
               }
               
@@ -3864,7 +3870,7 @@
               if (invalidItems.length > 0) {
                 console.error('Invalid subscription items found:', invalidItems);
                 showToast('Some meals could not be mapped to collections. Please try again.', 'error');
-                hideModalLoading();
+                
                 return;
               }
               
@@ -3897,7 +3903,7 @@
               console.error('Error updating subscription meals:', error);
               showToast('Error updating subscription meals', 'error');
             } finally {
-              hideModalLoading();
+              
             }
           } else {
             // Handle one-time meal additions
@@ -3917,7 +3923,7 @@
               const subscriptionId = currentSubscription?.id;
               if (!subscriptionId) {
                 showToast('No subscription ID found', 'error');
-                hideModalLoading();
+                
                 return;
               }
               
@@ -3991,7 +3997,7 @@
               if (invalidItems.length > 0) {
                 console.error('Invalid one-time items found:', invalidItems);
                 showToast('Some one-time meals could not be mapped to collections. Please try again.', 'error');
-                hideModalLoading();
+                
                 return;
               }
               
@@ -4024,7 +4030,7 @@
               console.error('Error adding one-time meals:', error);
               showToast('Error adding one-time meals', 'error');
             } finally {
-              hideModalLoading();
+              
             }
           }
         };
