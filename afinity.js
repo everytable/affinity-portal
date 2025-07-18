@@ -47,9 +47,24 @@
     { id: 14, title: 'Miso Soup & Rice', price: 5.5, img: MEAL_IMAGE, qty:   0 },
     { id: 15, title: 'Fruit & Nut Parfait', price: 6.8, img: MEAL_IMAGE, qty: 0 },
   ];
-  let selectedMeals = [];
+  let selectedMeals = []; // For one-time meals
+  let updateModeMeals = []; // For subscription update mode
   let originalSubscriptionMeals = [];
   let currentCatalogPayload = null;
+
+  // Helper function to get the current meals array based on mode
+  function getCurrentMealsArray() {
+    return mealsPageMode === 'update' ? updateModeMeals : selectedMeals;
+  }
+
+  // Helper function to update the current meals array based on mode
+  function updateCurrentMealsArray(meals) {
+    if (mealsPageMode === 'update') {
+      updateModeMeals = meals;
+    } else {
+      selectedMeals = meals;
+    }
+  }
   let currentCatalogVariants = null;
 
   // Add a new catalog for Cold Meals (use a subset or different items)
@@ -286,6 +301,9 @@
   // Menu data for meals page
   let menuData = null;
   let selectedMenuCategory = null;
+  
+  // Track meals page mode: 'update' for editing subscription meals, 'onetime' for adding one-time meals
+  let mealsPageMode = 'onetime';
 
   // Add global variable for current time zone
   let currentTimeZone = 'America/Los_Angeles'; // default fallback
@@ -547,6 +565,12 @@
       const response = await fetch(`${API_URL}/subscription/${subscriptionId}`);
       const data = await response.json();
       
+      // Ensure catalog variants are loaded for meal data mapping
+      if (!currentCatalogVariants || !currentCatalogVariants.variants) {
+        console.log('Catalog variants not loaded, fetching...');
+        await getCatalogVariants();
+      }
+      
       if (data.data) {
         const payload = data.data;
         currentSubscription = payload;
@@ -593,6 +617,44 @@
         if (intervalUnit && orderIntervalFrequency) {
           selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
           console.log('Set selectedFrequency from subscription data:', selectedFrequency);
+        }
+        
+        // Update originalSubscriptionMeals with fresh bundle selections data
+        if (payload.include && payload.include.bundle_selections && payload.include.bundle_selections.items) {
+          originalSubscriptionMeals = payload.include.bundle_selections.items.map(item => {
+            // Find variant information from catalog data
+            let variant = null;
+            let title = item.title || 'Meal';
+            let price = parseFloat(item.price) || 0;
+            let img = MEAL_IMAGE;
+            
+            if (currentCatalogVariants && currentCatalogVariants.variants) {
+              variant = currentCatalogVariants.variants.find(v => 
+                String(v.id) === String(item.external_variant_id) ||
+                String(v.id) === String(item.external_variant_id).replace('gid://shopify/ProductVariant/', '') ||
+                String(v.id).replace('gid://shopify/ProductVariant/', '') === String(item.external_variant_id)
+              );
+              
+              if (variant) {
+                title = variant.title || variant.product?.title || 'Meal';
+                if (variant.price) {
+                  if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                  else if (typeof variant.price === 'number') price = variant.price;
+                  else if (variant.price.amount) price = parseFloat(variant.price.amount);
+                }
+                img = getVariantImageFromVariantsData(variant);
+              }
+            }
+            
+            return {
+              id: item.external_variant_id,
+              qty: item.quantity || 0,
+              title: title,
+              price: price,
+              img: img
+            };
+          });
+          console.log('Updated originalSubscriptionMeals with fresh data:', originalSubscriptionMeals);
         }
         
         // Update modalChanges with fresh data
@@ -912,7 +974,8 @@
     console.log('currentCatalogVariants:', currentCatalogVariants);
     
     // Calculate total for all selected meals (both original and new selections)
-    selectedMeals.forEach(meal => {
+    const currentMeals = getCurrentMealsArray();
+    currentMeals.forEach(meal => {
       if (meal.qty > 0) {
         let price = 0;
         
@@ -962,7 +1025,8 @@
   // Get the appropriate total for meals page - use subscription total if no changes, otherwise use calculated total
   function getMealsPageHeaderTotal() {
     // Check if any changes have been made to the meals
-    const hasChanges = selectedMeals.some(meal => {
+    const currentMeals = getCurrentMealsArray();
+    const hasChanges = currentMeals.some(meal => {
       const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
       if (!originalMeal) {
         // New meal added
@@ -974,7 +1038,7 @@
     
     // Also check if any original meals were removed (qty = 0)
     const hasRemovals = originalSubscriptionMeals.some(origMeal => {
-      const selectedMeal = selectedMeals.find(sel => String(sel.id) === String(origMeal.id));
+      const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
       return !selectedMeal || selectedMeal.qty === 0;
     });
     
@@ -1145,8 +1209,15 @@
     const currentDeliveryDate = getDeliveryDateFromSubscription();
     console.log('Meals page - currentDeliveryDate:', currentDeliveryDate);
     console.log('Meals page - formatted date:', formatDeliveryDate(currentDeliveryDate));
+    console.log('Meals page mode:', mealsPageMode);
+    
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
     const headerTotal = getMealsPageHeaderTotal();
+    
+    // Set title and description based on mode
+    const pageTitle = mealsPageMode === 'update' ? 'Update Subscription Meals' : 'Add one time meal to next Subscription Charge';
+    const pageDescription = mealsPageMode === 'update' ? 'Update your subscription meals. Add, remove, or change quantities of your regular meals.' : 'Add one time meal to your next Charge. Remove or add one time meals to your next order.';
+    
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
       <div class="afinity-modal-header">
@@ -1157,8 +1228,8 @@
           <button class="afinity-modal-back">< Back</button>
           <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
             <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
-              <h2 class="afinity-meals-title">Add one time meal to next Subscription Charge</h2>
-              <div class="afinity-meals-desc">Add one time meal to your next Charge. Remove or add one time meals to your next order.</div>
+              <h2 class="afinity-meals-title">${pageTitle}</h2>
+              <div class="afinity-meals-desc">${pageDescription}</div>
             </div>
             <div class="afinity-meals-date-select" style="font-size:16px;min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
               <label class="afinity-modal-select-label">Delivery Date</label>
@@ -1189,57 +1260,34 @@
             <div class="afinity-meals-content">${renderMealsGrid()}</div>
           </div>
           <div class="afinity-modal-card afinity-meals-sidebar">
-            <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription (Read Only)</h3>
-            <ul class="afinity-meals-sidebar-list current-meals" style="opacity: 0.6; pointer-events: none;">
-              ${originalSubscriptionMeals.map(origMeal => {
-                const variant = getVariantById(origMeal.id);
-                const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
-                const title = variant ? (variant.product?.title || variant.sku || 'Meal') : origMeal.title;
-                const sel = selectedMeals.find(m => m.id === origMeal.id);
-                const qty = sel ? sel.qty : origMeal.qty;
-                
-                // Get the price and apply 10% discount
-                let price = 0;
-                if (variant && variant.price) {
-                  if (typeof variant.price === 'string') {
-                    price = parseFloat(variant.price);
-                  } else if (variant.price.amount) {
-                    price = parseFloat(variant.price.amount);
-                  } else if (typeof variant.price === 'number') {
-                    price = variant.price;
+            ${mealsPageMode === 'update' ? `
+              <!-- Update Mode: Show all meals as editable -->
+              <h3>Current Meals in Subscription</h3>
+              <ul class="afinity-meals-sidebar-list subscription-meals">
+                ${originalSubscriptionMeals.map(origMeal => {
+                  // Find the current quantity from current meals array
+                  const currentMeals = getCurrentMealsArray();
+                  const sel = currentMeals.find(m => String(m.id) === String(origMeal.id));
+                  const qty = sel ? sel.qty : origMeal.qty;
+                  
+                  // Only show if quantity > 0
+                  if (qty <= 0) return '';
+                  
+                  let meal = { ...origMeal, qty: qty };
+                  let variant = null;
+                  let img = MEAL_IMAGE;
+                  let title = 'Meal';
+                  let price = 0;
+                  
+                  // Try to find variant in all catalog variants with different ID formats
+                  if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+                    variant = currentCatalogVariants.variants.find(v => 
+                      String(v.id) === String(meal.id) ||
+                      String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+                      String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+                    );
                   }
-                } else {
-                  price = origMeal.price || 0;
-                }
-                
-                // Apply 10% discount
-                const discountedPrice = getDiscountedPrice(price);
-                
-                return `
-                  <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
-                    <img src="${img}" alt="${title}" />
-                    <div class="afinity-meals-sidebar-details">
-                      <div class="afinity-meals-sidebar-title">${title}</div>
-                      <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
-                    </div>
-                    <div class="afinity-meals-sidebar-qty-controls">
-                      <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${origMeal.id}" disabled>-</button>
-                      <span class="afinity-meals-sidebar-qty">${qty}</span>
-                      <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${origMeal.id}" disabled>+</button>
-                    </div>
-                  </li>
-                `;
-              }).join('')}
-            </ul>
-            <h3>Add one time Meals to your next subscription charge</h3>
-            <ul class="afinity-meals-sidebar-list swap-meals">
-              ${selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => o.id === m.id)).map(meal => {
-                let variant = null;
-                let img = MEAL_IMAGE;
-                let title = 'Meal';
-                let price = 0;
-                if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
-                  variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+                  
                   if (variant) {
                     img = getVariantImageFromVariantsData(variant);
                     title = variant.title || variant.product?.title || 'Meal';
@@ -1250,40 +1298,234 @@
                     }
                     price = isNaN(price) ? 0 : price;
                   } else {
+                    // Use meal data from subscription
                     title = meal.title || 'Meal';
                     price = meal.price || 0;
+                    img = meal.img || MEAL_IMAGE;
                   }
-                } else {
-                  title = meal.title || 'Meal';
-                  price = meal.price || 0;
-                }
-                
-                // Apply 10% discount to the price
-                const discountedPrice = getDiscountedPrice(price);
-                
-                return `
-                  <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
-                    <img src="${img}" alt="${title}" />
-                    <div class="afinity-meals-sidebar-details">
-                      <div class="afinity-meals-sidebar-title">${title}</div>
-                      <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
-                    </div>
-                    <div class="afinity-meals-sidebar-qty-controls">
-                      <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
-                      <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
-                      <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
-                    </div>
-                  </li>
-                `;
-              }).join('')}
-            </ul>
+                  
+                  // Apply 10% discount to the price
+                  const discountedPrice = getDiscountedPrice(price);
+                  
+                  return `
+                    <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                      <img src="${img}" alt="${title}" />
+                      <div class="afinity-meals-sidebar-details">
+                        <div class="afinity-meals-sidebar-title">${title}</div>
+                        <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                      </div>
+                      <div class="afinity-meals-sidebar-qty-controls">
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                        <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                      </div>
+                    </li>
+                  `;
+                }).join('')}
+              </ul>
+
+                            <h3>New meals to your Subscription</h3>
+              <ul class="afinity-meals-sidebar-list swap-meals">
+                ${getCurrentMealsArray().filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+                  let variant = null;
+                  let img = MEAL_IMAGE;
+                  let title = 'Meal';
+                  let price = 0;
+                  
+                  // Try to find variant in all catalog variants with different ID formats
+                  if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+                    variant = currentCatalogVariants.variants.find(v => 
+                      String(v.id) === String(meal.id) ||
+                      String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+                      String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+                    );
+                  }
+                  
+                  if (variant) {
+                    img = getVariantImageFromVariantsData(variant);
+                    title = variant.title || variant.product?.title || 'Meal';
+                    if (variant.price) {
+                      if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                      else if (typeof variant.price === 'number') price = variant.price;
+                      else if (variant.price.amount) price = parseFloat(variant.price.amount);
+                    }
+                    price = isNaN(price) ? 0 : price;
+                  } else {
+                    // Use meal data from subscription
+                    title = meal.title || 'Meal';
+                    price = meal.price || 0;
+                    img = meal.img || MEAL_IMAGE;
+                  }
+                  
+                  // Apply 10% discount to the price
+                  const discountedPrice = getDiscountedPrice(price);
+                  
+                  return `
+                    <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                      <img src="${img}" alt="${title}" />
+                      <div class="afinity-meals-sidebar-details">
+                        <div class="afinity-meals-sidebar-title">${title}</div>
+                        <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                      </div>
+                      <div class="afinity-meals-sidebar-qty-controls">
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                        <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                      </div>
+                    </li>
+                  `;
+                }).join('')}
+              </ul>
+            ` : `
+              <!-- One-time Mode: Show current meals as read-only and one-time meals as editable -->
+              <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription (Read Only)</h3>
+              <ul class="afinity-meals-sidebar-list current-meals" style="opacity: 0.6; pointer-events: none;">
+                ${originalSubscriptionMeals.map(origMeal => {
+                  const variant = getVariantById(origMeal.id);
+                  const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
+                  const title = variant ? (variant.product?.title || variant.sku || 'Meal') : origMeal.title;
+                  const sel = selectedMeals.find(m => m.id === origMeal.id);
+                  const qty = sel ? sel.qty : origMeal.qty;
+                  
+                  // Get the price and apply 10% discount
+                  let price = 0;
+                  if (variant && variant.price) {
+                    if (typeof variant.price === 'string') {
+                      price = parseFloat(variant.price);
+                    } else if (variant.price.amount) {
+                      price = parseFloat(variant.price.amount);
+                    } else if (typeof variant.price === 'number') {
+                      price = variant.price;
+                    }
+                  } else {
+                    price = origMeal.price || 0;
+                  }
+                  
+                  // Apply 10% discount
+                  const discountedPrice = getDiscountedPrice(price);
+                  
+                  return `
+                    <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
+                      <img src="${img}" alt="${title}" />
+                      <div class="afinity-meals-sidebar-details">
+                        <div class="afinity-meals-sidebar-title">${title}</div>
+                        <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                      </div>
+                      <div class="afinity-meals-sidebar-qty-controls">
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${origMeal.id}" disabled>-</button>
+                        <span class="afinity-meals-sidebar-qty">${qty}</span>
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${origMeal.id}" disabled>+</button>
+                      </div>
+                    </li>
+                  `;
+                }).join('')}
+              </ul>
+              <h3>Add one time Meals to your next subscription charge</h3>
+              <ul class="afinity-meals-sidebar-list swap-meals">
+                ${selectedMeals.filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+                  let variant = null;
+                  let img = MEAL_IMAGE;
+                  let title = 'Meal';
+                  let price = 0;
+                  
+                  // Try to find variant in all catalog variants with different ID formats
+                  if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+                    variant = currentCatalogVariants.variants.find(v => 
+                      String(v.id) === String(meal.id) ||
+                      String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+                      String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+                    );
+                  }
+                  
+                  if (variant) {
+                    img = getVariantImageFromVariantsData(variant);
+                    title = variant.title || variant.product?.title || 'Meal';
+                    if (variant.price) {
+                      if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                      else if (typeof variant.price === 'number') price = variant.price;
+                      else if (variant.price.amount) price = parseFloat(variant.price.amount);
+                    }
+                    price = isNaN(price) ? 0 : price;
+                  } else {
+                    // Use meal data from selection
+                    title = meal.title || 'Meal';
+                    price = meal.price || 0;
+                    img = meal.img || MEAL_IMAGE;
+                  }
+                  
+                  // Apply 10% discount to the price
+                  const discountedPrice = getDiscountedPrice(price);
+                  
+                  return `
+                    <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                      <img src="${img}" alt="${title}" />
+                      <div class="afinity-meals-sidebar-details">
+                        <div class="afinity-meals-sidebar-title">${title}</div>
+                        <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                      </div>
+                      <div class="afinity-meals-sidebar-qty-controls">
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                        <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                        <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                      </div>
+                    </li>
+                  `;
+                }).join('')}
+              </ul>
+            `}
             <div class="afinity-meals-sidebar-footer">
               <div class="afinity-meals-sidebar-total">
                 <span>Total:</span>
                 <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
               </div>
-              <button class="afinity-meals-swap-btn" ${selectedMeals.filter(m=>m.qty>0).length === 0 ? 'disabled' : ''}>
-                Add One Time Meals <span class="afinity-meals-swap-count">${selectedMeals.filter(m=>m.qty>0).length}</span>
+              <button class="afinity-meals-swap-btn" ${mealsPageMode === 'update' ? 
+                (() => {
+                  // Check if there are any changes to save
+                  const currentMeals = getCurrentMealsArray();
+                  const hasChanges = currentMeals.some(meal => {
+                    const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+                    if (!originalMeal) {
+                      // New meal added
+                      return meal.qty > 0;
+                    }
+                    // Quantity changed
+                    return meal.qty !== originalMeal.qty;
+                  });
+                  
+                  // Also check if any original meals were removed (qty = 0)
+                  const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+                    const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
+                    return !selectedMeal || selectedMeal.qty === 0;
+                  });
+                  
+                  return (!hasChanges && !hasRemovals) ? 'disabled' : '';
+                })() : 
+                (getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length === 0 ? 'disabled' : '')}>
+                ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'} <span class="afinity-meals-swap-count">${mealsPageMode === 'update' ? 
+                  (() => {
+                    // Count meals with changes
+                    const currentMeals = getCurrentMealsArray();
+                    let changeCount = 0;
+                    currentMeals.forEach(meal => {
+                      const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+                      if (!originalMeal && meal.qty > 0) {
+                        // New meal added
+                        changeCount++;
+                      } else if (originalMeal && meal.qty !== originalMeal.qty) {
+                        // Quantity changed
+                        changeCount++;
+                      }
+                    });
+                    // Count removed meals
+                    originalSubscriptionMeals.forEach(origMeal => {
+                      const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
+                      if (!selectedMeal || selectedMeal.qty === 0) {
+                        changeCount++;
+                      }
+                    });
+                    return changeCount;
+                  })() : 
+                  getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length}</span>
               </button>
             </div>
           </div>
@@ -1748,13 +1990,18 @@
     let totalCents = 0;
     
     // Calculate total for all selected meals (both original and new selections)
-    selectedMeals.forEach(meal => {
+    const currentMeals = getCurrentMealsArray();
+    currentMeals.forEach(meal => {
       if (meal.qty > 0) {
         let price = 0;
         
-        // Always use catalog variants data as the primary source
+        // Try to find variant in all catalog variants with different ID formats
         if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
-          const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+          const variant = currentCatalogVariants.variants.find(v => 
+            String(v.id) === String(meal.id) ||
+            String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+            String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+          );
           if (variant && variant.price) {
             // Try different price formats
             if (typeof variant.price === 'string') {
@@ -1767,7 +2014,7 @@
           }
         }
         
-        // Final fallback to meal price
+        // Final fallback to meal price from subscription data
         if (price === 0) {
           price = meal.price || 0;
         }
@@ -1985,8 +2232,23 @@
     // Edit contents or add extra meal
     const editBtn = modalOverlay.querySelector('.afinity-modal-update-meals');
     if (editBtn) editBtn.onclick = async () => {
+      mealsPageMode = 'update'; // Set mode to update subscription meals
+      
       currentPage = 'meals';
       renderModal();
+      
+      // Fetch fresh subscription data and update originalSubscriptionMeals
+      const subscriptionId = currentSubscription?.id;
+      if (subscriptionId) {
+        console.log('Refreshing subscription data for meals page...');
+        await refreshSubscriptionData(subscriptionId);
+        
+        // Initialize update mode meals with fresh original subscription meals
+        updateModeMeals = originalSubscriptionMeals.map(meal => ({ ...meal }));
+        
+        // Re-render the modal with fresh data
+        renderModal();
+      }
       
       // Fetch menu data when switching to meals page
       await fetchMenuData();
@@ -2003,8 +2265,23 @@
     const addExtraMeal = modalOverlay.querySelector('.afinity-modal-add-extra');
     if (addExtraMeal) addExtraMeal.onclick = async (e) => {
       e.preventDefault();
+      mealsPageMode = 'onetime'; // Set mode to add one-time meals
+      
       currentPage = 'meals';
       renderModal();
+      
+      // Fetch fresh subscription data to get updated one-time meals
+      const subscriptionId = currentSubscription?.id;
+      if (subscriptionId) {
+        console.log('Refreshing subscription data for one-time meals page...');
+        await refreshSubscriptionData(subscriptionId);
+        
+        // Clear one-time meals when switching to one-time mode
+        selectedMeals = [];
+        
+        // Re-render the modal with fresh data
+        renderModal();
+      }
       
       // Fetch menu data when switching to meals page
       await fetchMenuData();
@@ -2247,55 +2524,160 @@
     
     // Swap Items
     const swapBtn = modalOverlay.querySelector('.afinity-meals-swap-btn');
-    if (swapBtn) swapBtn.onclick = async () => {
+    console.log('Found swap button:', swapBtn);
+    if (swapBtn) {
+      console.log('Attaching click handler to swap button');
+      swapBtn.onclick = async () => {
       console.log('=== SWAP ITEMS CLICKED ===');
+      console.log('mealsPageMode:', mealsPageMode);
       console.log('selectedMeals:', selectedMeals);
+      console.log('updateModeMeals:', updateModeMeals);
+      console.log('currentMeals:', getCurrentMealsArray());
       console.log('currentSubscription:', currentSubscription);
       
-      // Check if there are any changes to save
-      const hasChanges = selectedMeals.some(meal => {
-        const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
-        if (!originalMeal) {
-          // New meal added
-          return meal.qty > 0;
-        }
-        // Quantity changed
-        return meal.qty !== originalMeal.qty;
-      });
-      
-      // Also check if any original meals were removed (qty = 0)
-      const hasRemovals = originalSubscriptionMeals.some(origMeal => {
-        const selectedMeal = selectedMeals.find(sel => String(sel.id) === String(origMeal.id));
-        return !selectedMeal || selectedMeal.qty === 0;
-      });
-      
-      if (!hasChanges && !hasRemovals) {
-        showToast('No changes to save', 'info');
-        return;
-      }
-      
-      showModalLoading();
-      
-      try {
-        const subscriptionId = currentSubscription?.id;
-        if (!subscriptionId) {
-          showToast('No subscription ID found', 'error');
-          hideModalLoading();
+      if (mealsPageMode === 'update') {
+        // Handle subscription meal updates
+        console.log('=== UPDATING SUBSCRIPTION MEALS ===');
+        
+        // Check if there are any changes to save
+        const currentMeals = getCurrentMealsArray();
+        const hasChanges = currentMeals.some(meal => {
+          const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+          if (!originalMeal) {
+            // New meal added
+            return meal.qty > 0;
+          }
+          // Quantity changed
+          return meal.qty !== originalMeal.qty;
+        });
+        
+        // Also check if any original meals were removed (qty = 0)
+        const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+          const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
+          return !selectedMeal || selectedMeal.qty === 0;
+        });
+        
+        if (!hasChanges && !hasRemovals) {
+          showToast('No changes to save', 'info');
           return;
         }
         
-        // Filter to only include NEW one-time meals (not in original subscription)
-        const oneTimeMeals = selectedMeals.filter(meal => {
-          // Only include meals that are not in the original subscription
-          const isOriginalMeal = originalSubscriptionMeals.some(orig => String(orig.id) === String(meal.id));
-          return !isOriginalMeal && meal.qty > 0;
-        });
+        showModalLoading();
+        
+        try {
+          const subscriptionId = currentSubscription?.id;
+          if (!subscriptionId) {
+            showToast('No subscription ID found', 'error');
+            hideModalLoading();
+            return;
+          }
+          
+          // Prepare items for bundle selection update (all meals with qty > 0)
+          const items = currentMeals.filter(meal => meal.qty > 0).map(meal => {
+            // Find the collection ID from menuData
+            let collectionId = null;
+            let externalProductId = null;
+            
+            if (menuData && menuData.items) {
+              for (const category of menuData.items) {
+                if (category.collection && category.collection.products) {
+                  const productNode = category.collection.products.edges.find(edge => {
+                    const product = edge.node;
+                    if (product.variants && product.variants.edges) {
+                      return product.variants.edges.some(variantEdge => 
+                        String(variantEdge.node.id.replace('gid://shopify/ProductVariant/', '')) === String(meal.id.replace('gid://shopify/ProductVariant/', '')  )
+                      );
+                    }
+                    return false;
+                  });
+                  
+                  if (productNode) {
+                    // Extract the numeric ID from the Shopify GID format using resourceId
+                    collectionId = category.resourceId.replace('gid://shopify/Collection/', '');
+                    externalProductId = productNode.node.id.replace('gid://shopify/Product/', '');
+                    break;
+                  }
+                }
+              }
+            }
+            
+            return {
+              collection_id: collectionId,
+              external_product_id: externalProductId,
+              external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
+              quantity: meal.qty
+            };
+          });
+          
+          console.log('Prepared subscription items:', items);
+          
+          // Validate that all items have required fields
+          const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
+          if (invalidItems.length > 0) {
+            console.error('Invalid subscription items found:', invalidItems);
+            showToast('Some meals could not be mapped to collections. Please try again.', 'error');
+            hideModalLoading();
+            return;
+          }
+          
+          // Call the bundle selections endpoint
+          console.log('Calling bundle selections endpoint with items:', items);
+          const response = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ items })
+          });
+          
+          const result = await response.json();
+          console.log('Bundle selections response:', result);
+          
+          if (result.success) {
+            showToast('Subscription meals updated successfully!', 'success');
+            
+            // Refresh subscription data to show updated meals
+            setTimeout(async () => {
+              await refreshSubscriptionData(subscriptionId);
+            }, 1000);
+            
+            // Go back to main page
+            currentPage = 'main';
+            renderModal();
+          } else {
+            showToast(result.error || 'Failed to update subscription meals', 'error');
+          }
+        } catch (error) {
+          console.error('Error updating subscription meals:', error);
+          showToast('Error updating subscription meals', 'error');
+        } finally {
+          hideModalLoading();
+        }
+      } else {
+        // Handle one-time meal additions
+        console.log('=== ADDING ONE-TIME MEALS ===');
+        
+        // Check if there are any one-time meals to add
+        const currentMeals = getCurrentMealsArray();
+        const oneTimeMeals = currentMeals.filter(meal => meal.qty > 0);
         
         if (oneTimeMeals.length === 0) {
           showToast('No one-time meals to add', 'info');
-          hideModalLoading();
           return;
         }
+        
+        showModalLoading();
+        
+        try {
+          const subscriptionId = currentSubscription?.id;
+          if (!subscriptionId) {
+            showToast('No subscription ID found', 'error');
+            hideModalLoading();
+            return;
+          }
+          
+          // Use the already filtered one-time meals
+          // Note: In one-time mode, all meals in currentMeals are one-time meals
         
         // Prepare the items array for the one-time meals
         const items = oneTimeMeals.map(meal => {
@@ -2390,6 +2772,7 @@
         }
         
         // Call the one-time meals endpoint
+        console.log('Calling one-time meals endpoint with items:', items);
         const response = await fetch(`${API_URL}/subscription/${subscriptionId}/onetime-meals`, {
           method: 'POST',
           headers: {
@@ -2418,10 +2801,12 @@
       } catch (error) {
         console.error('Error adding one-time meals:', error);
         showToast('Error adding one-time meals', 'error');
-      } finally {
-        hideModalLoading();
+              } finally {
+          hideModalLoading();
+        }
       }
     };
+    }
     // Initialize Flatpickr for date inputs
     const mainDateInput = modalOverlay.querySelector('#afinity-date');
     if (mainDateInput && typeof flatpickr !== 'undefined') {
@@ -3223,19 +3608,569 @@
     console.log('=== RENDER SIDEBAR MEALS COMPLETE ===');
   }
 
+  // Helper function to render just the sidebar content for meals page
+  function renderMealsPageSidebar() {
+    return `
+      ${mealsPageMode === 'update' ? `
+        <!-- Update Mode: Show all meals as editable -->
+        <h3>Current Meals in Subscription</h3>
+        <ul class="afinity-meals-sidebar-list subscription-meals">
+          ${originalSubscriptionMeals.map(origMeal => {
+            // Find the current quantity from current meals array
+            const currentMeals = getCurrentMealsArray();
+            const sel = currentMeals.find(m => String(m.id) === String(origMeal.id));
+            const qty = sel ? sel.qty : origMeal.qty;
+            
+            // Only show if quantity > 0
+            if (qty <= 0) return '';
+            
+            let meal = { ...origMeal, qty: qty };
+            let variant = null;
+            let img = MEAL_IMAGE;
+            let title = 'Meal';
+            let price = 0;
+            
+            // Try to find variant in all catalog variants with different ID formats
+            if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+              variant = currentCatalogVariants.variants.find(v => 
+                String(v.id) === String(meal.id) ||
+                String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+                String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+              );
+            }
+            
+            if (variant) {
+              img = getVariantImageFromVariantsData(variant);
+              title = variant.title || variant.product?.title || 'Meal';
+              if (variant.price) {
+                if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                else if (typeof variant.price === 'number') price = variant.price;
+                else if (variant.price.amount) price = parseFloat(variant.price.amount);
+              }
+              price = isNaN(price) ? 0 : price;
+            } else {
+              // Use meal data from subscription
+              title = meal.title || 'Meal';
+              price = meal.price || 0;
+              img = meal.img || MEAL_IMAGE;
+            }
+            
+            // Apply 10% discount to the price
+            const discountedPrice = getDiscountedPrice(price);
+            
+            return `
+              <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                <img src="${img}" alt="${title}" />
+                <div class="afinity-meals-sidebar-details">
+                  <div class="afinity-meals-sidebar-title">${title}</div>
+                  <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                </div>
+                <div class="afinity-meals-sidebar-qty-controls">
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                  <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+
+        <h3>New meals to your Subscription</h3>
+        <ul class="afinity-meals-sidebar-list swap-meals">
+          ${getCurrentMealsArray().filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+            let variant = null;
+            let img = MEAL_IMAGE;
+            let title = 'Meal';
+            let price = 0;
+            
+            // Try to find variant in all catalog variants with different ID formats
+            if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+              variant = currentCatalogVariants.variants.find(v => 
+                String(v.id) === String(meal.id) ||
+                String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+                String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+              );
+            }
+            
+            if (variant) {
+              img = getVariantImageFromVariantsData(variant);
+              title = variant.title || variant.product?.title || 'Meal';
+              if (variant.price) {
+                if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                else if (typeof variant.price === 'number') price = variant.price;
+                else if (variant.price.amount) price = parseFloat(variant.price.amount);
+              }
+              price = isNaN(price) ? 0 : price;
+            } else {
+              // Use meal data from selection
+              title = meal.title || 'Meal';
+              price = meal.price || 0;
+              img = meal.img || MEAL_IMAGE;
+            }
+            
+            // Apply 10% discount to the price
+            const discountedPrice = getDiscountedPrice(price);
+            
+            return `
+              <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                <img src="${img}" alt="${title}" />
+                <div class="afinity-meals-sidebar-details">
+                  <div class="afinity-meals-sidebar-title">${title}</div>
+                  <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                </div>
+                <div class="afinity-meals-sidebar-qty-controls">
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                  <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      ` : `
+        <!-- One-time Mode: Show current meals as read-only and one-time meals as editable -->
+        <h3 style="color: #999; opacity: 0.6;">Current Meals in Subscription (Read Only)</h3>
+        <ul class="afinity-meals-sidebar-list current-meals" style="opacity: 0.6; pointer-events: none;">
+          ${originalSubscriptionMeals.map(origMeal => {
+            const variant = getVariantById(origMeal.id);
+            const img = variant ? getVariantImageByCatalog(variant) : MEAL_IMAGE;
+            const title = variant ? (variant.product?.title || variant.sku || 'Meal') : origMeal.title;
+            const sel = selectedMeals.find(m => m.id === origMeal.id);
+            const qty = sel ? sel.qty : origMeal.qty;
+            
+            // Get the price and apply 10% discount
+            let price = 0;
+            if (variant && variant.price) {
+              if (typeof variant.price === 'string') {
+                price = parseFloat(variant.price);
+              } else if (variant.price.amount) {
+                price = parseFloat(variant.price.amount);
+              } else if (typeof variant.price === 'number') {
+                price = variant.price;
+              }
+            } else {
+              price = origMeal.price || 0;
+            }
+            
+            // Apply 10% discount
+            const discountedPrice = getDiscountedPrice(price);
+            
+            return `
+              <li class="afinity-meals-sidebar-item" data-meal-id="${origMeal.id}">
+                <img src="${img}" alt="${title}" />
+                <div class="afinity-meals-sidebar-details">
+                  <div class="afinity-meals-sidebar-title">${title}</div>
+                  <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                </div>
+                <div class="afinity-meals-sidebar-qty-controls">
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${origMeal.id}" disabled>-</button>
+                  <span class="afinity-meals-sidebar-qty">${qty}</span>
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${origMeal.id}" disabled>+</button>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+        <h3>Add one time Meals to your next subscription charge</h3>
+        <ul class="afinity-meals-sidebar-list swap-meals">
+          ${getCurrentMealsArray().filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+            let variant = null;
+            let img = MEAL_IMAGE;
+            let title = 'Meal';
+            let price = 0;
+            
+            // Try to find variant in all catalog variants with different ID formats
+            if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+              variant = currentCatalogVariants.variants.find(v => 
+                String(v.id) === String(meal.id) ||
+                String(v.id) === String(meal.id).replace('gid://shopify/ProductVariant/', '') ||
+                String(v.id).replace('gid://shopify/ProductVariant/', '') === String(meal.id)
+              );
+            }
+            
+            if (variant) {
+              img = getVariantImageFromVariantsData(variant);
+              title = variant.title || variant.product?.title || 'Meal';
+              if (variant.price) {
+                if (typeof variant.price === 'string') price = parseFloat(variant.price);
+                else if (typeof variant.price === 'number') price = variant.price;
+                else if (variant.price.amount) price = parseFloat(variant.price.amount);
+              }
+              price = isNaN(price) ? 0 : price;
+            } else {
+              // Use meal data from selection
+              title = meal.title || 'Meal';
+              price = meal.price || 0;
+              img = meal.img || MEAL_IMAGE;
+            }
+            
+            // Apply 10% discount to the price
+            const discountedPrice = getDiscountedPrice(price);
+            
+            return `
+              <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
+                <img src="${img}" alt="${title}" />
+                <div class="afinity-meals-sidebar-details">
+                  <div class="afinity-meals-sidebar-title">${title}</div>
+                  <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                </div>
+                <div class="afinity-meals-sidebar-qty-controls">
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
+                  <span class="afinity-meals-sidebar-qty">${meal.qty}</span>
+                  <button class="afinity-meals-sidebar-qty-btn" data-action="increment" data-meal-id="${meal.id}">+</button>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      `}
+      <div class="afinity-meals-sidebar-footer">
+        <div class="afinity-meals-sidebar-total">
+          <span>Total:</span>
+          <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
+        </div>
+        <button class="afinity-meals-swap-btn" ${mealsPageMode === 'update' ? 
+          (() => {
+            // Check if there are any changes to save
+            const currentMeals = getCurrentMealsArray();
+            const hasChanges = currentMeals.some(meal => {
+              const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+              if (!originalMeal) {
+                // New meal added
+                return meal.qty > 0;
+              }
+              // Quantity changed
+              return meal.qty !== originalMeal.qty;
+            });
+            
+            // Also check if any original meals were removed (qty = 0)
+            const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+              const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
+              return !selectedMeal || selectedMeal.qty === 0;
+            });
+            
+            return (!hasChanges && !hasRemovals) ? 'disabled' : '';
+          })() : 
+          (getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length === 0 ? 'disabled' : '')}>
+          ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'} <span class="afinity-meals-swap-count">${mealsPageMode === 'update' ? 
+            (() => {
+              // Count meals with changes
+              const currentMeals = getCurrentMealsArray();
+              let changeCount = 0;
+              currentMeals.forEach(meal => {
+                const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+                if (!originalMeal && meal.qty > 0) {
+                  // New meal added
+                  changeCount++;
+                } else if (originalMeal && meal.qty !== originalMeal.qty) {
+                  // Quantity changed
+                  changeCount++;
+                }
+              });
+              // Count removed meals
+              originalSubscriptionMeals.forEach(origMeal => {
+                const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
+                if (!selectedMeal || selectedMeal.qty === 0) {
+                  changeCount++;
+                }
+              });
+              return changeCount;
+            })() : 
+            getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length}</span>
+        </button>
+      </div>
+    `;
+  }
+
   function rerenderSidebarMeals() {
-    renderSidebarMeals();
-    
-    // Re-attach event handlers to the new sidebar quantity buttons
-    attachSidebarQuantityEvents();
-    
-    // Also update the header total when sidebar is re-rendered
+    // If we're on the meals page, update the sidebar content and re-attach events
     if (currentPage === 'meals') {
+      // Update the sidebar content directly
+      const sidebar = modalOverlay && modalOverlay.querySelector('.afinity-meals-sidebar');
+      if (sidebar) {
+        // Re-render just the sidebar content
+        const sidebarContent = renderMealsPageSidebar();
+        sidebar.innerHTML = sidebarContent;
+      }
+      
+      // Update the header total
       const headerTotal = getMealsPageHeaderTotal();
       const headerPriceElement = modalOverlay && modalOverlay.querySelector('.afinity-modal-price');
       if (headerPriceElement) {
         headerPriceElement.textContent = `$${headerTotal}`;
       }
+      
+      // Re-attach sidebar quantity events
+      attachSidebarQuantityEvents();
+      
+      // Re-attach swap button event handler
+      const swapBtn = modalOverlay.querySelector('.afinity-meals-swap-btn');
+      if (swapBtn) {
+        console.log('Re-attaching click handler to swap button after sidebar update');
+        swapBtn.onclick = async () => {
+          console.log('=== SWAP ITEMS CLICKED ===');
+          console.log('mealsPageMode:', mealsPageMode);
+          console.log('selectedMeals:', selectedMeals);
+          console.log('updateModeMeals:', updateModeMeals);
+          console.log('currentMeals:', getCurrentMealsArray());
+          console.log('currentSubscription:', currentSubscription);
+          
+          if (mealsPageMode === 'update') {
+            // Handle subscription meal updates
+            console.log('=== UPDATING SUBSCRIPTION MEALS ===');
+            
+            // Check if there are any changes to save
+            const currentMeals = getCurrentMealsArray();
+            const hasChanges = currentMeals.some(meal => {
+              const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+              if (!originalMeal) {
+                // New meal added
+                return meal.qty > 0;
+              }
+              // Quantity changed
+              return meal.qty !== originalMeal.qty;
+            });
+            
+            // Also check if any original meals were removed (qty = 0)
+            const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+              const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
+              return !selectedMeal || selectedMeal.qty === 0;
+            });
+            
+            if (!hasChanges && !hasRemovals) {
+              showToast('No changes to save', 'info');
+              return;
+            }
+            
+            showModalLoading();
+            
+            try {
+              const subscriptionId = currentSubscription?.id;
+              if (!subscriptionId) {
+                showToast('No subscription ID found', 'error');
+                hideModalLoading();
+                return;
+              }
+              
+              // Prepare items for bundle selection update (all meals with qty > 0)
+              const items = currentMeals.filter(meal => meal.qty > 0).map(meal => {
+                // Find the collection ID from menuData
+                let collectionId = null;
+                let externalProductId = null;
+                
+                if (menuData && menuData.items) {
+                  for (const category of menuData.items) {
+                    if (category.collection && category.collection.products) {
+                      const productNode = category.collection.products.edges.find(edge => {
+                        const product = edge.node;
+                        if (product.variants && product.variants.edges) {
+                          return product.variants.edges.some(variantEdge => 
+                            String(variantEdge.node.id.replace('gid://shopify/ProductVariant/', '')) === String(meal.id.replace('gid://shopify/ProductVariant/', '')  )
+                          );
+                        }
+                        return false;
+                      });
+                      
+                      if (productNode) {
+                        // Extract the numeric ID from the Shopify GID format using resourceId
+                        collectionId = category.resourceId.replace('gid://shopify/Collection/', '');
+                        externalProductId = productNode.node.id.replace('gid://shopify/Product/', '');
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                return {
+                  collection_id: collectionId,
+                  external_product_id: externalProductId,
+                  external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
+                  quantity: meal.qty
+                };
+              });
+              
+              console.log('Prepared subscription items:', items);
+              
+              // Validate that all items have required fields
+              const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
+              if (invalidItems.length > 0) {
+                console.error('Invalid subscription items found:', invalidItems);
+                showToast('Some meals could not be mapped to collections. Please try again.', 'error');
+                hideModalLoading();
+                return;
+              }
+              
+              // Call the bundle selections endpoint
+              console.log('Calling bundle selections endpoint with items:', items);
+              const response = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ items })
+              });
+              
+              const result = await response.json();
+              console.log('Bundle selections response:', result);
+              
+              if (result.success) {
+                showToast('Subscription meals updated successfully!', 'success');
+                
+                // Refresh subscription data to show updated meals
+                setTimeout(async () => {
+                  await refreshSubscriptionData(subscriptionId);
+                }, 1000);
+                
+                // Go back to main page
+                currentPage = 'main';
+                renderModal();
+              } else {
+                showToast(result.error || 'Failed to update subscription meals', 'error');
+              }
+            } catch (error) {
+              console.error('Error updating subscription meals:', error);
+              showToast('Error updating subscription meals', 'error');
+            } finally {
+              hideModalLoading();
+            }
+          } else {
+            // Handle one-time meal additions
+            console.log('=== ADDING ONE-TIME MEALS ===');
+            
+            // Check if there are any one-time meals to add
+            const currentMeals = getCurrentMealsArray();
+            const oneTimeMeals = currentMeals.filter(meal => meal.qty > 0);
+            
+            if (oneTimeMeals.length === 0) {
+              showToast('No one-time meals to add', 'info');
+              return;
+            }
+            
+            showModalLoading();
+            
+            try {
+              const subscriptionId = currentSubscription?.id;
+              if (!subscriptionId) {
+                showToast('No subscription ID found', 'error');
+                hideModalLoading();
+                return;
+              }
+              
+              // Use the already filtered one-time meals
+              // Note: In one-time mode, all meals in currentMeals are one-time meals
+              
+              // Prepare the items array for the one-time meals
+              const items = oneTimeMeals.map(meal => {
+                // Find the collection ID from menuData
+                let collectionId = null;
+                let externalProductId = null;
+                let productTitle = null;
+                let variantTitle = null;
+                let price = null;
+                
+                if (menuData && menuData.items) {
+                  for (const category of menuData.items) {
+                    if (category.collection && category.collection.products) {
+                      const productNode = category.collection.products.edges.find(edge => {
+                        const product = edge.node;
+                        if (product.variants && product.variants.edges) {
+                          return product.variants.edges.some(variantEdge => 
+                            String(variantEdge.node.id.replace('gid://shopify/ProductVariant/', '')) === String(meal.id.replace('gid://shopify/ProductVariant/', '')  )
+                          );
+                        }
+                        return false;
+                      });
+                      
+                      if (productNode) {
+                        // Extract the numeric ID from the Shopify GID format using resourceId
+                        collectionId = category.resourceId.replace('gid://shopify/Collection/', '');
+                        externalProductId = productNode.node.id.replace('gid://shopify/Product/', '');
+                        
+                        // Get product and variant titles
+                        productTitle = productNode.node.title || 'Meal';
+                        const variant = productNode.node.variants.edges.find(variantEdge => 
+                          String(variantEdge.node.id.replace('gid://shopify/ProductVariant/', '')) === String(meal.id.replace('gid://shopify/ProductVariant/', ''))
+                        );
+                        variantTitle = variant ? variant.node.title : 'Default';
+                        
+                        // Get price from variant
+                        if (variant && variant.node.price) {
+                          if (typeof variant.node.price === 'string') {
+                            price = parseFloat(variant.node.price);
+                          } else if (variant.node.price.amount) {
+                            price = parseFloat(variant.node.price.amount);
+                          } else if (typeof variant.node.price === 'number') {
+                            price = variant.node.price;
+                          }
+                        }
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                return {
+                  collection_id: collectionId,
+                  external_product_id: externalProductId,
+                  external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
+                  quantity: meal.qty,
+                  product_title: productTitle,
+                  variant_title: variantTitle,
+                  price: price || meal.price || 0
+                };
+              });
+              
+              console.log('Prepared one-time items:', items);
+              
+              // Validate that all items have required fields
+              const invalidItems = items.filter(item => !item.collection_id || !item.external_product_id || !item.external_variant_id);
+              if (invalidItems.length > 0) {
+                console.error('Invalid one-time items found:', invalidItems);
+                showToast('Some one-time meals could not be mapped to collections. Please try again.', 'error');
+                hideModalLoading();
+                return;
+              }
+              
+              // Call the one-time meals endpoint
+              console.log('Calling one-time meals endpoint with items:', items);
+              const response = await fetch(`${API_URL}/subscription/${subscriptionId}/onetime-meals`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ items })
+              });
+             
+             const result = await response.json();
+             console.log('One-time meals response:', result);
+              
+              if (result.success) {
+                showToast('One-time meals added successfully!', 'success');
+                
+                // Refresh subscription data to show updated meals
+                setTimeout(async () => {
+                  await refreshSubscriptionData(subscriptionId);
+                }, 1000);
+                
+                // Go back to main page
+                currentPage = 'main';
+                renderModal();
+              } else {
+                showToast(result.error || 'Failed to add one-time meals', 'error');
+              }
+            } catch (error) {
+              console.error('Error adding one-time meals:', error);
+              showToast('Error adding one-time meals', 'error');
+            } finally {
+              hideModalLoading();
+            }
+          }
+        };
+      }
+    } else {
+      // For other pages, just update the sidebar
+      renderSidebarMeals();
+      attachSidebarQuantityEvents();
     }
   }
 
@@ -3251,13 +4186,14 @@
       mealButtons.forEach(btn => {
         btn.onclick = (e) => {
           const mealId = btn.getAttribute('data-meal-id');
-          let sel = selectedMeals.find(m => String(m.id) === String(mealId));
+          const currentMeals = getCurrentMealsArray();
+          let sel = currentMeals.find(m => String(m.id) === String(mealId));
           if (btn.classList.contains('afinity-r-card__remove-btn')) {
-            // Remove from selectedMeals
+            // Remove from current meals array
             if (sel) {
               sel.qty = 0;
               // Optionally remove from array entirely:
-              // selectedMeals = selectedMeals.filter(m => String(m.id) !== String(mealId));
+              // currentMeals = currentMeals.filter(m => String(m.id) !== String(mealId));
             }
           } else {
             // Add or increment
@@ -3286,12 +4222,13 @@
               
               // Always use catalog variants data as the primary source
               const mealData = getMealDataFromVariantsData(mealId, product);
-              selectedMeals.push(mealData);
+              currentMeals.push(mealData);
             } else {
               sel.qty++;
             }
           }
-          updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+          updateCurrentMealsArray(currentMeals);
+          updateModalChanges(mealsPageMode === 'update' ? 'updateModeMeals' : 'selectedMeals', JSON.parse(JSON.stringify(currentMeals)));
           rerenderSidebarMeals();
         };
       });
@@ -3309,7 +4246,14 @@
         img: MEAL_IMAGE
       };
     }
-    const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(variantId));
+    
+    // Try to find variant with different ID formats
+    const variant = currentCatalogVariants.variants.find(v => 
+      String(v.id) === String(variantId) ||
+      String(v.id) === String(variantId).replace('gid://shopify/ProductVariant/', '') ||
+      String(v.id).replace('gid://shopify/ProductVariant/', '') === String(variantId)
+    );
+    
     if (variant) {
       let price = 0;
       if (variant.price) {
@@ -3345,9 +4289,9 @@
   function attachSidebarQuantityEvents() {
     console.log('Attaching sidebar quantity events...');
     
-    // Attach event handlers to quantity buttons in the swap meals section only (not current meals)
-    const quantityButtons = modalOverlay && modalOverlay.querySelectorAll('.afinity-meals-sidebar-list.swap-meals .afinity-meals-sidebar-qty-btn');
-    console.log('Found quantity buttons in swap meals section:', quantityButtons ? quantityButtons.length : 0);
+    // Attach event handlers to quantity buttons in both subscription-meals and swap-meals sections
+    const quantityButtons = modalOverlay && modalOverlay.querySelectorAll('.afinity-meals-sidebar-list .afinity-meals-sidebar-qty-btn:not([disabled])');
+    console.log('Found quantity buttons:', quantityButtons ? quantityButtons.length : 0);
     
     if (quantityButtons) {
       quantityButtons.forEach(btn => {
@@ -3356,25 +4300,27 @@
           
           const action = btn.getAttribute('data-action');
           const mealId = btn.getAttribute('data-meal-id'); // Don't parse as integer, keep as string
-          const idx = selectedMeals.findIndex(m => String(m.id) === String(mealId));
+          const currentMeals = getCurrentMealsArray();
+          const idx = currentMeals.findIndex(m => String(m.id) === String(mealId));
           
           console.log('Action:', action, 'Meal ID:', mealId, 'Index:', idx);
           
           if (idx !== -1) {
             // Preserve existing meal data and only update quantity
-            let updatedMeal = { ...selectedMeals[idx] };
+            let updatedMeal = { ...currentMeals[idx] };
             if (action === 'increment') {
               updatedMeal.qty++;
             } else if (action === 'decrement') {
               updatedMeal.qty--;
               if (updatedMeal.qty < 0) updatedMeal.qty = 0;
             }
-            selectedMeals[idx] = updatedMeal;
-            updateModalChanges('selectedMeals', JSON.parse(JSON.stringify(selectedMeals)));
+            currentMeals[idx] = updatedMeal;
+            updateCurrentMealsArray(currentMeals);
+            updateModalChanges(mealsPageMode === 'update' ? 'updateModeMeals' : 'selectedMeals', JSON.parse(JSON.stringify(currentMeals)));
             rerenderSidebarMeals();
           } else {
-            console.log('Meal not found in selectedMeals array');
-            console.log('Available meal IDs:', selectedMeals.map(m => m.id));
+            console.log('Meal not found in current meals array');
+            console.log('Available meal IDs:', currentMeals.map(m => m.id));
           }
         };
       });
