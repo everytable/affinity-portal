@@ -1161,7 +1161,7 @@
         <!-- One-time Items Section -->
         ${currentSubscription?.include?.onetimes && currentSubscription.include.onetimes.length > 0 ? `
           <div class="afinity-modal-card">
-            <div class="afinity-modal-card-title">Add One off item to order</div>
+            <div class="afinity-modal-card-title">One off items to next Order</div>
             <div class="afinity-modal-onetime-list">
               ${currentSubscription.include.onetimes.map(onetime => {
                 // Try to find variant in catalog data to get proper image and title
