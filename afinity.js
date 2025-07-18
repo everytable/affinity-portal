@@ -1223,7 +1223,10 @@
                     <img src="${img}" alt="${title}" />
                     <div class="afinity-modal-onetime-details">
                       <div class="afinity-modal-onetime-title">${title}</div>
-                      <div class="afinity-modal-onetime-price">$${price.toFixed(2)}</div>
+                      <div class="afinity-modal-onetime-meta">
+                        <div class="afinity-modal-onetime-qty">x ${qty}</div>
+                        <div class="afinity-modal-onetime-price">$${price.toFixed(2)}</div>
+                      </div>
                     </div>
                     <button class="afinity-modal-onetime-delete" data-onetime-id="${onetime.id}" title="Remove item">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1546,31 +1549,7 @@
                   return (!hasChanges && !hasRemovals) ? 'disabled' : '';
                 })() : 
                 (getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length === 0 ? 'disabled' : '')}>
-                ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'} <span class="afinity-meals-swap-count">${mealsPageMode === 'update' ? 
-                  (() => {
-                    // Count meals with changes
-                    const currentMeals = getCurrentMealsArray();
-                    let changeCount = 0;
-                    currentMeals.forEach(meal => {
-                      const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
-                      if (!originalMeal && meal.qty > 0) {
-                        // New meal added
-                        changeCount++;
-                      } else if (originalMeal && meal.qty !== originalMeal.qty) {
-                        // Quantity changed
-                        changeCount++;
-                      }
-                    });
-                    // Count removed meals
-                    originalSubscriptionMeals.forEach(origMeal => {
-                      const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
-                      if (!selectedMeal || selectedMeal.qty === 0) {
-                        changeCount++;
-                      }
-                    });
-                    return changeCount;
-                  })() : 
-                  getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length}</span>
+                ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'}
               </button>
             </div>
           </div>
@@ -3780,32 +3759,8 @@
             return (!hasChanges && !hasRemovals) ? 'disabled' : '';
           })() : 
           (getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length === 0 ? 'disabled' : '')}>
-          ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'} <span class="afinity-meals-swap-count">${mealsPageMode === 'update' ? 
-            (() => {
-              // Count meals with changes
-              const currentMeals = getCurrentMealsArray();
-              let changeCount = 0;
-              currentMeals.forEach(meal => {
-                const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
-                if (!originalMeal && meal.qty > 0) {
-                  // New meal added
-                  changeCount++;
-                } else if (originalMeal && meal.qty !== originalMeal.qty) {
-                  // Quantity changed
-                  changeCount++;
-                }
-              });
-              // Count removed meals
-              originalSubscriptionMeals.forEach(origMeal => {
-                const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
-                if (!selectedMeal || selectedMeal.qty === 0) {
-                  changeCount++;
-                }
-              });
-              return changeCount;
-            })() : 
-            getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length}</span>
-        </button>
+          ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'}
+          </button>
       </div>
     `;
   }
