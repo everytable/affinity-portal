@@ -117,6 +117,9 @@
   // Global object to store all requested changes
   let modalChanges = {};
   
+  // Cache for offset days
+  let cachedOffsetDays = null;
+  
   // Add request tracking to prevent concurrent API calls
   let isUpdatingSubscription = false;
   let updateRequestQueue = [];
@@ -124,6 +127,32 @@
   // Helper function to update modalChanges with logging
   function updateModalChanges(key, value) {
     modalChanges[key] = value;
+  }
+  
+  // Function to fetch offset days from API
+  async function fetchOffsetDays() {
+    if (cachedOffsetDays !== null) {
+      return cachedOffsetDays;
+    }
+    
+    try {
+      const response = await fetch(`${API_URL}/subscription/offset-days`);
+      const data = await response.json();
+      
+      if (data.success && data.offsetDays !== null) {
+        cachedOffsetDays = data.offsetDays;
+        return cachedOffsetDays;
+      } else {
+        // Fallback to default value
+        cachedOffsetDays = 2;
+        return cachedOffsetDays;
+      }
+    } catch (error) {
+      console.error('Error fetching offset days:', error);
+      // Fallback to default value
+      cachedOffsetDays = 2;
+      return cachedOffsetDays;
+    }
   }
   
   // Centralized function to update subscription with request debouncing
@@ -733,9 +762,11 @@
   // Helper to format delivery date
   function formatDeliveryDate(dateStr) {
     if (!dateStr) return '';
-    // dateStr is in ISO format (YYYY-MM-DD), convert to MM-DD-YYYY for display
+    // dateStr is in ISO format (YYYY-MM-DD), convert to MM-DD-YYYY - DayOfWeek for display
     const [year, month, day] = dateStr.split('-');
-    const formatted = `${month}-${day}-${year}`;
+    const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+    const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const formatted = `${month}-${day}-${year} - ${dayOfWeek}`;
     return formatted;
   }
   
@@ -755,6 +786,33 @@
     if (!stateName) return '';
     const state = US_STATES.find(s => s.name === stateName || s.code === stateName);
     return state ? state.code : stateName;
+  }
+  
+  // Helper to get delivery date calculated from next charge date
+  async function getNextChargeDateFromSubscription() {
+    if (!currentSubscription?.next_charge_scheduled_at) {
+      return deliveryDate; 
+    }
+    
+    const nextChargeDate = currentSubscription.next_charge_scheduled_at;
+    
+    // Extract date part if it includes time
+    let dateStr = nextChargeDate;
+    if (dateStr.includes('T')) {
+      dateStr = dateStr.split('T')[0];
+    }
+    
+    // Get offset days from API
+    const offsetDays = await fetchOffsetDays();
+    
+    // Calculate delivery date by adding offset days
+    const dateObj = new Date(dateStr);
+    dateObj.setDate(dateObj.getDate() + offsetDays);
+    
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
   
   // Helper to get delivery date from currentSubscription order attributes
@@ -824,17 +882,18 @@
     return fulfillmentTime; // fallback
   }
 
-  function getNextOrderDate() {
-    // Get the current delivery date from subscription
-    const currentDeliveryDate = getDeliveryDateFromSubscription();
+  async function getNextOrderDate() {
+    // Get the next charge date from subscription
+    const nextChargeDate = await getNextChargeDateFromSubscription();
     
-    if (!currentDeliveryDate) {
+    if (!nextChargeDate) {
       return 'Date not set';
     }
     
     try {
+      console.log('nextChargeDate', nextChargeDate);
       // Parse the date and format it like "July 29th, 2025 - Tuesday"
-      const date = new Date(currentDeliveryDate);
+      const date = new Date(nextChargeDate);
       const options = { 
         year: 'numeric',
         month: 'long',
@@ -868,7 +927,7 @@
     }
   }
 
-  function renderModal() {
+  async function renderModal() {
     // Create overlay if not present
     if (!modalOverlay) {
       modalOverlay = document.createElement('div');
@@ -879,7 +938,7 @@
     }
     // Only update the content root
     const contentRoot = modalOverlay.querySelector('#afinity-modal-content-root');
-    contentRoot.innerHTML = renderModalContent();
+    contentRoot.innerHTML = await renderModalContent();
     attachModalEvents();
     // Always re-render the method section if on main page
     if (currentPage === 'main') {
@@ -890,11 +949,11 @@
     if (modalLoading) showModalLoading(); else hideModalLoading();
   }
 
-  function renderModalContent() {
+  async function renderModalContent() {
     if (currentPage === 'main') {
-      return renderMainPage();
+      return await renderMainPage();
     } else if (currentPage === 'meals') {
-      return renderMealsPage();
+      return await renderMealsPage();
     }
     return '';
   }
@@ -989,8 +1048,8 @@
     }
   }
 
-  function renderMainPage() {
-    const currentDeliveryDate = getDeliveryDateFromSubscription();
+  async function renderMainPage() {
+    const currentDeliveryDate = await getNextChargeDateFromSubscription();
     // Calculate total price for header
     const headerTotal = calculateSubscriptionTotal();
     // Determine method
@@ -1090,7 +1149,7 @@
               <span>Update All Future Orders</span>
             </label>
             <div style="font-size: 12px; color: #666; margin-top: 4px; margin-left: 24px;">
-              Next Order: ${getNextOrderDate()}
+              Next Order: <span id="next-order-date">Loading...</span>
             </div>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
@@ -1169,8 +1228,8 @@
     `;
   }
 
-  function renderMealsPage() {
-    const currentDeliveryDate = getDeliveryDateFromSubscription();
+  async function renderMealsPage() {
+    const currentDeliveryDate = await getNextChargeDateFromSubscription();
     
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
     const headerTotal = getMealsPageHeaderTotal();
@@ -2908,6 +2967,17 @@
       updateAllFutureCheckbox.onchange = (e) => {
         updateModalChanges('updateAllFutureOrders', e.target.checked);
       };
+    }
+    
+    // Update the "Next Order" display with the actual date
+    const nextOrderElement = modalOverlay.querySelector('#next-order-date');
+    if (nextOrderElement) {
+      getNextOrderDate().then(dateText => {
+        nextOrderElement.textContent = dateText;
+      }).catch(error => {
+        console.error('Error updating next order date:', error);
+        nextOrderElement.textContent = 'Date not set';
+      });
     }
   }
 
