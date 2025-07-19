@@ -1198,18 +1198,8 @@
                     const qty = item.quantity || 1;
                     
                     // Get the price from subscription data (no discount on main page)
-                    let price = 0;
-                    if (variant && variant.price) {
-                      if (typeof variant.price === 'string') {
-                        price = parseFloat(variant.price);
-                      } else if (variant.price.amount) {
-                        price = parseFloat(variant.price.amount);
-                      } else if (typeof variant.price === 'number') {
-                        price = variant.price;
-                      }
-                    } else {
-                      price = Number(item.price) || 0;
-                    }
+                    // Always use subscription price, not variant price
+                    const price = Number(item.price) || 0;
                     
                     return `
                       <div class="afinity-modal-cart-item">
@@ -3458,18 +3448,8 @@
       const qty = item.quantity || 1;
       
       // Get the price from subscription data (no discount on main page)
-      let price = 0;
-      if (variant && variant.price) {
-        if (typeof variant.price === 'string') {
-          price = parseFloat(variant.price);
-        } else if (variant.price.amount) {
-          price = parseFloat(variant.price.amount);
-        } else if (typeof variant.price === 'number') {
-          price = variant.price;
-        }
-      } else {
-        price = Number(item.price) || 0;
-      }
+      // Always use subscription price, not variant price
+      const price = Number(item.price) || 0;
       
       return `
         <div class="afinity-modal-cart-item">
