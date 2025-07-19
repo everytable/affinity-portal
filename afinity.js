@@ -1300,12 +1300,8 @@
                 if (variant) {
                   img = getVariantImageFromVariantsData(variant);
                   title = variant.title || variant.product?.title || onetime.product_title || 'One-time Item';
-                  if (variant.price) {
-                    if (typeof variant.price === 'string') price = parseFloat(variant.price);
-                    else if (typeof variant.price === 'number') price = variant.price;
-                    else if (variant.price.amount) price = parseFloat(variant.price.amount);
-                  }
-                  price = isNaN(price) ? parseFloat(onetime.price) || 0 : price;
+                  // For one-time items, always use the price from the subscription, not the variant price
+                  // price is already set to parseFloat(onetime.price) || 0 above
                 }
                 
                 return `
