@@ -1106,7 +1106,7 @@
           price = meal.price || 0;
         }
         
-        // Use original price for total calculation (no discount applied to total)
+        // Use original price for header total calculation (discount already applied in subscription data)
         // Convert price to cents, multiply by quantity, then add
         const priceCents = Math.round(price * 100);
         const mealTotal = priceCents * meal.qty;
@@ -2012,9 +2012,10 @@
           price = meal.price || 0;
         }
         
-        // Use original price for total calculation (no discount applied to total)
-        // Convert price to cents, multiply by quantity, then add
-        const priceCents = Math.round(price * 100);
+        // Apply 10% discount to the price before calculating total
+        const discountedPrice = getDiscountedPrice(price);
+        // Convert discounted price to cents, multiply by quantity, then add
+        const priceCents = Math.round(discountedPrice * 100);
         totalCents += priceCents * meal.qty;
       }
     });
