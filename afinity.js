@@ -1234,15 +1234,6 @@
             <label for="afinity-time" class="afinity-modal-select-label">Time</label>
             <input id="timepicker" class="timepicker" type="text" placeholder="Select delivery time" value="${formatTimeForDisplay(modalChanges.fulfillmentTime || fulfillmentTime || getFulfillmentTimeFromSubscription())}"/>
           </div>
-          <div style="margin-top: 12px;">
-            <label class="afinity-modal-checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-              <input type="checkbox" id="afinity-update-all-future" style="width: 16px; height: 16px; margin: 0;" ${modalChanges.updateAllFutureOrders ? 'checked' : ''} />
-              <span>Update All Future Orders</span>
-            </label>
-            <div style="font-size: 12px; color: #666; margin-top: 4px; margin-left: 24px;">
-              Next Order: <span id="next-order-date">Loading...</span>
-            </div>
-          </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
             <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()">Save</button>
           </div>
@@ -2039,44 +2030,10 @@
       const subscriptionId = currentSubscription?.id;
       if (!subscriptionId) {
         showToast('No subscription ID found', 'error');
-        
         return;
       }
 
-      // Check if we should update only the next charge or the entire subscription
-      const updateAllFuture = modalChanges.updateAllFutureOrders || false;
-
-      if (!updateAllFuture) {
-        // Only update the next charge date - use the new endpoint
-        if (modalChanges.deliveryDate) {
-          const chargeDatePayload = {
-            deliveryDate: modalChanges.deliveryDate,
-            fulfillmentTime: modalChanges.fulfillmentTime || fulfillmentTime
-          };
-
-          const chargeDateResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update-charge-date`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chargeDatePayload)
-          });
-
-          const chargeDateResult = await chargeDateResponse.json();
-          if (!chargeDateResult.success) {
-            showToast(chargeDateResult.error || 'Failed to update charge date', 'error');
-            
-            return;
-          }
-        }
-
-        showToast('Next charge date updated successfully!', 'success');
-        // Add a small delay before refreshing to ensure the update has processed
-        setTimeout(async () => {
-          await refreshSubscriptionData(subscriptionId);
-        }, 1000);
-        return;
-      }
-
-      // Update entire subscription (existing logic for when checkbox is checked)
+      // Update subscription with all changes
       // For Delivery, update address first
       if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Delivery') {
         const addressResp = await fetch(`${API_URL}/subscription/address`, {
@@ -2225,7 +2182,6 @@
         deliveryDate: modalChanges.deliveryDate,
         fulfillmentTime: modalChanges.fulfillmentTime,
         selectedFrequency: modalChanges.selectedFrequency,
-        updateAllFutureOrders: true,
         ...(frequencyData && { subscription_preferences: frequencyData })
       };
       
@@ -2360,37 +2316,7 @@
           }
         }
 
-        // Check if we should update only the next charge or the entire subscription
-        const updateAllFuture = modalChanges.updateAllFutureOrders || false;
-
-        if (!updateAllFuture && modalChanges.deliveryDate) {
-          // Only update the next charge date - use the new endpoint
-          const chargeDatePayload = {
-            deliveryDate: modalChanges.deliveryDate,
-            fulfillmentTime: modalChanges.fulfillmentTime || fulfillmentTime
-          };
-
-          const chargeDateResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update-charge-date`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chargeDatePayload)
-          });
-
-          const chargeDateResult = await chargeDateResponse.json();
-          if (!chargeDateResult.success) {
-            showToast(chargeDateResult.error || 'Failed to update charge date', 'error');
-            return;
-          }
-
-          showToast('Next charge date updated successfully!', 'success');
-          // Add a small delay before refreshing to ensure the update has processed
-          setTimeout(async () => {
-            await refreshSubscriptionData(subscriptionId);
-          }, 1000);
-          return;
-        }
-
-        // Update entire subscription (existing logic for when checkbox is checked)
+        // Update subscription with all changes
         // Always update fulfillment type and related fields
         const orderAttributesArr = [];
         
@@ -2511,7 +2437,6 @@
           deliveryDate: modalChanges.deliveryDate,
           fulfillmentTime: modalChanges.fulfillmentTime,
           selectedFrequency: modalChanges.selectedFrequency,
-          updateAllFutureOrders: true,
           ...(frequencyData && { subscription_preferences: frequencyData })
         };
 
@@ -3023,24 +2948,6 @@
       saveAllBtn.onclick = saveDate;
     }
     
-    // Add event handler for the "Update All Future Orders" checkbox
-    const updateAllFutureCheckbox = modalOverlay.querySelector('#afinity-update-all-future');
-    if (updateAllFutureCheckbox) {
-      updateAllFutureCheckbox.onchange = (e) => {
-        updateModalChanges('updateAllFutureOrders', e.target.checked);
-      };
-    }
-    
-    // Update the "Next Order" display with the actual date
-    const nextOrderElement = modalOverlay.querySelector('#next-order-date');
-    if (nextOrderElement) {
-      getNextOrderDate().then(dateText => {
-        nextOrderElement.textContent = dateText;
-      }).catch(error => {
-        console.error('Error updating next order date:', error);
-        nextOrderElement.textContent = 'Date not set';
-      });
-    }
     
     // Update all date input fields with properly formatted dates
     const dateInputs = modalOverlay.querySelectorAll('#afinity-date, #afinity-meals-date');
