@@ -532,6 +532,13 @@
       defaultDate: (currentDate && !restrictedDates.includes(currentDate)) ? currentDate : undefined, // Set default date if available and not restricted
       onChange: function(selectedDates, dateStr, instance) {
         
+        // Check if this is a different date from the original
+        const originalDate = getDeliveryDateFromSubscription();
+        if (dateStr && dateStr !== originalDate) {
+          // Show a warning toast about the consequences
+          showToast('Note: Moving the fulfillment date will affect the charge date on all upcoming orders.', 'info');
+        }
+        
         updateModalChanges('deliveryDate', dateStr);
         deliveryDate = dateStr;
         
@@ -2024,8 +2031,33 @@
     return totalCents / 100;
   }
 
+  // Helper function to check if fulfillment date or time has changed and show confirmation
+  async function confirmFulfillmentDateChange() {
+    // Get original delivery date and time from subscription
+    const originalDate = getDeliveryDateFromSubscription();
+    const originalTime = getFulfillmentTimeFromSubscription();
+    const newDate = modalChanges.deliveryDate;
+    const newTime = modalChanges.fulfillmentTime;
+    
+    // Check if date or time has changed
+    const dateChanged = newDate && newDate !== originalDate;
+    const timeChanged = newTime && newTime !== originalTime;
+    
+    // If neither date nor time has changed, no confirmation needed
+    if (!dateChanged && !timeChanged) {
+      return true;
+    }
+    
+    // Show confirmation popup
+    return confirm('Moving a fulfillment date or time will move the charge date on all upcoming orders. Are you sure you want to continue?');
+  }
+
   // Dedicated function to save date
   async function saveDate() {
+    // Check for fulfillment date changes and get confirmation
+    if (!(await confirmFulfillmentDateChange())) {
+      return; // User cancelled, don't proceed
+    }
     showModalLoading();
     try {
       const subscriptionId = currentSubscription?.id;
@@ -2278,6 +2310,11 @@
    
     const saveBtn = modalOverlay.querySelector('.afinity-modal-footer-save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
+      
+      // Check for fulfillment date changes and get confirmation
+      if (!(await confirmFulfillmentDateChange())) {
+        return; // User cancelled, don't proceed
+      }
       
       // Show loading state
       showModalLoading();
@@ -4540,6 +4577,14 @@
             if (period === 'PM' && hour24 < 12) hour24 += 12;
             if (period === 'AM' && hour24 === 12) hour24 = 0;
             const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
+            
+            // Check if this is a different time from the original
+            const originalTime = getFulfillmentTimeFromSubscription();
+            if (time24Format && time24Format !== originalTime) {
+              // Show a warning toast about the consequences
+              showToast('Note: Moving the fulfillment time will affect the charge date on all upcoming orders.', 'info');
+            }
+            
             updateModalChanges('fulfillmentTime', time24Format);
             fulfillmentTime = time24Format;
             console.log('Time picker changed to:', time24Format);
@@ -4799,6 +4844,14 @@
             if (period === 'PM' && hour24 < 12) hour24 += 12;
             if (period === 'AM' && hour24 === 12) hour24 = 0;
             const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
+            
+            // Check if this is a different time from the original
+            const originalTime = getFulfillmentTimeFromSubscription();
+            if (time24Format && time24Format !== originalTime) {
+              // Show a warning toast about the consequences
+              showToast('Note: Moving the fulfillment time will affect the charge date on all upcoming orders.', 'info');
+            }
+            
             updateModalChanges('fulfillmentTime', time24Format);
             fulfillmentTime = time24Format;
           }
