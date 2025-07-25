@@ -2608,7 +2608,7 @@
             }
             
             return {
-              collection_id: collectionId,
+              collection_id: '308869562425',
               external_product_id: externalProductId,
               external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
               quantity: meal.qty
@@ -2739,7 +2739,7 @@
           }
           
           return {
-            collection_id: collectionId,
+            collection_id: '308869562425',
             external_product_id: externalProductId,
             external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
             product_title: productTitle,
@@ -3865,7 +3865,7 @@
                 }
                 
                 return {
-                  collection_id: collectionId,
+                  collection_id: '308869562425',
                   external_product_id: externalProductId,
                   external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
                   quantity: meal.qty
@@ -3988,7 +3988,7 @@
                 }
                 
                 return {
-                  collection_id: collectionId,
+                  collection_id: '308869562425',
                   external_product_id: externalProductId,
                   external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
                   quantity: meal.qty,
