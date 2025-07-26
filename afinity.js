@@ -2461,7 +2461,15 @@
           return;
         }
         if (isoString) {
-          orderAttributesArr.push({ "Fulfillment Date": isoString });
+          // Update existing Fulfillment Date or add new one
+          const existingIndex = orderAttributesArr.findIndex(attr => 
+            Object.keys(attr)[0] === 'Fulfillment Date'
+          );
+          if (existingIndex !== -1) {
+            orderAttributesArr[existingIndex] = { "Fulfillment Date": isoString };
+          } else {
+            orderAttributesArr.push({ "Fulfillment Date": isoString });
+          }
         }
         
         // Parse frequency if changed
