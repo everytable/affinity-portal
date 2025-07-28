@@ -469,17 +469,64 @@
     }
   }
 
-  // Helper function to generate dates for the next 3 days (today, tomorrow, day after tomorrow)
+  // Helper function to generate frequency-based restricted dates
   function getRestrictedDates() {
     const today = new Date();
     const restrictedDates = [];
     
-    // Add today, tomorrow, and day after tomorrow
-    for (let i = 0; i < 3; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-      restrictedDates.push(dateStr);
+    // Get current frequency from modal changes or global variable
+    const currentFrequency = modalChanges.selectedFrequency || selectedFrequency;
+    
+    if (currentFrequency) {
+      const frequencyData = parseFrequency(currentFrequency);
+      if (frequencyData) {
+        const { order_interval_unit, order_interval_frequency } = frequencyData;
+        
+        // Calculate the number of days to restrict based on frequency
+        let daysToRestrict = 0;
+        
+        switch (order_interval_unit) {
+          case 'week':
+            // For weekly subscriptions, restrict the next week's worth of days
+            daysToRestrict = 7 * order_interval_frequency;
+            break;
+          case 'month':
+            // For monthly subscriptions, restrict the next month's worth of days
+            daysToRestrict = 30 * order_interval_frequency;
+            break;
+          case 'day':
+            // For daily subscriptions, restrict the next day's worth of days
+            daysToRestrict = order_interval_frequency;
+            break;
+          default:
+            // Fallback to 3 days for unknown units
+            daysToRestrict = 3;
+        }
+        
+        // Add restricted dates based on frequency
+        for (let i = 0; i < daysToRestrict; i++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+          restrictedDates.push(dateStr);
+        }
+      } else {
+        // Fallback to 3 days if frequency parsing fails
+        for (let i = 0; i < 3; i++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+          restrictedDates.push(dateStr);
+        }
+      }
+    } else {
+      // Fallback to 3 days if no frequency is set
+      for (let i = 0; i < 3; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        restrictedDates.push(dateStr);
+      }
     }
     
     return restrictedDates;
@@ -507,7 +554,7 @@
     } else if (fulfillmentType === 'Pickup') {
       allowedDates = allowedPickupDates;
     }
-    // Get restricted dates (3 days out)
+    // Get frequency-based restricted dates
     const restrictedDates = getRestrictedDates();
     
     // Filter out restricted dates from allowed dates
@@ -2777,7 +2824,7 @@
     // Initialize Flatpickr for date inputs
     const mainDateInput = modalOverlay.querySelector('#afinity-date');
     if (mainDateInput && typeof flatpickr !== 'undefined') {
-      // Get restricted dates (3 days out)
+      // Get frequency-based restricted dates
       const restrictedDates = getRestrictedDates();
       
       flatpickr(mainDateInput, {
@@ -2788,7 +2835,7 @@
             // Disable weekends (0 = Sunday, 6 = Saturday)
             const isWeekend = (date.getDay() === 0 || date.getDay() === 6);
             
-            // Disable restricted dates (3 days out)
+            // Disable frequency-based restricted dates
             const dateStr = date.toISOString().split('T')[0];
             const isRestricted = restrictedDates.includes(dateStr);
             
@@ -2812,6 +2859,10 @@
     if (frequencyInput) frequencyInput.onchange = (e) => {
       updateModalChanges('selectedFrequency', e.target.value);
       selectedFrequency = e.target.value;
+      
+      // Reinitialize date picker with new frequency-based restrictions
+      const currentFulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
+      setupDatePicker(currentFulfillmentMethod);
     };
     // Address inputs - ensure they update modalChanges
     const addressInput = modalOverlay.querySelector('#afinity-address');
@@ -4308,7 +4359,7 @@
       return [];
     }
     
-    // Check if the selected date is in restricted dates (3 days out)
+    // Check if the selected date is in frequency-based restricted dates
     const restrictedDates = getRestrictedDates();
     if (restrictedDates.includes(selectedDate)) {
       return [];
@@ -4460,7 +4511,7 @@
         $(timeInput).timepicker('remove');
       }
       
-      // Check if the final date is in restricted dates (3 days out)
+      // Check if the final date is in frequency-based restricted dates
       const restrictedDates = getRestrictedDates();
       if (finalDate && restrictedDates.includes(finalDate)) {
         timeInput.value = '';
@@ -4762,7 +4813,7 @@
         timeOptions = generateTimeOptions(selectedDate);
       }
 
-      // Check if the selected date is in restricted dates (3 days out)
+      // Check if the selected date is in frequency-based restricted dates
       const restrictedDates = getRestrictedDates();
       if (selectedDate && restrictedDates.includes(selectedDate)) {
         timeInput.value = '';
