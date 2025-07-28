@@ -2142,18 +2142,6 @@
         }
       }
       
-      if (modalChanges.deliveryDate) {
-        // Update existing Fulfillment Date or add new one
-        const existingIndex = orderAttributesArr.findIndex(attr => 
-          Object.keys(attr)[0] === 'Fulfillment Date'
-        );
-        if (existingIndex !== -1) {
-          orderAttributesArr[existingIndex] = { "Fulfillment Date": modalChanges.deliveryDate };
-        } else {
-          orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
-        }
-      }
-      
       // Compute ISO string for Fulfillment Date
       let timeZone = '';
       if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
@@ -2405,18 +2393,6 @@
             orderAttributesArr[existingIndex] = { "LocationID": locationIdToSend };
           } else {
             orderAttributesArr.push({ "LocationID": locationIdToSend });
-          }
-        }
-        
-        if (modalChanges.deliveryDate) {
-          // Update existing Fulfillment Date or add new one
-          const existingIndex = orderAttributesArr.findIndex(attr => 
-            Object.keys(attr)[0] === 'Fulfillment Date'
-          );
-          if (existingIndex !== -1) {
-            orderAttributesArr[existingIndex] = { "Fulfillment Date": modalChanges.deliveryDate };
-          } else {
-            orderAttributesArr.push({ "Fulfillment Date": modalChanges.deliveryDate });
           }
         }
         
