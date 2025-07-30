@@ -719,9 +719,15 @@
           selectedFrequency = `${intervalUnit}-${orderIntervalFrequency}`;
         }
         
-        // Update originalSubscriptionMeals with fresh bundle selections data
+        // Update originalSubscriptionMeals with fresh bundle selections data (excluding hidden fees)
         if (payload.include && payload.include.bundle_selections && payload.include.bundle_selections.items) {
-          originalSubscriptionMeals = payload.include.bundle_selections.items.map(item => {
+          originalSubscriptionMeals = payload.include.bundle_selections.items
+            .filter(item => {
+              // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+              const productId = item.external_product_id || item.product_id;
+              return productId !== '7927816716345' && productId !== '7933253517369';
+            })
+            .map(item => {
             // Find variant information from catalog data
             let variant = null;
             let title = item.title || 'Meal';
@@ -1025,51 +1031,6 @@
     return fulfillmentTime; // fallback
   }
 
-  async function getNextOrderDate() {
-    // Get the next charge date from subscription
-    const nextChargeDate = await getNextChargeDateFromSubscription();
-    
-    if (!nextChargeDate) {
-      return 'Date not set';
-    }
-    
-    try {
-      console.log('nextChargeDate', nextChargeDate);
-      // Parse the date and format it like "July 29th, 2025 - Tuesday"
-      const date = new Date(nextChargeDate);
-      const options = { 
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        weekday: 'long'
-      };
-      
-      const formattedDate = date.toLocaleDateString('en-US', options);
-      
-      // Add ordinal suffix to day
-      const day = date.getDate();
-      const suffix = getOrdinalSuffix(day);
-      
-      // Replace the numeric day with ordinal day
-      return formattedDate.replace(/\d+/, day + suffix);
-    } catch (error) {
-      console.error('Error formatting next order date:', error);
-      return 'Date not set';
-    }
-  }
-
-  function getOrdinalSuffix(day) {
-    if (day >= 11 && day <= 13) {
-      return 'th';
-    }
-    switch (day % 10) {
-      case 1: return 'st';
-      case 2: return 'nd';
-      case 3: return 'rd';
-      default: return 'th';
-    }
-  }
-
   async function renderModal() {
     // Create overlay if not present
     if (!modalOverlay) {
@@ -1100,6 +1061,70 @@
     return '';
   }
 
+  // Helper function to get delivery instructions from include section
+  function getDeliveryInstructions() {
+    if (!currentSubscription || !currentSubscription.include || !currentSubscription.include.address || !currentSubscription.include.address.order_attributes) {
+      return '';
+    }
+    
+    const orderAttributes = currentSubscription.include.address.order_attributes;
+    const deliveryInstructionsAttr = orderAttributes.find(attr => {
+      // Handle both {name, value} and {"Key": "Value"} formats
+      if (attr && typeof attr === 'object') {
+        if ('name' in attr && 'value' in attr) {
+          return attr.name === 'Delivery Instructions';
+        } else {
+          // It's in {"Key": "Value"} format
+          return Object.keys(attr)[0] === 'Delivery Instructions';
+        }
+      }
+      return false;
+    });
+    
+    if (deliveryInstructionsAttr) {
+      // Handle both formats
+      if ('name' in deliveryInstructionsAttr && 'value' in deliveryInstructionsAttr) {
+        return deliveryInstructionsAttr.value;
+      } else {
+        // It's in {"Key": "Value"} format
+        return deliveryInstructionsAttr['Delivery Instructions'];
+      }
+    }
+    
+    return '';
+  }
+
+  // Helper function to get hidden fees (packaging and delivery)
+  function getHiddenFees() {
+    if (!currentSubscription || !currentSubscription.include || !currentSubscription.include.bundle_selections || !Array.isArray(currentSubscription.include.bundle_selections.items)) {
+      return { deliveryFee: 0, packagingFee: 0 };
+    }
+    
+    let deliveryFee = 0;
+    let packagingFee = 0;
+    
+    currentSubscription.include.bundle_selections.items
+      .filter(item => {
+        // Only include packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+        const productId = item.external_product_id || item.product_id;
+        return productId === '7927816716345' || productId === '7933253517369';
+      })
+      .forEach(item => {
+        const price = Number(item.price) || 0;
+        const qty = parseInt(item.quantity) || 1;
+        const total = price * qty;
+        
+        const productId = item.external_product_id || item.product_id;
+        if (productId === '7933253517369') {
+          deliveryFee = total;
+        } else if (productId === '7927816716345') {
+          packagingFee = total;
+        }
+      });
+    
+    return { deliveryFee, packagingFee };
+  }
+
   // Helper to calculate the total price for the subscription
   function calculateSubscriptionTotal() {
     if (!currentSubscription || !currentSubscription.include || !currentSubscription.include.bundle_selections || !Array.isArray(currentSubscription.include.bundle_selections.items)) {
@@ -1107,14 +1132,35 @@
     }
     let totalCents = 0;
     
-    // Add subscription items
-    currentSubscription.include.bundle_selections.items.forEach(item => {
-      // Convert price to cents, multiply, then add
-      const price = Number(item.price) || 0;
-      const priceCents = Math.round(price * 100);
-      const qty = parseInt(item.quantity) || 1;
-      totalCents += priceCents * qty;
-    });
+    // Add subscription items (excluding packaging and delivery fees from display, but including in total)
+    currentSubscription.include.bundle_selections.items
+      .filter(item => {
+        // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+        const productId = item.external_product_id || item.product_id;
+        return productId !== '7927816716345' && productId !== '7933253517369';
+      })
+      .forEach(item => {
+        // Convert price to cents, multiply, then add
+        const price = Number(item.price) || 0;
+        const priceCents = Math.round(price * 100);
+        const qty = parseInt(item.quantity) || 1;
+        totalCents += priceCents * qty;
+      });
+    
+    // Add hidden fees to total (packaging and delivery fees)
+    currentSubscription.include.bundle_selections.items
+      .filter(item => {
+        // Only include packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+        const productId = item.external_product_id || item.product_id;
+        return productId === '7927816716345' || productId === '7933253517369';
+      })
+      .forEach(item => {
+        // Convert price to cents, multiply, then add
+        const price = Number(item.price) || 0;
+        const priceCents = Math.round(price * 100);
+        const qty = parseInt(item.quantity) || 1;
+        totalCents += priceCents * qty;
+      });
     
     // Add one-time items
     if (currentSubscription.include.onetimes && Array.isArray(currentSubscription.include.onetimes)) {
@@ -1168,6 +1214,12 @@
         
       }
     });
+    
+    // Add hidden fees to total (packaging and delivery fees)
+    const hiddenFees = getHiddenFees();
+    const deliveryFeeCents = Math.round(hiddenFees.deliveryFee * 100);
+    const packagingFeeCents = Math.round(hiddenFees.packagingFee * 100);
+    totalCents += deliveryFeeCents + packagingFeeCents;
     
     const total = (totalCents / 100).toFixed(2);
     // Convert back to dollars
@@ -1240,7 +1292,13 @@
                currentSubscription && currentSubscription.include &&
                currentSubscription.include.bundle_selections &&
                Array.isArray(currentSubscription.include.bundle_selections.items))
-                ? currentSubscription.include.bundle_selections.items.map(item => {
+                ? currentSubscription.include.bundle_selections.items
+                    .filter(item => {
+                      // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+                      const productId = item.external_product_id || item.product_id;
+                      return productId !== '7927816716345' && productId !== '7933253517369';
+                    })
+                    .map(item => {
                     const variant = getVariantById(item.external_variant_id);
                     if (!variant) return '';
                     const img =
@@ -1290,6 +1348,18 @@
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
             <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()">Save</button>
+          </div>
+        </div>
+        <div class="afinity-modal-card">
+          <div class="afinity-modal-card-title">Delivery Instructions</div>
+          <div class="afinity-modal-row">
+            <label for="afinity-delivery-instructions" class="afinity-modal-select-label">Instructions</label>
+            <textarea id="afinity-delivery-instructions" placeholder="Enter delivery instructions (e.g., gate code, building access, special instructions)" rows="3" maxlength="280">${getDeliveryInstructions()}</textarea>
+          </div>
+          <div style="display:flex; justify-content:flex-start; align-items:center; margin-top:8px;">
+            <div class="afinity-character-count">
+              <span id="afinity-instructions-char-count"> Character limit: ${getDeliveryInstructions().length}</span>/280 characters
+            </div>
           </div>
         </div>
         <div class="afinity-modal-card">
@@ -1644,8 +1714,28 @@
             `}
             <div class="afinity-meals-sidebar-footer">
               <div class="afinity-meals-sidebar-total">
-                <span>Total:</span>
-                <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
+                ${(() => {
+                  const hiddenFees = getHiddenFees();
+                  const hasFees = hiddenFees.deliveryFee > 0 || hiddenFees.packagingFee > 0;
+                  return hasFees ? `
+                    ${hiddenFees.deliveryFee > 0 ? `
+                      <div class="afinity-meals-sidebar-fee">
+                        <span>Delivery Fee:</span>
+                        <span>$${hiddenFees.deliveryFee.toFixed(2)}</span>
+                      </div>
+                    ` : ''}
+                    ${hiddenFees.packagingFee > 0 ? `
+                      <div class="afinity-meals-sidebar-fee">
+                        <span>Packaging Fee:</span>
+                        <span>$${hiddenFees.packagingFee.toFixed(2)}</span>
+                      </div>
+                    ` : ''}
+                  ` : '';
+                })()}
+                <div class="afinity-meals-sidebar-total-row">
+                  <span>Total:</span>
+                  <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
+                </div>
               </div>
               <button class="afinity-meals-swap-btn" ${mealsPageMode === 'update' ? 
                 (() => {
@@ -1704,28 +1794,6 @@
     return allCollectionsHtml;
   }
 
-  function renderCollectionSection(collection, collectionTitle) {
-    console.log('Rendering collection section:', { collectionTitle, collection });
-    
-    if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
-      console.log('No products found in collection:', collectionTitle);
-      return '';
-    }
-
-    const products = collection.products.edges.map(edge => edge.node);
-    
-    const productMealsHtml = products.map(product => renderProductMeals(product)).join('');
-    
-    return `
-      <div class="afinity-collection-section">
-        <h3 class="afinity-collection-title">${collectionTitle}</h3>
-        <div class="afinity-meals-grid">
-          ${productMealsHtml}
-        </div>
-      </div>
-    `;
-  }
-
   function renderCollectionSectionWithVariants(collection, collectionTitle) {
     if (!collection.products || !collection.products.edges || collection.products.edges.length === 0) {
       return '';
@@ -1769,19 +1837,6 @@
         </div>
       </div>
     `;
-  }
-
-  function renderProductMeals(product) {
-    if (!product.variants || !product.variants.edges || product.variants.edges.length === 0) {
-      return '';
-    }
-
-    const variants = product.variants.edges.map(edge => edge.node);
-    const variantCardsHtml = variants.map(edge => {
-      const variant = edge.node;
-      return renderMealCardFromVariant(variant, product);
-    }).join('');
-    return variantCardsHtml;
   }
 
   function renderProductMealsWithVariants(product) {
@@ -1832,72 +1887,6 @@
     }).join('');
     
     return variantCardsHtml;
-  }
-
-  function renderMealCardFromVariant(variant, product) {
-    const img = getVariantImageFromCollection(variant, product);
-    const title = product.title || variant.title || 'Meal';
-    const price = variant.price ? parseFloat(variant.price) : 0;
-    
-    // Check if this variant is in selectedMeals
-    const isActive = selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
-    
-    return `
-      <li class="afinity-r-meals-grid__item" style="display: block;"
-        data-product-start-date="2025-01-01"
-        data-product-end-date="2025-12-31"
-        data-is-first-variant="true"
-      >
-        <div class="afinity-r-card${isActive ? ' afinity-r-card--active' : ''}" 
-          data-variant-id="${variant.id}"
-          data-collection-id="1"
-          data-product-id="${product.id}"
-          data-catalog-id="demo-catalog-id"
-          data-selling-plan-groups="[]">
-          <div class="afinity-r-card__container">
-            <div class="afinity-r-card__image-link">
-              <img
-                src="${img}"
-                alt="${title}"
-                class="afinity-r-card__image"
-                loading="lazy"
-                width="220"
-                height="200"
-              >
-            </div>
-            <div class="afinity-r-card__details">
-              <h3 class="afinity-r-card__title">
-                <span class="afinity-r-card__title-link">
-                  ${title}
-                </span>
-              </h3>
-              <div class="afinity-r-card__footer">
-                <div class="price__container price-block" data-variant-id="${variant.id}">
-                  <span class="afinity-r-card__price--discount price-item--regular" data-variant-id="${variant.id}">
-                    $${price.toFixed(2)}
-                  </span>
-                </div>
-                <div class="price-action-wrapper" data-variant-id="${variant.id}">
-                  ${isActive ? `
-                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart afinity-r-card__remove-btn" type="button" data-meal-id="${variant.id}" style="background:#c0392b;">
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="4" y="9" width="12" height="2" rx="1" fill="white"/>
-                      </svg>
-                    </button>
-                  ` : `
-                    <button class="afinity-r-card__add-btn afinity-r-card__add-btn--smart" type="button" data-meal-id="${variant.id}">
-                      <svg width="20" height="20" class="icon icon-add-to-cart" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M10 0C15.5228 0 20 4.47715 20 10C20 15.5228 15.5228 20 10 20C4.47715 20 0 15.5228 0 10C0 4.47715 4.47715 0 10 0ZM10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 5C10.5523 5 11 5.44772 11 6V9H14C14.5523 9 15 9.44772 15 10C15 10.5523 14.5523 11 14 11H11V14C11 14.5523 10.5523 15 10 15C9.44772 15 9 14.5523 9 14V11H6C5.44772 11 5 10.5523 5 10C5 9.44772 5.44772 9 6 9H9V6C9 5.44772 9.44772 5 10 5Z" fill="white"/>
-                      </svg>
-                    </button>
-                  `}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </li>
-    `;
   }
 
   function renderMealCardFromVariantsData(variant, product) {
@@ -1978,26 +1967,6 @@
         </div>
       </li>
     `;
-  }
-
-  function getVariantImageFromCollection(variant, product) {
-    // Try variant image first
-    if (variant?.image?.url) {
-      return variant.image.url;
-    }
-    
-    // Try product featured media
-    if (variant?.product?.featuredMedia?.preview?.image?.url) {
-      return variant.product.featuredMedia.preview.image.url;
-    }
-    
-    // Try product featured media preview URL
-    if (variant?.product?.featuredMedia?.preview?.url) {
-      return variant.product.featuredMedia.preview.url;
-    }
-    
-    // Fallback to default meal image
-    return MEAL_IMAGE;
   }
 
   function getVariantImageFromVariantsData(variant) {
@@ -2099,7 +2068,7 @@
     return confirm('Moving a fulfillment date or time will move the charge date on all upcoming orders. Are you sure you want to continue?');
   }
 
-  // Dedicated function to save date
+
   async function saveDate() {
     // Check for fulfillment date changes and get confirmation
     if (!(await confirmFulfillmentDateChange())) {
@@ -2492,6 +2461,19 @@
             orderAttributesArr[existingIndex] = { "Fulfillment Date": isoString };
           } else {
             orderAttributesArr.push({ "Fulfillment Date": isoString });
+          }
+        }
+        
+        // Add delivery instructions if changed
+        if (modalChanges.deliveryInstructions !== undefined) {
+          // Update existing Delivery Instructions or add new one
+          const existingIndex = orderAttributesArr.findIndex(attr => 
+            Object.keys(attr)[0] === 'Delivery Instructions'
+          );
+          if (existingIndex !== -1) {
+            orderAttributesArr[existingIndex] = { "Delivery Instructions": modalChanges.deliveryInstructions };
+          } else {
+            orderAttributesArr.push({ "Delivery Instructions": modalChanges.deliveryInstructions });
           }
         }
         
@@ -3047,6 +3029,28 @@
         console.error('Error updating date label:', error);
       }
     });
+    
+    // Add character count for delivery instructions
+    const instructionsTextarea = modalOverlay.querySelector('#afinity-delivery-instructions');
+    const charCountSpan = modalOverlay.querySelector('#afinity-instructions-char-count');
+    if (instructionsTextarea && charCountSpan) {
+      instructionsTextarea.addEventListener('input', function() {
+        const currentLength = this.value.length;
+        charCountSpan.textContent = ` Character limit: ${currentLength}`;
+        
+        // Store delivery instructions in modalChanges for saving
+        updateModalChanges('deliveryInstructions', this.value);
+        
+        // Optional: Add visual feedback when approaching limit
+        if (currentLength >= 250) {
+          charCountSpan.style.color = '#ff6b6b';
+        } else if (currentLength >= 200) {
+          charCountSpan.style.color = '#ffa726';
+        } else {
+          charCountSpan.style.color = '';
+        }
+      });
+    }
   }
 
   function attachMethodSectionEvents() {
@@ -3249,7 +3253,13 @@
           }
 
           if (payload && payload.include && payload.include.bundle_selections && Array.isArray(payload.include.bundle_selections.items)) {
-            originalSubscriptionMeals = payload.include.bundle_selections.items.map(item => {
+            originalSubscriptionMeals = payload.include.bundle_selections.items
+              .filter(item => {
+                // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+                const productId = item.external_product_id || item.product_id;
+                return productId !== '7927816716345' && productId !== '7933253517369';
+              })
+              .map(item => {
               // Try to find a matching meal in MEALS or COLD_MEALS for title/img fallback
               const match = [...MEALS, ...COLD_MEALS].find(m => String(m.id) === String(item.external_variant_id));
               return {
@@ -3413,9 +3423,13 @@
   function rerenderModalCartList() {
     const cartList = document.querySelector('.afinity-modal-cart-list');
     if (!cartList) return;
-    // Use bundle_selections.items as the source
+    // Use bundle_selections.items as the source, but filter out packaging and delivery fees
     const items = (currentSubscription && currentSubscription.include && currentSubscription.include.bundle_selections && Array.isArray(currentSubscription.include.bundle_selections.items))
-      ? currentSubscription.include.bundle_selections.items
+      ? currentSubscription.include.bundle_selections.items.filter(item => {
+          // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+          const productId = item.external_product_id || item.product_id;
+          return productId !== '7927816716345' && productId !== '7933253517369';
+        })
       : [];
     cartList.innerHTML = items.map(item => {
       const variant = getVariantById(item.external_variant_id);
@@ -3783,8 +3797,28 @@
       `}
       <div class="afinity-meals-sidebar-footer">
         <div class="afinity-meals-sidebar-total">
-          <span>Total:</span>
-          <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
+          ${(() => {
+            const hiddenFees = getHiddenFees();
+            const hasFees = hiddenFees.deliveryFee > 0 || hiddenFees.packagingFee > 0;
+            return hasFees ? `
+              ${hiddenFees.deliveryFee > 0 ? `
+                <div class="afinity-meals-sidebar-fee">
+                  <span>Delivery Fee:</span>
+                  <span>$${hiddenFees.deliveryFee.toFixed(2)}</span>
+                </div>
+              ` : ''}
+              ${hiddenFees.packagingFee > 0 ? `
+                <div class="afinity-meals-sidebar-fee">
+                  <span>Packaging Fee:</span>
+                  <span>$${hiddenFees.packagingFee.toFixed(2)}</span>
+                </div>
+              ` : ''}
+            ` : '';
+          })()}
+          <div class="afinity-meals-sidebar-total-row">
+            <span>Total:</span>
+            <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
+          </div>
         </div>
         <button class="afinity-meals-swap-btn" ${mealsPageMode === 'update' ? 
           (() => {

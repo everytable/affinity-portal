@@ -1076,8 +1076,20 @@
   border-top: 1px solid #eee;
 }
 
+.afinity-meals-sidebar-fee{
+  display: flex;
+  justify-content: space-between;
+}
+
+.afinity-meals-sidebar-total-row{
+  display: flex;
+  justify-content: space-between;
+  padding-top: 10px;
+}
+
 .afinity-meals-sidebar-total {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
   margin-bottom: 1rem;
   font-weight: 600;
