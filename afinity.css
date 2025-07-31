@@ -492,6 +492,115 @@
   background: #003f3d;
 }
 
+.afinity-modal-skip-btn {
+  background: #dc3545;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  border: none;
+  padding: 0.5rem 1.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.afinity-modal-skip-btn:hover {
+  background: #c82333;
+}
+
+/* Charges Table Styles */
+.afinity-charges-table-wrapper {
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.afinity-charges-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.afinity-charges-table th,
+.afinity-charges-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.afinity-charges-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.afinity-charges-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.afinity-charge-status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.afinity-status-queued {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.afinity-status-skipped {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.afinity-status-unknown {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.afinity-skip-btn,
+.afinity-unskip-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.afinity-skip-btn {
+  background-color: #dc3545;
+  color: white;
+}
+
+.afinity-skip-btn:hover {
+  background-color: #c82333;
+}
+
+.afinity-unskip-btn {
+  background-color: #28a745;
+  color: white;
+}
+
+.afinity-unskip-btn:hover {
+  background-color: #218838;
+}
+
+.afinity-charges-loading,
+.afinity-no-charges,
+.afinity-charges-error {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+}
+
+.afinity-charges-error {
+  color: #dc3545;
+}
+
 .afinity-modal-footer-card {
   margin-bottom: 0;
   box-shadow: none;

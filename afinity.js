@@ -210,6 +210,258 @@
   }
 
 
+
+  // Function to fetch charges for the address
+  async function fetchChargesForAddress(addressId) {
+    try {
+      // Fetch both queued and skipped charges
+      const [queuedResponse, skippedResponse] = await Promise.all([
+        fetch(`${API_URL}/subscription/charges/by-address?address_id=${addressId}&status=queued`),
+        fetch(`${API_URL}/subscription/charges/by-address?address_id=${addressId}&status=skipped`)
+      ]);
+
+      if (!queuedResponse.ok || !skippedResponse.ok) {
+        throw new Error('Failed to fetch charges');
+      }
+
+      const [queuedData, skippedData] = await Promise.all([
+        queuedResponse.json(),
+        skippedResponse.json()
+      ]);
+
+      // Combine both arrays and sort by scheduled date
+      const allCharges = [
+        ...(queuedData.charges || []),
+        ...(skippedData.charges || [])
+      ].sort((a, b) => {
+        const dateA = new Date(a.scheduled_at || 0);
+        const dateB = new Date(b.scheduled_at || 0);
+        return dateA - dateB;
+      });
+
+      return allCharges;
+    } catch (error) {
+      console.error('Error fetching charges:', error);
+      return [];
+    }
+  }
+
+  // Function to render charges table
+  async function renderChargesTable(charges) {
+    if (!charges || charges.length === 0) {
+      return '<div class="afinity-no-charges">No charges found.</div>';
+    }
+
+    // Get offset days for date calculation
+    const offsetDays = await fetchOffsetDays();
+
+    const tableRows = charges.map(charge => {
+      let scheduledDate = 'N/A';
+      if (charge.scheduled_at) {
+        const dateObj = new Date(charge.scheduled_at);
+        dateObj.setDate(dateObj.getDate() + offsetDays);
+        scheduledDate = dateObj.toLocaleDateString();
+      }
+      const totalPrice = parseFloat(charge.total_price || 0).toFixed(2);
+      const status = charge.status || 'unknown';
+      const isSkipped = status === 'skipped';
+      
+      // Extract purchase_item_ids from line_items
+      let purchaseItemIds = [];
+      if (charge.line_items && charge.line_items.length > 0) {
+        purchaseItemIds = [...new Set(charge.line_items.map(item => item.purchase_item_id))];
+      }
+      const purchaseItemIdsJson = JSON.stringify(purchaseItemIds);
+      
+      return `
+        <tr class="afinity-charge-row" data-charge-id="${charge.id}">
+          <td>${scheduledDate}</td>
+          <td>$${totalPrice}</td>
+          <td>
+            <span class="afinity-charge-status afinity-status-${status}">${status}</span>
+          </td>
+          <td>
+            ${isSkipped 
+              ? `<button class="afinity-unskip-btn" data-charge-id="${charge.id}" data-purchase-item-ids='${purchaseItemIdsJson}'>Unskip</button>`
+              : `<button class="afinity-skip-btn" data-charge-id="${charge.id}" data-purchase-item-ids='${purchaseItemIdsJson}'>Skip</button>`
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="afinity-charges-table-wrapper">
+        <table class="afinity-charges-table">
+          <thead>
+            <tr>
+              <th>Scheduled Date</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Function to handle skip charge
+  async function handleSkipCharge(chargeId, purchaseItemIds) {
+    try {
+      const confirmed = confirm('Are you sure you want to skip this charge?');
+      if (!confirmed) return;
+
+      showModalLoading();
+
+      const formData = new FormData();
+      formData.append('charge_id', chargeId);
+      if (purchaseItemIds && purchaseItemIds.length > 0) {
+        formData.append('purchase_item_ids', JSON.stringify(purchaseItemIds));
+      }
+
+      const response = await fetch(`${API_URL}/subscription/charges/skip`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to skip charge');
+      }
+
+      hideModalLoading();
+      showToast('Charge skipped successfully!', 'success');
+      
+      // Reload the entire subscription modal to reflect updated charge data
+      const subscriptionId = currentSubscription?.id;
+      if (subscriptionId) {
+        await refreshSubscriptionData(subscriptionId);
+        await renderModal();
+      }
+      
+    } catch (error) {
+      hideModalLoading();
+      console.error('Error skipping charge:', error);
+      showToast(error.message || 'Error skipping charge', 'error');
+    }
+  }
+
+  // Function to handle unskip charge
+  async function handleUnskipCharge(chargeId, purchaseItemIds) {
+    try {
+      const confirmed = confirm('Are you sure you want to unskip this charge?');
+      if (!confirmed) return;
+
+      showModalLoading();
+
+      const formData = new FormData();
+      formData.append('charge_id', chargeId);
+      if (purchaseItemIds && purchaseItemIds.length > 0) {
+        formData.append('purchase_item_ids', JSON.stringify(purchaseItemIds));
+      }
+
+      const response = await fetch(`${API_URL}/subscription/charges/unskip`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to unskip charge');
+      }
+
+      hideModalLoading();
+      showToast('Charge unskipped successfully!', 'success');
+      
+      // Reload the entire subscription modal to reflect updated charge data
+      const subscriptionId = currentSubscription?.id;
+      if (subscriptionId) {
+        await refreshSubscriptionData(subscriptionId);
+        await renderModal();
+      }
+      
+    } catch (error) {
+      hideModalLoading();
+      console.error('Error unskipping charge:', error);
+      showToast(error.message || 'Error unskipping charge', 'error');
+    }
+  }
+
+  // Function to load and render charges table
+  async function loadChargesTable() {
+    const container = document.getElementById('afinity-charges-table-container');
+    if (!container) return;
+
+    try {
+      container.innerHTML = '<div class="afinity-charges-loading">Loading charges...</div>';
+      
+      const addressId = currentSubscription?.address_id;
+      if (!addressId) {
+        container.innerHTML = '<div class="afinity-no-charges">No address ID found.</div>';
+        return;
+      }
+
+      const charges = await fetchChargesForAddress(addressId);
+      container.innerHTML = await renderChargesTable(charges);
+      
+      // Attach event listeners to skip/unskip buttons
+      attachChargesTableEvents();
+      
+    } catch (error) {
+      console.error('Error loading charges table:', error);
+      container.innerHTML = '<div class="afinity-charges-error">Error loading charges.</div>';
+    }
+  }
+
+  // Function to attach event listeners to charges table
+  function attachChargesTableEvents() {
+    const skipButtons = document.querySelectorAll('.afinity-skip-btn');
+    const unskipButtons = document.querySelectorAll('.afinity-unskip-btn');
+
+    skipButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const chargeId = parseInt(button.getAttribute('data-charge-id'));
+        const purchaseItemIdsJson = button.getAttribute('data-purchase-item-ids');
+        let purchaseItemIds = [];
+        
+        if (purchaseItemIdsJson) {
+          try {
+            purchaseItemIds = JSON.parse(purchaseItemIdsJson);
+          } catch (error) {
+            console.error('Error parsing purchase_item_ids:', error);
+          }
+        }
+        
+        handleSkipCharge(chargeId, purchaseItemIds);
+      });
+    });
+
+    unskipButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const chargeId = parseInt(button.getAttribute('data-charge-id'));
+        const purchaseItemIdsJson = button.getAttribute('data-purchase-item-ids');
+        let purchaseItemIds = [];
+        
+        if (purchaseItemIdsJson) {
+          try {
+            purchaseItemIds = JSON.parse(purchaseItemIdsJson);
+          } catch (error) {
+            console.error('Error parsing purchase_item_ids:', error);
+          }
+        }
+        
+        handleUnskipCharge(chargeId, purchaseItemIds);
+      });
+    });
+  }
+
+
   
   // Function to fetch offset days from API
   async function fetchOffsetDays() {
@@ -507,7 +759,10 @@
         for (let i = 0; i < daysToRestrict; i++) {
           const date = new Date(today);
           date.setDate(today.getDate() + i);
-          const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+          // Use local timezone instead of UTC to avoid date offset issues
+          const dateStr = date.getFullYear() + '-' + 
+                         String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                         String(date.getDate()).padStart(2, '0');
           restrictedDates.push(dateStr);
         }
       } else {
@@ -515,7 +770,10 @@
         for (let i = 0; i < 3; i++) {
           const date = new Date(today);
           date.setDate(today.getDate() + i);
-          const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+          // Use local timezone instead of UTC to avoid date offset issues
+          const dateStr = date.getFullYear() + '-' + 
+                         String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                         String(date.getDate()).padStart(2, '0');
           restrictedDates.push(dateStr);
         }
       }
@@ -524,7 +782,10 @@
       for (let i = 0; i < 3; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
-        const dateStr = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        // Use local timezone instead of UTC to avoid date offset issues
+        const dateStr = date.getFullYear() + '-' + 
+                       String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                       String(date.getDate()).padStart(2, '0');
         restrictedDates.push(dateStr);
       }
     }
@@ -961,7 +1222,10 @@
     const dateObj = new Date(dateStr);
     dateObj.setDate(dateObj.getDate() + offsetDays);
     
-    return dateObj.toISOString().split('T')[0];
+    // Use local timezone instead of UTC to avoid date offset issues
+    return dateObj.getFullYear() + '-' + 
+           String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + 
+           String(dateObj.getDate()).padStart(2, '0');
   }
   
   // Helper to get delivery date from currentSubscription order attributes
@@ -1364,6 +1628,19 @@
         </div>
         <div class="afinity-modal-card">
           <a href="#" class="afinity-modal-add-extra">&#8853; <span>Add extra meal to order</span></a>
+        </div>
+        
+        <!-- Charges Table Section -->
+        <div class="afinity-modal-card">
+          <div class="afinity-modal-card-title">Manage Your Upcoming Deliveries or Pickups</div>
+          <div class="afinity-modal-row">
+            <p style="margin: 0; color: #666; font-size: 14px;">
+              View and manage your upcoming Deliveries or Pickups. Skip or unskip individual Deliveries or Pickups as needed.
+            </p>
+          </div>
+          <div id="afinity-charges-table-container">
+            <div class="afinity-charges-loading">Loading charges...</div>
+          </div>
         </div>
         
         <!-- One-time Items Section -->
@@ -2240,7 +2517,7 @@
     }
   }
 
-  function attachModalEvents() {
+  async function attachModalEvents() {
     if (modalLoading) return;
     // Close modal
     modalOverlay.querySelector('.afinity-modal-close').onclick = () => {
@@ -2523,6 +2800,13 @@
       e.preventDefault();
       await handleCancelSubscription();
     };
+
+
+
+    // Load charges table
+    if (currentPage === 'main') {
+      await loadChargesTable();
+    }
     // Attach meal card events
     attachMealCardEvents();
     // Attach sidebar quantity controls
@@ -2818,7 +3102,10 @@
             const isWeekend = (date.getDay() === 0 || date.getDay() === 6);
             
             // Disable frequency-based restricted dates
-            const dateStr = date.toISOString().split('T')[0];
+            // Use local timezone instead of UTC to avoid date offset issues
+            const dateStr = date.getFullYear() + '-' + 
+                           String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                           String(date.getDate()).padStart(2, '0');
             const isRestricted = restrictedDates.includes(dateStr);
             
             return isWeekend || isRestricted;
@@ -4439,8 +4726,11 @@
     let currentMin = startMin;
     
     // Check if it's today and adjust for past times
+    // Use local timezone instead of UTC to avoid date offset issues
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = today.getFullYear() + '-' + 
+                    String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(today.getDate()).padStart(2, '0');
     const isToday = selectedDate === todayStr;
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
