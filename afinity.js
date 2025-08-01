@@ -1549,6 +1549,61 @@
   }
 
   // Calculate total for meals page based on current selections
+  // Calculate conditional fees based on current meal selections and fulfillment method
+  function calculateConditionalFeesForMealsPage() {
+    // Use cached settings or default threshold
+    const subscriptionDeliveryFeeWaiverThreshold = 50; // Default threshold, can be updated via API call
+    
+    // Calculate the total of items (excluding fees)
+    let total = 0;
+    const currentMeals = getCurrentMealsArray();
+    
+    currentMeals.forEach(meal => {
+      if (meal.qty > 0) {
+        let price = 0;
+        
+        // Get price from catalog variants or fallback to meal price
+        if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+          const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(meal.id));
+          if (variant && variant.price) {
+            if (typeof variant.price === 'string') {
+              price = parseFloat(variant.price);
+            } else if (variant.price.amount) {
+              price = parseFloat(variant.price.amount);
+            } else if (typeof variant.price === 'number') {
+              price = variant.price;
+            }
+          }
+        }
+        
+        // Fallback to meal price if not found in catalog
+        if (price === 0) {
+          price = meal.price || 0;
+        }
+        
+        total += price * meal.qty;
+      }
+    });
+    
+    // Get current fulfillment method
+    const currentFulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
+    
+    let deliveryFee = 0;
+    let packagingFee = 0;
+    
+    // Always add packaging fee for delivery (1 quantity max)
+    if (currentFulfillmentMethod === 'Delivery') {
+      packagingFee = 2.99; // $2.99 packaging fee
+    }
+    
+    // Conditionally add delivery fee based on threshold
+    if (total < subscriptionDeliveryFeeWaiverThreshold) {
+      deliveryFee = 3.99; // $3.99 delivery fee
+    }
+    
+    return { deliveryFee, packagingFee };
+  }
+
   function calculateMealsPageTotal() {
     let totalCents = 0;
     
@@ -1587,10 +1642,10 @@
       }
     });
     
-    // Add hidden fees to total (packaging and delivery fees)
-    const hiddenFees = getHiddenFees();
-    const deliveryFeeCents = Math.round(hiddenFees.deliveryFee * 100);
-    const packagingFeeCents = Math.round(hiddenFees.packagingFee * 100);
+    // Add conditional fees to total (packaging and delivery fees)
+    const conditionalFees = calculateConditionalFeesForMealsPage();
+    const deliveryFeeCents = Math.round(conditionalFees.deliveryFee * 100);
+    const packagingFeeCents = Math.round(conditionalFees.packagingFee * 100);
     totalCents += deliveryFeeCents + packagingFeeCents;
     
     const total = (totalCents / 100).toFixed(2);
@@ -2427,6 +2482,12 @@
         totalCents += priceCents * meal.qty;
       }
     });
+    
+    // Add conditional fees to total (packaging and delivery fees)
+    const conditionalFees = calculateConditionalFeesForMealsPage();
+    const deliveryFeeCents = Math.round(conditionalFees.deliveryFee * 100);
+    const packagingFeeCents = Math.round(conditionalFees.packagingFee * 100);
+    totalCents += deliveryFeeCents + packagingFeeCents;
     
     // Convert back to dollars
     return totalCents / 100;
@@ -4210,6 +4271,32 @@
               ` : ''}
             ` : '';
           })()}
+          
+          ${(() => {
+            const conditionalFees = calculateConditionalFeesForMealsPage();
+            let feesHtml = '';
+            
+            if (conditionalFees.deliveryFee > 0) {
+              feesHtml += `
+                <div class="afinity-meals-sidebar-fee-row">
+                  <span>Delivery Fee:</span>
+                  <span>$${conditionalFees.deliveryFee.toFixed(2)}</span>
+                </div>
+              `;
+            }
+            
+            if (conditionalFees.packagingFee > 0) {
+              feesHtml += `
+                <div class="afinity-meals-sidebar-fee-row">
+                  <span>Packaging Fee:</span>
+                  <span>$${conditionalFees.packagingFee.toFixed(2)}</span>
+                </div>
+              `;
+            }
+            
+            return feesHtml;
+          })()}
+          
           <div class="afinity-meals-sidebar-total-row">
             <span>Total:</span>
             <span class="afinity-meals-sidebar-total-price">$${calculateSidebarTotal().toFixed(2)}</span>
