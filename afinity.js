@@ -1550,10 +1550,24 @@
 
   // Calculate total for meals page based on current selections
   // Calculate conditional fees based on current meal selections and fulfillment method
+  // Global variable to cache the delivery fee threshold
+  let cachedDeliveryFeeThreshold = 50; // Default threshold
+
+  // Function to fetch and cache the delivery fee threshold
+  async function fetchDeliveryFeeThreshold() {
+    try {
+      const response = await fetch(`${API_URL}/settings`);
+      if (response.ok) {
+        const settings = await response.json();
+        cachedDeliveryFeeThreshold = settings.subscription_delivery_fee_waiver_threshold || 50;
+      }
+    } catch (error) {
+      console.error('Error fetching delivery fee threshold:', error);
+    }
+  }
+
+  // Synchronous function for template rendering
   function calculateConditionalFeesForMealsPage() {
-    // Use cached settings or default threshold
-    const subscriptionDeliveryFeeWaiverThreshold = 50; // Default threshold, can be updated via API call
-    
     // Calculate the total of items (excluding fees)
     let total = 0;
     const currentMeals = getCurrentMealsArray();
@@ -1590,18 +1604,29 @@
     
     let deliveryFee = 0;
     let packagingFee = 0;
+    let shouldStrikeThroughDelivery = false;
     
-    // Always add packaging fee for delivery (1 quantity max)
+    // Only add fees for delivery method
     if (currentFulfillmentMethod === 'Delivery') {
+      // Always add packaging fee for delivery (1 quantity max)
       packagingFee = 2.99; // $2.99 packaging fee
+      
+      // Conditionally add delivery fee based on threshold
+      if (total < cachedDeliveryFeeThreshold) {
+        deliveryFee = 3.99; // $3.99 delivery fee
+      } else {
+        // Show delivery fee with strike-through when threshold is met
+        shouldStrikeThroughDelivery = true;
+      }
     }
     
-    // Conditionally add delivery fee based on threshold
-    if (total < subscriptionDeliveryFeeWaiverThreshold) {
-      deliveryFee = 3.99; // $3.99 delivery fee
-    }
-    
-    return { deliveryFee, packagingFee };
+    return { 
+      deliveryFee, 
+      packagingFee, 
+      shouldStrikeThroughDelivery,
+      threshold: cachedDeliveryFeeThreshold,
+      subtotal: total
+    };
   }
 
   function calculateMealsPageTotal() {
@@ -1888,6 +1913,9 @@
   }
 
   async function renderMealsPage() {
+    // Fetch delivery fee threshold when meals page loads
+    await fetchDeliveryFeeThreshold();
+    
     const currentDeliveryDate = await getNextChargeDateFromSubscription();
     
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
@@ -3438,6 +3466,12 @@
             }
           }
         }
+        
+        // If we're on the meals page, refresh the sidebar to update fees
+        if (currentPage === 'meals') {
+          rerenderSidebarMeals();
+        }
+        
         // Re-render the modal to show cleared date/time fields
         renderModal();
       };
@@ -4257,9 +4291,17 @@
             const conditionalFees = calculateConditionalFeesForMealsPage();
             let feesHtml = '';
             
-            if (conditionalFees.deliveryFee > 0) {
+            // Show delivery fee with strike-through when threshold is met
+            if (conditionalFees.shouldStrikeThroughDelivery) {
               feesHtml += `
-                <div class="afinity-meals-sidebar-fee-row">
+                <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>Delivery Fee:</span>
+                  <span style="text-decoration: line-through; color: #999;">$${3.99.toFixed(2)}</span>
+                </div>
+              `;
+            } else if (conditionalFees.deliveryFee > 0) {
+              feesHtml += `
+                <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
                   <span>Delivery Fee:</span>
                   <span>$${conditionalFees.deliveryFee.toFixed(2)}</span>
                 </div>
@@ -4268,7 +4310,7 @@
             
             if (conditionalFees.packagingFee > 0) {
               feesHtml += `
-                <div class="afinity-meals-sidebar-fee-row">
+                <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
                   <span>Packaging Fee:</span>
                   <span>$${conditionalFees.packagingFee.toFixed(2)}</span>
                 </div>
@@ -4276,6 +4318,26 @@
             }
             
             return feesHtml;
+          })()}
+          
+          ${(() => {
+            const conditionalFees = calculateConditionalFeesForMealsPage();
+            // Show threshold info for debugging (can be removed in production)
+            if (conditionalFees.subtotal > 0) {
+              return `
+                <div style="font-size: 11px; color: #999; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>Subtotal:</span>
+                    <span>$${conditionalFees.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>Threshold:</span>
+                    <span>$${conditionalFees.threshold.toFixed(2)}</span>
+                  </div>
+                </div>
+              `;
+            }
+            return '';
           })()}
           
           <div class="afinity-meals-sidebar-total-row">
