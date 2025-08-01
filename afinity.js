@@ -1797,8 +1797,11 @@
   function getMealsPageHeaderTotal() {
     // Check if any changes have been made to the meals
     const currentMeals = getCurrentMealsArray();
+    const subscriptionDate = getDeliveryDateFromSubscription();
+    const availableOriginalMeals = filterSelectedMealsByAvailability(originalSubscriptionMeals, subscriptionDate);
+    
     const hasChanges = currentMeals.some(meal => {
-      const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+      const originalMeal = availableOriginalMeals.find(orig => String(orig.id) === String(meal.id));
       if (!originalMeal) {
         // New meal added
         return meal.qty > 0;
@@ -1808,7 +1811,7 @@
     });
     
     // Also check if any original meals were removed (qty = 0)
-    const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+    const hasRemovals = availableOriginalMeals.some(origMeal => {
       const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
       return !selectedMeal || selectedMeal.qty === 0;
     });
@@ -2244,7 +2247,11 @@
               </ul>
               <h3>Add one time items to your next subscription charge</h3>
               <ul class="afinity-meals-sidebar-list swap-meals">
-                ${selectedMeals.filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+                ${selectedMeals.filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).filter(meal => {
+                  // Filter one-time meals based on availability for the subscription date
+                  const subscriptionDate = getDeliveryDateFromSubscription();
+                  return filterSelectedMealsByAvailability([meal], subscriptionDate).length > 0;
+                }).map(meal => {
                   let variant = null;
                   let img = MEAL_IMAGE;
                   let title = 'Meal';
@@ -2432,6 +2439,14 @@
       return '';
     }
 
+    // Get the subscription date for filtering
+    const subscriptionDate = getDeliveryDateFromSubscription();
+
+    // Check if product is available for the subscription date
+    if (!isProductAvailableForDate(product, subscriptionDate)) {
+      return ''; // Don't render this product if it's not available for the subscription date
+    }
+
     // Get the catalog ID from currentCatalogPayload
     const catalogId = currentCatalogPayload?.catalogId ? 
       currentCatalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '') : null;
@@ -2494,10 +2509,14 @@
     
     // Check if this variant is in selectedMeals
     const isActive = selectedMeals.find(m => String(m.id) === String(variant.id) && m.qty > 0);
+    // Get launch and delist dates from product
+    const launchDate = product.launchDate?.value || product.launchDate || '';
+    const delistDate = product.delistDate?.value || product.delistDate || '';
+    
     return `
       <li class="afinity-r-meals-grid__item" style="display: block;"
-        data-product-start-date="2025-01-01"
-        data-product-end-date="2025-12-31"
+        data-product-start-date="${launchDate}"
+        data-product-end-date="${delistDate}"
         data-is-first-variant="true"
       >
         <div class="afinity-r-card${isActive ? ' afinity-r-card--active' : ''}" 
@@ -2854,6 +2873,8 @@
       // Add a small delay before refreshing to ensure the update has processed
       setTimeout(async () => {
         await refreshSubscriptionData(subscriptionId);
+        // Refresh meals display to show/hide products based on new date
+        refreshMealsDisplayForDateChange();
       }, 1000);
     } catch (error) {
       showToast('Error saving changes', 'error');
@@ -4128,10 +4149,16 @@
 
   // Update rerenderSidebarMeals and renderSidebarMeals to recalculate and update the cart total
   function renderSidebarMeals() {
+    // Get the subscription date for filtering
+    const subscriptionDate = getDeliveryDateFromSubscription();
+    
+    // Filter original subscription meals by availability
+    const availableOriginalMeals = filterSelectedMealsByAvailability(originalSubscriptionMeals, subscriptionDate);
+    
     // Current Meals in Subscription (Read Only)
     const sidebarList = document.querySelector('.afinity-meals-sidebar-list.current-meals');
     if (sidebarList) {
-      sidebarList.innerHTML = originalSubscriptionMeals.map(origMeal => {
+      sidebarList.innerHTML = availableOriginalMeals.map(origMeal => {
         
         // Always use catalog variants data as the primary source
         let variant = null;
@@ -4193,7 +4220,10 @@
     // Swap Meals
     const swapList = document.querySelector('.afinity-meals-sidebar-list.swap-meals');
     if (swapList) {
-      swapList.innerHTML = selectedMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+      swapList.innerHTML = selectedMeals.filter(m => m.qty > 0 && !availableOriginalMeals.some(o => String(o.id) === String(m.id))).filter(meal => {
+        // Filter one-time meals based on availability for the subscription date
+        return filterSelectedMealsByAvailability([meal], subscriptionDate).length > 0;
+      }).map(meal => {
         let variant = null;
         let img = MEAL_IMAGE; // Default fallback image
         let title = 'Meal';
@@ -4247,12 +4277,18 @@
 
   // Helper function to render just the sidebar content for meals page
   function renderMealsPageSidebar() {
+    // Get the subscription date for filtering
+    const subscriptionDate = getDeliveryDateFromSubscription();
+    
+    // Filter original subscription meals by availability
+    const availableOriginalMeals = filterSelectedMealsByAvailability(originalSubscriptionMeals, subscriptionDate);
+    
     return `
       ${mealsPageMode === 'update' ? `
         <!-- Update Mode: Show all meals as editable -->
         <h3>Current Meals in Subscription</h3>
         <ul class="afinity-meals-sidebar-list subscription-meals">
-          ${originalSubscriptionMeals.map(origMeal => {
+          ${availableOriginalMeals.map(origMeal => {
             // Find the current quantity from current meals array
             const currentMeals = getCurrentMealsArray();
             const sel = currentMeals.find(m => String(m.id) === String(origMeal.id));
@@ -4312,9 +4348,13 @@
           }).join('')}
         </ul>
 
-        <h3>New meals to your Subscription</h3>
-        <ul class="afinity-meals-sidebar-list swap-meals">
-          ${getCurrentMealsArray().filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+                      <h3>New meals to your Subscription</h3>
+              <ul class="afinity-meals-sidebar-list swap-meals">
+                ${getCurrentMealsArray().filter(m => m.qty > 0 && !availableOriginalMeals.some(o => String(o.id) === String(m.id))).filter(meal => {
+                  // Filter new meals based on availability for the subscription date
+                  const subscriptionDate = getDeliveryDateFromSubscription();
+                  return filterSelectedMealsByAvailability([meal], subscriptionDate).length > 0;
+                }).map(meal => {
             let variant = null;
             let img = MEAL_IMAGE;
             let title = 'Meal';
@@ -4534,7 +4574,12 @@
           })() : 
           (() => {
             const currentMeals = getCurrentMealsArray();
-            const oneTimeMeals = currentMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id)));
+            const subscriptionDate = getDeliveryDateFromSubscription();
+            const availableOriginalMeals = filterSelectedMealsByAvailability(originalSubscriptionMeals, subscriptionDate);
+            const oneTimeMeals = currentMeals.filter(m => m.qty > 0 && !availableOriginalMeals.some(o => String(o.id) === String(m.id))).filter(meal => {
+              // Filter one-time meals based on availability for the subscription date
+              return filterSelectedMealsByAvailability([meal], subscriptionDate).length > 0;
+            });
             return oneTimeMeals.length === 0 ? 'disabled' : '';
           })()}>
           ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'}
@@ -4565,6 +4610,10 @@
             // Check if there are any changes to save
             const currentMeals = getCurrentMealsArray();
             
+            // Get the subscription date for filtering
+            const subscriptionDate = getDeliveryDateFromSubscription();
+            const availableOriginalMeals = filterSelectedMealsByAvailability(originalSubscriptionMeals, subscriptionDate);
+            
             // Check if cart is empty (no meals with qty > 0)
             const hasMealsInCart = currentMeals.some(meal => meal.qty > 0);
             if (!hasMealsInCart) {
@@ -4573,7 +4622,7 @@
             }
             
             const hasChanges = currentMeals.some(meal => {
-              const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
+              const originalMeal = availableOriginalMeals.find(orig => String(orig.id) === String(meal.id));
               if (!originalMeal) {
                 // New meal added
                 return meal.qty > 0;
@@ -4583,7 +4632,7 @@
             });
             
             // Also check if any original meals were removed (qty = 0)
-            const hasRemovals = originalSubscriptionMeals.some(origMeal => {
+            const hasRemovals = availableOriginalMeals.some(origMeal => {
               const selectedMeal = currentMeals.find(sel => String(sel.id) === String(origMeal.id));
               return !selectedMeal || selectedMeal.qty === 0;
             });
@@ -4689,7 +4738,11 @@
             
             // Check if there are any one-time meals to add
             const currentMeals = getCurrentMealsArray();
-            const oneTimeMeals = currentMeals.filter(meal => meal.qty > 0);
+            const subscriptionDate = getDeliveryDateFromSubscription();
+            const oneTimeMeals = currentMeals.filter(meal => meal.qty > 0).filter(meal => {
+              // Filter one-time meals based on availability for the subscription date
+              return filterSelectedMealsByAvailability([meal], subscriptionDate).length > 0;
+            });
             
             if (oneTimeMeals.length === 0) {
               showToast('Cannot save empty cart. Please add meals before saving.', 'error');
@@ -5474,6 +5527,87 @@
           }
         }
       });
+    }
+  }
+
+  // Helper function to check if a product is available for the subscription date
+  function isProductAvailableForDate(product, subscriptionDate) {
+    if (!subscriptionDate) {
+      return true; // If no subscription date, show all products
+    }
+
+    // Get launch and delist dates from product
+    const launchDate = product.launchDate?.value || product.launchDate;
+    const delistDate = product.delistDate?.value || product.delistDate;
+
+    // If no dates are set, show the product
+    if (!launchDate && !delistDate) {
+      return true;
+    }
+
+    // Compare dates as strings (YYYY-MM-DD format) to avoid timezone issues
+    // Check launch date
+    if (launchDate) {
+      if (subscriptionDate < launchDate) {
+        return false; // Subscription date is before launch date
+      }
+    }
+
+    // Check delist date
+    if (delistDate) {
+      if (subscriptionDate > delistDate) {
+        return false; // Subscription date is after delist date
+      }
+    }
+
+    return true; // Product is available for this date
+  }
+
+  // Helper function to filter selected meals based on availability
+  function filterSelectedMealsByAvailability(selectedMealsArray, subscriptionDate) {
+    if (!subscriptionDate) {
+      return selectedMealsArray; // If no subscription date, keep all selected meals
+    }
+
+    return selectedMealsArray.filter(meal => {
+      // Find the product data for this meal
+      if (menuData && menuData.items) {
+        for (const collectionItem of menuData.items) {
+          if (collectionItem.collection && collectionItem.collection.products) {
+            const product = collectionItem.collection.products.edges.find(edge => {
+              const productNode = edge.node;
+              return productNode.variants && productNode.variants.edges.some(variantEdge => 
+                String(variantEdge.node.id) === String(meal.id)
+              );
+            });
+            
+            if (product) {
+              return isProductAvailableForDate(product.node, subscriptionDate);
+            }
+          }
+        }
+      }
+      
+      // If we can't find the product data, keep the meal (better to show than hide)
+      return true;
+    });
+  }
+
+  // Function to refresh meals display when subscription date changes
+  function refreshMealsDisplayForDateChange() {
+    if (currentPage === 'meals') {
+      // Re-render the meals grid to show/hide products based on new date
+      const mealsGrid = modalOverlay && modalOverlay.querySelector('.afinity-meals-grid-container');
+      if (mealsGrid) {
+        const mealsGridContent = renderMealsGrid();
+        mealsGrid.innerHTML = mealsGridContent;
+      }
+      
+      // Re-render the sidebar to update available meals
+      rerenderSidebarMeals();
+      
+      // Re-attach meal card events
+      attachMealCardEvents();
     }
   }
 })();
