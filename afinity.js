@@ -3037,7 +3037,7 @@
         
         let isoString = '';
         try {
-          const timeStr = toAmPm(timeToUse || '15:30');
+          const timeStr = toAmPm(timeToUse);
           isoString = getLocalISOFromDateAndTime(
             modalChanges.deliveryDate,
             timeStr,
@@ -3045,7 +3045,6 @@
           );
         } catch (e) {
           showToast('Invalid date or time format', 'error');
-          
           return;
         }
         if (isoString) {
@@ -3767,10 +3766,6 @@
                 const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
                 const [hours, minutes] = timeWithOffset.split(':');
                 fulfillmentTime = `${hours}:${minutes}`;
-              } else {
-                // Format: "2025-07-03"
-                deliveryDate = fulfillmentDateTime;
-                fulfillmentTime = '15:30'; // Default time
               }
             } else {
               // No Fulfillment Date found, set empty values to force user selection
@@ -3866,7 +3861,9 @@
           try {
             await fetchSubscriptionAndPickup(subscriptionId, zip);
             // After fetching available dates, initialize the date and time pickers with current values
+            console.log('About to call initializeDateAndTimePickers');
             await initializeDateAndTimePickers();
+            console.log('Finished calling initializeDateAndTimePickers');
           } catch (err) {
             console.error("Error in fetchSubscriptionAndPickup", err);
           }
@@ -5197,6 +5194,9 @@
     
           // Initialize time picker with current time
       const timeInput = document.getElementById('timepicker');
+      console.log('initializeDateAndTimePickers - timeInput element:', timeInput);
+      console.log('initializeDateAndTimePickers - jQuery available:', typeof jQuery !== 'undefined');
+      console.log('initializeDateAndTimePickers - jQuery.fn.timepicker available:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker);
       
       if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
         console.log('initializeDateAndTimePickers - Initializing time picker');
@@ -5505,6 +5505,10 @@
   function reinitializeTimePicker() {
     console.log('reinitializeTimePicker called');
     const timeInput = document.getElementById('timepicker');
+    console.log('reinitializeTimePicker - timeInput element:', timeInput);
+    console.log('reinitializeTimePicker - jQuery available:', typeof jQuery !== 'undefined');
+    console.log('reinitializeTimePicker - jQuery.fn.timepicker available:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker);
+    
     if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
       if ($(timeInput).data('timepicker')) {
         console.log('Removing existing timepicker');
