@@ -540,6 +540,18 @@
       
       if (hasFulfillmentMethodChange || hasBundleUpdate) {
         try {
+          // Get the fulfillment type from the payload
+          let fulfillmentType = 'Delivery'; // default
+          if (updatePayload.order_attributes) {
+            const fulfillmentTypeAttr = updatePayload.order_attributes.find(attr => {
+              const key = Object.keys(attr)[0];
+              return key === 'Fulfillment Type';
+            });
+            if (fulfillmentTypeAttr) {
+              fulfillmentType = fulfillmentTypeAttr['Fulfillment Type'];
+            }
+          }
+          
           // Get current subscription items (excluding fees)
           const currentItems = currentSubscription?.bundle_selections?.items || [];
           const itemsWithoutFees = currentItems.filter(item => {
@@ -547,8 +559,20 @@
             return productId !== '7927816716345' && productId !== '7933253517369';
           });
           
+          // Create a mock modalChanges object with the fulfillment type from payload
+          const mockModalChanges = {
+            fulfillmentMethod: fulfillmentType
+          };
+          
+          // Temporarily override the global modalChanges for fee calculation
+          const originalModalChanges = modalChanges;
+          modalChanges = mockModalChanges;
+          
           // Apply conditional fee logic
           const updatedItems = await handleConditionalFees(itemsWithoutFees, subscriptionId);
+          
+          // Restore original modalChanges
+          modalChanges = originalModalChanges;
           
           // Update the payload with the new bundle items
           finalUpdatePayload.bundle_selections = {
