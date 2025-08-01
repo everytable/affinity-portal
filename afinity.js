@@ -526,10 +526,44 @@
     isUpdatingSubscription = true;
     
     try {
+      // Apply conditional fee logic before making the API call
+      let finalUpdatePayload = { ...updatePayload };
+      
+      // Check if this is a fulfillment method change or bundle update
+      const hasFulfillmentMethodChange = updatePayload.order_attributes && 
+        updatePayload.order_attributes.some(attr => {
+          const key = Object.keys(attr)[0];
+          return key === 'Fulfillment Type';
+        });
+      
+      const hasBundleUpdate = updatePayload.bundle_selections;
+      
+      if (hasFulfillmentMethodChange || hasBundleUpdate) {
+        try {
+          // Get current subscription items (excluding fees)
+          const currentItems = currentSubscription?.bundle_selections?.items || [];
+          const itemsWithoutFees = currentItems.filter(item => {
+            const productId = item.external_product_id || item.product_id;
+            return productId !== '7927816716345' && productId !== '7933253517369';
+          });
+          
+          // Apply conditional fee logic
+          const updatedItems = await handleConditionalFees(itemsWithoutFees, subscriptionId);
+          
+          // Update the payload with the new bundle items
+          finalUpdatePayload.bundle_selections = {
+            items: updatedItems
+          };
+        } catch (error) {
+          console.error('Error applying conditional fees:', error);
+          // Continue with original payload if fee logic fails
+        }
+      }
+      
       const response = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
+        body: JSON.stringify(finalUpdatePayload)
       });
       
       const result = await response.json();
@@ -557,7 +591,7 @@
           const retryResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatePayload)
+            body: JSON.stringify(finalUpdatePayload)
           });
           const retryResult = await retryResponse.json();
           return retryResult;
@@ -956,6 +990,13 @@
       // Ensure catalog variants are loaded for meal data mapping
       if (!currentCatalogVariants || !currentCatalogVariants.variants) {
         await getCatalogVariants();
+      }
+      
+      // Fetch delivery fee threshold settings for conditional fee calculations
+      try {
+        await fetchDeliveryFeeThreshold();
+      } catch (error) {
+        console.error('Error fetching delivery fee threshold:', error);
       }
       
       if (data.data) {
@@ -2703,32 +2744,6 @@
         return;
       }
 
-      // Handle conditional fees for subscription bundle
-      try {
-        // Get current subscription items
-        const currentItems = currentSubscription?.bundle_selections?.items || [];
-        
-        // Apply conditional fee logic
-        const updatedItems = await handleConditionalFees(currentItems, subscriptionId);
-        
-        // If items changed, update the subscription bundle
-        if (JSON.stringify(currentItems) !== JSON.stringify(updatedItems)) {
-          const bundleUpdatePayload = {
-            bundle_selections: {
-              items: updatedItems
-            }
-          };
-          
-          const bundleUpdateData = await updateSubscriptionSafely(subscriptionId, bundleUpdatePayload);
-          if (!bundleUpdateData.success) {
-            console.warn('Failed to update bundle with conditional fees:', bundleUpdateData.error);
-          }
-        }
-      } catch (error) {
-        console.error('Error handling conditional fees:', error);
-        // Don't fail the entire save operation if fee handling fails
-      }
-
       showToast('All changes saved successfully!', 'success');
       // Add a small delay before refreshing to ensure the update has processed
       setTimeout(async () => {
@@ -3754,6 +3769,13 @@
             }
           }
           
+          // Fetch delivery fee threshold settings for conditional fee calculations
+          try {
+            await fetchDeliveryFeeThreshold();
+          } catch (err) {
+            console.error("Error fetching delivery fee threshold:", err);
+          }
+
           currentPage = 'main';
           if (modalOverlay) {
             modalOverlay.style.display = '';
