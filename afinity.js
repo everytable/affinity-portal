@@ -1417,7 +1417,23 @@
       if (fulfillmentDateTime.includes('T')) {
         // Extract time and convert to 24-hour format
         const timePart = fulfillmentDateTime.split('T')[1];
-        const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+        // Handle both positive and negative timezone offsets
+        let timeWithOffset;
+        if (timePart.includes('+')) {
+          timeWithOffset = timePart.split('+')[0];
+        } else if (timePart.includes('-')) {
+          // Check if this is a timezone offset or just the time
+          const parts = timePart.split('-');
+          if (parts.length >= 3) {
+            // This is likely a timezone offset (e.g., "15:30:00-07:00")
+            timeWithOffset = parts[0] + ':' + parts[1];
+          } else {
+            // This is just the time (e.g., "15:30")
+            timeWithOffset = timePart;
+          }
+        } else {
+          timeWithOffset = timePart;
+        }
         const [hours, minutes] = timeWithOffset.split(':');
         return `${hours}:${minutes}`;
       }
@@ -2787,13 +2803,19 @@
         frequencyData = parseFrequency(modalChanges.selectedFrequency);
       }
       
+      console.log('saveDate - modalChanges:', modalChanges);
+      console.log('saveDate - fulfillmentTime from modalChanges:', modalChanges.fulfillmentTime);
+      console.log('saveDate - global fulfillmentTime:', fulfillmentTime);
+      
       const updatePayload = {
         order_attributes: orderAttributesArr,
         deliveryDate: modalChanges.deliveryDate,
-        fulfillmentTime: modalChanges.fulfillmentTime,
+        fulfillmentTime: modalChanges.fulfillmentTime || fulfillmentTime,
         selectedFrequency: modalChanges.selectedFrequency,
         ...(frequencyData && { subscription_preferences: frequencyData })
       };
+      
+      console.log('saveDate - final updatePayload:', updatePayload);
       
       const subscriptionData = await updateSubscriptionSafely(subscriptionId, updatePayload);
       if (!subscriptionData.success) {
