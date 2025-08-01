@@ -1914,7 +1914,9 @@
           </div>
           <div class="afinity-modal-row">
             <label for="afinity-time" class="afinity-modal-select-label">Time</label>
-            <input id="timepicker" class="timepicker" type="text" placeholder="Select delivery time" value="${formatTimeForDisplay(modalChanges.fulfillmentTime || fulfillmentTime || getFulfillmentTimeFromSubscription())}"/>
+            <select id="timepicker" class="timepicker">
+              <option value="">Select delivery time</option>
+            </select>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:8px;">
             <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()">Save</button>
@@ -5239,8 +5241,11 @@
     const dateInput = document.getElementById('afinity-date');
     if (dateInput) dateInput.value = '';
     
-    const timeInput = document.getElementById('timepicker');
-    if (timeInput) timeInput.value = '';
+    const timeSelect = document.getElementById('timepicker');
+    if (timeSelect) {
+      timeSelect.innerHTML = '<option value="">Select delivery time</option>';
+      timeSelect.value = '';
+    }
     // 3. Fetch new available dates and reset pickers
     await fetchAvailableDates(zip, locationId);
     setupDatePicker(fulfillmentType);
@@ -5420,16 +5425,12 @@
   // Add this new function near other helpers
   function reinitializeTimePicker() {
     console.log('reinitializeTimePicker called');
-    const timeInput = document.getElementById('timepicker');
-    console.log('reinitializeTimePicker - timeInput element:', timeInput);
-    console.log('reinitializeTimePicker - jQuery available:', typeof jQuery !== 'undefined');
-    console.log('reinitializeTimePicker - jQuery.fn.timepicker available:', typeof jQuery !== 'undefined' && jQuery.fn.timepicker);
+    const timeSelect = document.getElementById('timepicker');
+    console.log('reinitializeTimePicker - timeSelect element:', timeSelect);
     
-    if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
-      if ($(timeInput).data('timepicker')) {
-        console.log('Removing existing timepicker');
-        $(timeInput).timepicker('remove');
-      }
+    if (timeSelect) {
+      // Clear existing options except the first placeholder
+      timeSelect.innerHTML = '<option value="">Select delivery time</option>';
 
       // Generate time options based on the selected date
       const selectedDate = modalChanges.deliveryDate || deliveryDate;
@@ -5441,10 +5442,10 @@
       // Check if the selected date is in frequency-based restricted dates
       const restrictedDates = getRestrictedDates();
       if (selectedDate && restrictedDates.includes(selectedDate)) {
-        timeInput.value = '';
+        timeSelect.value = '';
         updateModalChanges('fulfillmentTime', '');
         fulfillmentTime = '';
-        return; // Don't initialize time picker for restricted dates
+        return; // Don't populate time options for restricted dates
       }
 
       // Fallback to default if empty
@@ -5462,13 +5463,17 @@
         ];
       }
 
-      // Set min/max from the generated options
-      const minTime = timeOptions[0];
-      const maxTime = timeOptions[timeOptions.length - 1];
+      // Populate the select element with time options
+      timeOptions.forEach(timeOption => {
+        const option = document.createElement('option');
+        option.value = timeOption;
+        option.textContent = timeOption;
+        timeSelect.appendChild(option);
+      });
 
-      // Determine the correct default time (from modalChanges, fallback to fulfillmentTime, fallback to minTime)
+      // Determine the correct default time (from modalChanges, fallback to fulfillmentTime, fallback to first available time)
       let defaultTime24 = fulfillmentTime || modalChanges.fulfillmentTime;
-      let defaultTime12 = minTime; // fallback
+      let defaultTime12 = timeOptions[0]; // fallback to first available time
       if (defaultTime24) {
         // Convert 24-hour format (e.g., '15:30') to 12-hour format (e.g., '3:30 PM')
         const [h, m] = defaultTime24.split(':');
@@ -5480,53 +5485,47 @@
         defaultTime12 = `${displayHour}:${minute} ${ampm}`;
       }
 
-      // If the default time is not in the available options, fallback to minTime
+      // If the default time is not in the available options, fallback to first available time
       if (!timeOptions.includes(defaultTime12)) {
-        defaultTime12 = minTime;
+        defaultTime12 = timeOptions[0];
       }
 
+      // Set the selected value
+      timeSelect.value = defaultTime12;
 
-      console.log("FINISHED.")
-      $(timeInput).timepicker({
-        interval: 15,
-        minTime,
-        maxTime,
-        defaultTime: defaultTime12,
-        startTime: minTime,
-        dynamic: false,
-        dropdown: true,
-        scrollbar: true,
-        change: function(time) {
-          console.log('reinitializeTimePicker - Time picker change event triggered with time:', time);
-          if (time) {
-            // Convert 12-hour format to 24-hour format for storage
-            const [timeStr, period] = time.split(' ');
-            const [hour, minute] = timeStr.split(':');
-            let hour24 = parseInt(hour);
-            if (period === 'PM' && hour24 < 12) hour24 += 12;
-            if (period === 'AM' && hour24 === 12) hour24 = 0;
-            const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
-            
-            console.log('reinitializeTimePicker - Converted time to 24-hour format:', time24Format);
-            
-            // Check if this is a different time from the original
-            const originalTime = getFulfillmentTimeFromSubscription();
-            console.log('reinitializeTimePicker - Original time from subscription:', originalTime);
-            
-            if (time24Format && time24Format !== originalTime) {
-              // Show a warning toast about the consequences
-              showToast('Note: Moving the fulfillment time will affect the charge date on all upcoming orders.', 'info');
-            }
-            
-            console.log('reinitializeTimePicker - Before updateModalChanges - modalChanges:', modalChanges);
-            updateModalChanges('fulfillmentTime', time24Format);
-            console.log('reinitializeTimePicker - After updateModalChanges - modalChanges:', modalChanges);
-            
-            fulfillmentTime = time24Format;
-            console.log('reinitializeTimePicker - Time picker changed to:', time24Format);
+      // Add change event listener
+      timeSelect.addEventListener('change', function() {
+        console.log('reinitializeTimePicker - Time select change event triggered with time:', this.value);
+        if (this.value) {
+          // Convert 12-hour format to 24-hour format for storage
+          const [timeStr, period] = this.value.split(' ');
+          const [hour, minute] = timeStr.split(':');
+          let hour24 = parseInt(hour);
+          if (period === 'PM' && hour24 < 12) hour24 += 12;
+          if (period === 'AM' && hour24 === 12) hour24 = 0;
+          const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
+          
+          console.log('reinitializeTimePicker - Converted time to 24-hour format:', time24Format);
+          
+          // Check if this is a different time from the original
+          const originalTime = getFulfillmentTimeFromSubscription();
+          console.log('reinitializeTimePicker - Original time from subscription:', originalTime);
+          
+          if (time24Format && time24Format !== originalTime) {
+            // Show a warning toast about the consequences
+            showToast('Note: Moving the fulfillment time will affect the charge date on all upcoming orders.', 'info');
           }
+          
+          console.log('reinitializeTimePicker - Before updateModalChanges - modalChanges:', modalChanges);
+          updateModalChanges('fulfillmentTime', time24Format);
+          console.log('reinitializeTimePicker - After updateModalChanges - modalChanges:', modalChanges);
+          
+          fulfillmentTime = time24Format;
+          console.log('reinitializeTimePicker - Time select changed to:', time24Format);
         }
       });
+
+      console.log("FINISHED - Select element populated with time options");
     }
   }
 
