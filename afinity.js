@@ -552,11 +552,12 @@
             }
           }
           
-          // Get current subscription items (excluding fees)
+          // Get current subscription items (excluding delivery fee and packaging fee)
           const currentItems = currentSubscription?.bundle_selections?.items || [];
           const itemsWithoutFees = currentItems.filter(item => {
             const productId = item.external_product_id || item.product_id;
-            return productId !== '7927816716345' && productId !== '7933253517369';
+            // Filter out delivery fee (7933253517369) and packaging fee (7927816716345)
+            return productId !== '7933253517369' && productId !== '7927816716345';
           });
           
           // Create a mock modalChanges object with the fulfillment type from payload
