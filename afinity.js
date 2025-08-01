@@ -243,7 +243,7 @@
     } catch (error) {
       console.error('Error fetching charges:', error);
       return [];
-    }
+    } 
   }
 
   // Function to render charges table
@@ -824,8 +824,6 @@
       allowedPickupDates = [];
       window.deliveryDaysData = [];
       window.pickupLocationsData = [];
-    }finally{
-      hideModalLoading();
     }
   }
 
@@ -1194,9 +1192,7 @@
         pickupLocationsLoading = false;
         renderPickupLocationsSection();
         return [];
-      }).finally(() => {
-        hideModalLoading();
-      });
+      })
     return pickupLocationsPromise;
   }
 
@@ -3576,7 +3572,6 @@
   // Listen for the event on document
   document.addEventListener('Recharge::click::manageSubscription', function(event) {
     event.preventDefault();
-    showModalLoading
     // When modal is closed, the style is set to none, so we need to set it to block
     if(modalOverlay) {
       modalOverlay.style.display = 'block';
@@ -3720,6 +3715,7 @@
             console.error("Error fetching delivery fee threshold:", err);
           }
 
+          hideModalLoading();
           currentPage = 'main';
           if (modalOverlay) {
             modalOverlay.style.display = '';
@@ -3790,6 +3786,7 @@
 
           if (locationId && zip) {
             fetchPickupLocations(zip).then(pickupLocations => {
+              console.log("FETCHED PICKUP LOCATIONS");
               const matchedLocation = pickupLocations.find(loc => String(loc.id) === String(locationId));
               const locationName = matchedLocation ? matchedLocation.name : null;
               if (locationName) {
@@ -3798,18 +3795,15 @@
                   .then(resp => resp.json())
                   .then(catalogPayload => {
                     currentCatalogPayload = catalogPayload;
-                    
-                    // Fetch variants for this catalog
                     if (catalogPayload && catalogPayload.catalogId) {
-                      showModalLoading();
                       const catalogId = catalogPayload.catalogId.replace('gid://shopify/MarketCatalog/', '');
                       fetch(`${API_URL}/subscriptions/${catalogId}/variants`)
                         .then(resp => resp.json())
                         .then(async (variantsData) => {
                           currentCatalogVariants = variantsData;
-                          rerenderModalCartList();
+                          await rerenderModalCartList();
                           await renderModal();
-                          initializeDateAndTimePickers();
+                          await initializeDateAndTimePickers();
                         })
                         .catch(err => {
                           currentCatalogVariants = null;
@@ -3876,6 +3870,7 @@
               currentCatalogPayload = null;
             }
           }
+
         })
         .catch(error => {
           console.error('Error fetching subscription data:', error);
@@ -3893,7 +3888,9 @@
       renderModal();
     }
 
-  });
+    hideModalLoading();
+    console.log("FINALLY DONE")
+  })
 
   // Helper to get variant by id
   function getVariantById(variantId) {
