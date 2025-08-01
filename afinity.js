@@ -1138,6 +1138,9 @@
           });
         }
         
+        // Update fulfillment time from subscription data
+        fulfillmentTime = getFulfillmentTimeFromSubscription();
+        
         // Update modalChanges with fresh data
         updateModalChanges('address1', address1);
         updateModalChanges('address2', address2);
@@ -1147,6 +1150,7 @@
         updateModalChanges('fulfillmentMethod', fulfillmentMethod);
         updateModalChanges('deliveryDate', deliveryDate);
         updateModalChanges('selectedFrequency', selectedFrequency);
+        updateModalChanges('fulfillmentTime', fulfillmentTime);
         
         // Re-render the modal to show updated data
         renderModal();
@@ -2780,22 +2784,22 @@
         timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
       }
       
-      // Get time directly from the UI input field using jQuery
-      const timeInput = $('#timepicker');
+      // Get time directly from the UI select field
+      const timeSelect = document.getElementById('timepicker');
       let timeToUse = '';
       
-      console.log("timeInput:", timeInput);
-      if (timeInput && timeInput.length) {
-        const timeValue = timeInput.val().trim().toLowerCase();
-        console.log("timeInput.val():", timeValue);
+      console.log("timeSelect:", timeSelect);
+      if (timeSelect && timeSelect.value) {
+        const timeValue = timeSelect.value.trim();
+        console.log("timeSelect.value:", timeValue);
         if (timeValue) {
-          // Handle cases like "8:00pm" and "8:00 pm"
-          const timeParts = timeValue.match(/(\d+):(\d+)\s*([ap]m)/);
+          // Handle cases like "8:00 PM" and "8:00 PM"
+          const timeParts = timeValue.match(/(\d+):(\d+)\s*([AP]M)/);
           if (timeParts) {
             const [_, hour, minute, period] = timeParts;
             let hour24 = parseInt(hour);
-            if (period === 'pm' && hour24 < 12) hour24 += 12;
-            if (period === 'am' && hour24 === 12) hour24 = 0;
+            if (period === 'PM' && hour24 < 12) hour24 += 12;
+            if (period === 'AM' && hour24 === 12) hour24 = 0;
             timeToUse = `${hour24.toString().padStart(2, '0')}:${minute}`;
             console.log("Parsed timeToUse:", timeToUse);
           }
@@ -2866,8 +2870,7 @@
       
       const subscriptionData = await updateSubscriptionSafely(subscriptionId, updatePayload);
       if (!subscriptionData.success) {
-        showToast(subscriptionData.error || 'Failed to update subscription', 'error');
-        
+        showToast('Failed to update subscription, if you previously just saved. Please wait a minute before trying again.', 'error');
         return;
       }
 
@@ -2875,8 +2878,16 @@
       // Add a small delay before refreshing to ensure the update has processed
       setTimeout(async () => {
         await refreshSubscriptionData(subscriptionId);
+        
+        // Re-fetch available dates and times for the zip code
+        const currentZip = modalChanges.zip || zip;
+        const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+        await fetchAvailableDates(currentZip, currentPickupLocationId);
+        
         // Refresh meals display to show/hide products based on new date
         refreshMealsDisplayForDateChange();
+        // Reinitialize the time picker with updated data
+        reinitializeTimePicker();
       }, 1000);
     } catch (error) {
       showToast('Error saving changes', 'error');
@@ -2959,223 +2970,8 @@
    
     const saveBtn = modalOverlay.querySelector('.afinity-modal-footer-save-btn');
     if (saveBtn) saveBtn.onclick = async () => {
-      
-      // Check for fulfillment date changes and get confirmation
-      if (!(await confirmFulfillmentDateChange())) {
-        return; // User cancelled, don't proceed
-      }
-      
-      // Show loading state
-      showModalLoading();
-      
-      try {
-        const subscriptionId = currentSubscription?.id;
-        if (!subscriptionId) {
-          showToast('No subscription ID found', 'error');
-          return;
-        }
-
-        // Update address using the dedicated address endpoint
-        if (modalChanges.address1 || modalChanges.address2 || modalChanges.city || modalChanges.state || modalChanges.zip) {
-          const addressData = {
-            subscriptionId: subscriptionId,
-            address1: modalChanges.address1,
-            address2: modalChanges.address2,
-            city: modalChanges.city,
-            state: modalChanges.state,
-            zip: modalChanges.zip
-          };
-
-          const addressResponse = await fetch(`${API_URL}/subscription/address`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(addressData)
-          });
-
-          const addressResult = await addressResponse.json();
-          if (!addressResult.success) {
-            console.error('Failed to update address:', addressResult);
-            showToast(addressResult.error || 'Failed to update address', 'error');
-            
-            return;
-          }
-        }
-
-        // Update subscription with all changes
-        // Always update fulfillment type and related fields
-        const orderAttributesArr = [];
-        
-        // First, get all existing order attributes from the current subscription
-        if (currentSubscription?.include?.address?.order_attributes) {
-          // Convert existing order attributes to the format we need
-          currentSubscription.include.address.order_attributes.forEach(attr => {
-            if (attr && typeof attr === 'object') {
-              // Handle both {name, value} and {"Key": "Value"} formats
-              if ('name' in attr && 'value' in attr) {
-                orderAttributesArr.push({ [attr.name]: attr.value });
-              } else {
-                // It's already in {"Key": "Value"} format
-                orderAttributesArr.push(attr);
-              }
-            }
-          });
-        }
-        
-        // Now update or add the specific attributes we're changing
-        if (modalChanges.fulfillmentMethod || fulfillmentMethod) {
-          // Update existing Fulfillment Type or add new one
-          const existingIndex = orderAttributesArr.findIndex(attr => 
-            Object.keys(attr)[0] === 'Fulfillment Type'
-          );
-          if (existingIndex !== -1) {
-            orderAttributesArr[existingIndex] = { "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod };
-          } else {
-            orderAttributesArr.push({ "Fulfillment Type": modalChanges.fulfillmentMethod || fulfillmentMethod });
-          }
-        }
-        
-        // Always include LocationID
-        let locationIdToSend = null;
-        if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
-          locationIdToSend = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
-        } else {
-          // For Delivery, use the delivery location ID from subscription
-          locationIdToSend = currentSubscription?.deliveryLocation?.location_id;
-        }
-        
-        if (locationIdToSend) {
-          // Update existing LocationID or add new one
-          const existingIndex = orderAttributesArr.findIndex(attr => 
-            Object.keys(attr)[0] === 'LocationID'
-          );
-          if (existingIndex !== -1) {
-            orderAttributesArr[existingIndex] = { "LocationID": locationIdToSend };
-          } else {
-            orderAttributesArr.push({ "LocationID": locationIdToSend });
-          }
-        }
-        
-        // Compute ISO string for Fulfillment Date
-        let timeZone = '';
-        if ((modalChanges.fulfillmentMethod || fulfillmentMethod) === 'Pickup') {
-          // Try to get from selected pickup location
-          const pickupLoc = (pickupLocations || []).find(loc => String(loc.id) === String(modalChanges.selectedPickupLocationId || selectedPickupLocationId));
-          timeZone = pickupLoc && pickupLoc.locationTimeZone ? pickupLoc.locationTimeZone : 'America/Los_Angeles';
-        } else {
-          // Delivery
-          timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
-        }
-        
-        // Get time directly from the UI input field using jQuery
-        const timeInput = $('#timepicker');
-        let timeToUse = '';
-        
-        console.log("timeInput:", timeInput);
-        if (timeInput && timeInput.length) {
-          const timeValue = timeInput.val().trim().toLowerCase();
-          console.log("timeInput.val():", timeValue);
-          if (timeValue) {
-            // Handle cases like "8:00pm" and "8:00 pm"
-            const timeParts = timeValue.match(/(\d+):(\d+)\s*([ap]m)/);
-            if (timeParts) {
-              const [_, hour, minute, period] = timeParts;
-              let hour24 = parseInt(hour);
-              if (period === 'pm' && hour24 < 12) hour24 += 12;
-              if (period === 'am' && hour24 === 12) hour24 = 0;
-              timeToUse = `${hour24.toString().padStart(2, '0')}:${minute}`;
-              console.log("Parsed timeToUse:", timeToUse);
-            }
-          }
-        }
-        
-        // Fallback to modalChanges or original subscription if UI value is empty
-        if (!timeToUse) {
-          console.log("No timeToUse, using fulfillmentTime or modalChanges.fulfillmentTime");
-          timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
-          if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
-            const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
-              obj => obj.hasOwnProperty("Fulfillment Date")
-            );
-            const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
-            if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
-              const timePart = fulfillmentDateAttr.split('T')[1];
-              const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
-              const [hours, minutes] = timeWithOffset.split(':');
-              timeToUse = `${hours}:${minutes}`;
-            }
-          }
-        }
-        
-        let isoString = '';
-        try {
-          const timeStr = toAmPm(timeToUse);
-          isoString = getLocalISOFromDateAndTime(
-            modalChanges.deliveryDate,
-            timeStr,
-            currentTimeZone
-          );
-        } catch (e) {
-          showToast('Invalid date or time format', 'error');
-          return;
-        }
-        if (isoString) {
-          // Update existing Fulfillment Date or add new one
-          const existingIndex = orderAttributesArr.findIndex(attr => 
-            Object.keys(attr)[0] === 'Fulfillment Date'
-          );
-          if (existingIndex !== -1) {
-            orderAttributesArr[existingIndex] = { "Fulfillment Date": isoString };
-          } else {
-            orderAttributesArr.push({ "Fulfillment Date": isoString });
-          }
-        }
-        
-        // Add delivery instructions if changed
-        if (modalChanges.deliveryInstructions !== undefined) {
-          // Update existing Delivery Instructions or add new one
-          const existingIndex = orderAttributesArr.findIndex(attr => 
-            Object.keys(attr)[0] === 'Delivery Instructions'
-          );
-          if (existingIndex !== -1) {
-            orderAttributesArr[existingIndex] = { "Delivery Instructions": modalChanges.deliveryInstructions };
-          } else {
-            orderAttributesArr.push({ "Delivery Instructions": modalChanges.deliveryInstructions });
-          }
-        }
-        
-        // Parse frequency if changed
-        let frequencyData = null;
-        if (modalChanges.selectedFrequency && modalChanges.selectedFrequency !== selectedFrequency) {
-          frequencyData = parseFrequency(modalChanges.selectedFrequency);
-        }
-        
-        const updatePayload = {
-          order_attributes: orderAttributesArr,
-          deliveryDate: modalChanges.deliveryDate,
-          fulfillmentTime: timeToUse, // Use the time we extracted from the UI
-          selectedFrequency: modalChanges.selectedFrequency,
-          ...(frequencyData && { subscription_preferences: frequencyData })
-        };
-
-        const subscriptionResult = await updateSubscriptionSafely(subscriptionId, updatePayload);
-        if (subscriptionResult.success) {
-          showToast('All changes saved successfully!', 'success');
-          // Add a small delay before refreshing to ensure the update has processed
-          setTimeout(async () => {
-            await refreshSubscriptionData(subscriptionId);
-          }, 1000);
-        } else {
-          console.error('Failed to save subscription changes:', subscriptionResult);
-          showToast('Failed to save changes', 'error');
-        }
-      } catch (error) {
-        console.error('Error saving changes:', error);
-        showToast('Error saving changes', 'error');
-      } finally {
-        hideModalLoading();
-      }
+      // Use the same saveDate function to avoid code duplication
+      await saveDate();
     };
     
     // Handle the Cancel button to close the modal
@@ -3335,7 +3131,7 @@
             currentPage = 'main';
             renderModal();
           } else {
-            showToast(result.error || 'Failed to update subscription meals', 'error');
+            showToast('Failed to update subscription meals, if you previously just saved. Please wait a minute before trying again.', 'error');
           }
         } catch (error) {
           console.error('Error updating subscription meals:', error);
@@ -4727,7 +4523,7 @@
                 currentPage = 'main';
                 renderModal();
               } else {
-                showToast(result.error || 'Failed to update subscription meals', 'error');
+                showToast('Failed to update subscription meals, if you previously just saved. Please wait a minute before trying again.', 'error');
               }
             } catch (error) {
               console.error('Error updating subscription meals:', error);
