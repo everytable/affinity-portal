@@ -2759,7 +2759,7 @@
       }
       
       // If fulfillmentTime is empty, get it from the original subscription
-      let timeToUse = modalChanges.fulfillmentTime || fulfillmentTime;
+      let timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
       if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
         const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
           obj => obj.hasOwnProperty("Fulfillment Date")
@@ -2810,7 +2810,7 @@
       const updatePayload = {
         order_attributes: orderAttributesArr,
         deliveryDate: modalChanges.deliveryDate,
-        fulfillmentTime: modalChanges.fulfillmentTime || fulfillmentTime,
+        fulfillmentTime: fulfillmentTime || modalChanges.fulfillmentTime,
         selectedFrequency: modalChanges.selectedFrequency,
         ...(frequencyData && { subscription_preferences: frequencyData })
       };
@@ -3020,7 +3020,7 @@
         }
         
         // If fulfillmentTime is empty, get it from the original subscription
-        let timeToUse = modalChanges.fulfillmentTime || fulfillmentTime;
+        let timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
 
         if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
           const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
@@ -3082,7 +3082,7 @@
         const updatePayload = {
           order_attributes: orderAttributesArr,
           deliveryDate: modalChanges.deliveryDate,
-          fulfillmentTime: modalChanges.fulfillmentTime,
+          fulfillmentTime: fulfillmentTime || modalChanges.fulfillmentTime,
           selectedFrequency: modalChanges.selectedFrequency,
           ...(frequencyData && { subscription_preferences: frequencyData })
         };
@@ -5153,8 +5153,8 @@
     
     // Get current values from subscription data - ALWAYS prioritize order_attributes
     const currentDate = modalChanges.deliveryDate || deliveryDate;
-    const currentTime = modalChanges.fulfillmentTime || fulfillmentTime;
-    const currentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod;
+    const currentTime = fulfillmentTime || modalChanges.fulfillmentTime;
+    const currentMethod = fulfillmentMethod || modalChanges.fulfillmentMethod ;
     
     // Ensure we're using the values from order_attributes as the primary source
     const orderAttributesDate = getDeliveryDateFromSubscription();
@@ -5547,7 +5547,7 @@
       const maxTime = timeOptions[timeOptions.length - 1];
 
       // Determine the correct default time (from modalChanges, fallback to fulfillmentTime, fallback to minTime)
-      let defaultTime24 = modalChanges.fulfillmentTime || fulfillmentTime;
+      let defaultTime24 = fulfillmentTime || modalChanges.fulfillmentTime;
       let defaultTime12 = minTime; // fallback
       if (defaultTime24) {
         // Convert 24-hour format (e.g., '15:30') to 12-hour format (e.g., '3:30 PM')
