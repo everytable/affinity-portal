@@ -579,10 +579,15 @@
           // Restore original modalChanges
           modalChanges = originalModalChanges;
           
+          console.log('Bundle update payload items:', updatedItems);
+          console.log('Bundle update payload items length:', updatedItems.length);
+          
           // Make separate API call to update bundle_selections with fees
           const bundleUpdatePayload = {
             items: updatedItems
           };
+          
+          console.log('Full bundle update payload:', bundleUpdatePayload);
           
           const bundleResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
             method: 'POST',
@@ -591,6 +596,7 @@
           });
           
           const bundleResult = await bundleResponse.json();
+          console.log('Bundle update response:', bundleResult);
           if (!bundleResult.success) {
             console.warn('Failed to update bundle with conditional fees:', bundleResult.error);
           }
@@ -1575,7 +1581,8 @@
       const settingsResponse = await fetch(`${API_URL}/settings`);
       const settings = await settingsResponse.json();
       const subscriptionDeliveryFeeWaiverThreshold = parseFloat(settings.find((s) => s.key === 'subscription_delivery_fee_waiver_threshold')?.value || '0');
-      console.log('Threshold:', subscriptionDeliveryFeeWaiverThreshold);
+      console.log('Threshold from API:', subscriptionDeliveryFeeWaiverThreshold);
+      console.log('Cached threshold:', cachedDeliveryFeeThreshold);
       
       // Calculate the total of items (excluding fees)
       let total = 0;
@@ -1651,7 +1658,7 @@
       const response = await fetch(`${API_URL}/settings`);
       if (response.ok) {
         const settings = await response.json();
-        cachedDeliveryFeeThreshold = settings.subscription_delivery_fee_waiver_threshold || 50;
+        cachedDeliveryFeeThreshold = parseFloat(settings.find((s) => s.key === 'subscription_delivery_fee_waiver_threshold')?.value || '50');
       }
     } catch (error) {
       console.error('Error fetching delivery fee threshold:', error);
