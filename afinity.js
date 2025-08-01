@@ -1782,11 +1782,13 @@
       }
     });
     
-    // Add conditional fees to total (packaging and delivery fees)
-    const conditionalFees = calculateConditionalFeesForMealsPage();
-    const deliveryFeeCents = Math.round(conditionalFees.deliveryFee * 100);
-    const packagingFeeCents = Math.round(conditionalFees.packagingFee * 100);
-    totalCents += deliveryFeeCents + packagingFeeCents;
+    // Add conditional fees to total (packaging and delivery fees) - only for subscription update mode
+    if (mealsPageMode === 'update') {
+      const conditionalFees = calculateConditionalFeesForMealsPage();
+      const deliveryFeeCents = Math.round(conditionalFees.deliveryFee * 100);
+      const packagingFeeCents = Math.round(conditionalFees.packagingFee * 100);
+      totalCents += deliveryFeeCents + packagingFeeCents;
+    }
     
     const total = (totalCents / 100).toFixed(2);
     // Convert back to dollars
@@ -2307,22 +2309,26 @@
             <div class="afinity-meals-sidebar-footer">
               <div class="afinity-meals-sidebar-total">
                 ${(() => {
-                  const hiddenFees = getHiddenFees();
-                  const hasFees = hiddenFees.deliveryFee > 0 || hiddenFees.packagingFee > 0;
-                  return hasFees ? `
-                    ${hiddenFees.deliveryFee > 0 ? `
-                      <div class="afinity-meals-sidebar-fee">
-                        <span>Delivery Fee:</span>
-                        <span>$${hiddenFees.deliveryFee.toFixed(2)}</span>
-                      </div>
-                    ` : ''}
-                    ${hiddenFees.packagingFee > 0 ? `
-                      <div class="afinity-meals-sidebar-fee">
-                        <span>Packaging Fee:</span>
-                        <span>$${hiddenFees.packagingFee.toFixed(2)}</span>
-                      </div>
-                    ` : ''}
-                  ` : '';
+                  // Only show fees in subscription update mode, not in one-time meal mode
+                  if (mealsPageMode === 'update') {
+                    const hiddenFees = getHiddenFees();
+                    const hasFees = hiddenFees.deliveryFee > 0 || hiddenFees.packagingFee > 0;
+                    return hasFees ? `
+                      ${hiddenFees.deliveryFee > 0 ? `
+                        <div class="afinity-meals-sidebar-fee">
+                          <span>Delivery Fee:</span>
+                          <span>$${hiddenFees.deliveryFee.toFixed(2)}</span>
+                        </div>
+                      ` : ''}
+                      ${hiddenFees.packagingFee > 0 ? `
+                        <div class="afinity-meals-sidebar-fee">
+                          <span>Packaging Fee:</span>
+                          <span>$${hiddenFees.packagingFee.toFixed(2)}</span>
+                        </div>
+                      ` : ''}
+                    ` : '';
+                  }
+                  return '';
                 })()}
                 <div class="afinity-meals-sidebar-total-row">
                   <span>Total:</span>
@@ -2647,11 +2653,13 @@
       }
     });
     
-    // Add conditional fees to total (packaging and delivery fees)
-    const conditionalFees = calculateConditionalFeesForMealsPage();
-    const deliveryFeeCents = Math.round(conditionalFees.deliveryFee * 100);
-    const packagingFeeCents = Math.round(conditionalFees.packagingFee * 100);
-    totalCents += deliveryFeeCents + packagingFeeCents;
+    // Add conditional fees to total (packaging and delivery fees) - only for subscription update mode
+    if (mealsPageMode === 'update') {
+      const conditionalFees = calculateConditionalFeesForMealsPage();
+      const deliveryFeeCents = Math.round(conditionalFees.deliveryFee * 100);
+      const packagingFeeCents = Math.round(conditionalFees.packagingFee * 100);
+      totalCents += deliveryFeeCents + packagingFeeCents;
+    }
     
     // Convert back to dollars
     return totalCents / 100;
@@ -2871,20 +2879,24 @@
       }
 
       showToast('All changes saved successfully!', 'success');
-      // Add a small delay before refreshing to ensure the update has processed
-      setTimeout(async () => {
-        await refreshSubscriptionData(subscriptionId);
-        
-        // Re-fetch available dates and times for the zip code
-        const currentZip = modalChanges.zip || zip;
-        const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
-        await fetchAvailableDates(currentZip, currentPickupLocationId);
-        
-        // Refresh meals display to show/hide products based on new date
-        refreshMealsDisplayForDateChange();
-        // Reinitialize the time picker with updated data
-        reinitializeTimePicker();
-      }, 1000);
+                  // Add a small delay before refreshing to ensure the update has processed
+            setTimeout(async () => {
+              console.log('Starting data refresh after subscription meal update...');
+              await refreshSubscriptionData(subscriptionId);
+              
+              // Re-fetch available dates and times for the zip code
+              const currentZip = modalChanges.zip || zip;
+              const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+              console.log('Calling fetchAvailableDates with zip:', currentZip, 'pickupLocationId:', currentPickupLocationId);
+              await fetchAvailableDates(currentZip, currentPickupLocationId);
+              console.log('fetchAvailableDates completed');
+              
+              // Refresh meals display to show/hide products based on new date
+              refreshMealsDisplayForDateChange();
+              // Reinitialize the time picker with updated data
+              reinitializeTimePicker();
+              console.log('Data refresh completed after subscription meal update');
+            }, 1000);
     } catch (error) {
       showToast('Error saving changes', 'error');
     } finally {
@@ -3118,14 +3130,24 @@
           if (result.success) {
             showToast('Subscription meals updated successfully!', 'success');
             
-            // Refresh subscription data to show updated meals
-            setTimeout(async () => {
-              await refreshSubscriptionData(subscriptionId);
-            }, 1000);
-            
-            // Go back to main page
+            // Navigate back to main page first
             currentPage = 'main';
             renderModal();
+            
+            // Add a small delay before refreshing to ensure the update has processed
+            setTimeout(async () => {
+              await refreshSubscriptionData(subscriptionId);
+              
+              // Re-fetch available dates and times for the zip code
+              const currentZip = modalChanges.zip || zip;
+              const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+              await fetchAvailableDates(currentZip, currentPickupLocationId);
+              
+              // Refresh meals display to show/hide products based on new date
+              refreshMealsDisplayForDateChange();
+              // Reinitialize the time picker with updated data
+              reinitializeTimePicker();
+            }, 2000);
           } else {
             showToast('Failed to update subscription meals, if you previously just saved. Please wait a minute before trying again.', 'error');
           }
@@ -3246,27 +3268,39 @@
           body: JSON.stringify({ items })
         });
        
-       const result = await response.json();
-        if (result.success) {
-          showToast('One-time meals added successfully!', 'success');
-          
-          // Refresh subscription data to show updated meals
-          setTimeout(async () => {
-            await refreshSubscriptionData(subscriptionId);
-          }, 1000);
-          
-          // Go back to main page
-          currentPage = 'main';
-          renderModal();
-        } else {
-          showToast(result.error || 'Failed to add one-time meals', 'error');
-        }
+          const result = await response.json();
+          if (result.success) {
+              showToast('One-time meals added successfully!', 'success');
+              
+              // Navigate back to main page first
+              currentPage = 'main';
+              renderModal();
+              
+              // Add a small delay before refreshing to ensure the update has processed
+              setTimeout(async () => {
+                console.log('Starting data refresh after one-time meal addition...');
+                await refreshSubscriptionData(subscriptionId);
+                
+                // Re-fetch available dates and times for the zip code
+                const currentZip = modalChanges.zip || zip;
+                const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+                console.log('Calling fetchAvailableDates with zip:', currentZip, 'pickupLocationId:', currentPickupLocationId);
+                await fetchAvailableDates(currentZip, currentPickupLocationId);
+                console.log('fetchAvailableDates completed');
+                
+                // Refresh meals display to show/hide products based on new date
+                refreshMealsDisplayForDateChange();
+                // Reinitialize the time picker with updated data
+                reinitializeTimePicker();
+                console.log('Data refresh completed after one-time meal addition');
+              }, 2000);
+          } else {
+            showToast(result.error || 'Failed to add one-time meals', 'error');
+          }
       } catch (error) {
         console.error('Error adding one-time meals:', error);
         showToast('Error adding one-time meals', 'error');
-              } finally {
-          
-        }
+      }
       }
     };
     }
@@ -4305,30 +4339,33 @@
             const conditionalFees = calculateConditionalFeesForMealsPage();
             let feesHtml = '';
             
-            // Show delivery fee with strike-through when threshold is met
-            if (conditionalFees.shouldStrikeThroughDelivery) {
-              feesHtml += `
-                <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>Delivery Fee:</span>
-                  <span style="text-decoration: line-through; color: #999;">$${3.99.toFixed(2)}</span>
-                </div>
-              `;
-            } else if (conditionalFees.deliveryFee > 0) {
-              feesHtml += `
-                <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>Delivery Fee:</span>
-                  <span>$${conditionalFees.deliveryFee.toFixed(2)}</span>
-                </div>
-              `;
-            }
-            
-            if (conditionalFees.packagingFee > 0) {
-              feesHtml += `
-                <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>Packaging Fee:</span>
-                  <span>$${conditionalFees.packagingFee.toFixed(2)}</span>
-                </div>
-              `;
+            // Only show fees in subscription update mode, not in one-time meal mode
+            if (mealsPageMode === 'update') {
+              // Show delivery fee with strike-through when threshold is met
+              if (conditionalFees.shouldStrikeThroughDelivery) {
+                feesHtml += `
+                  <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Delivery Fee:</span>
+                    <span style="text-decoration: line-through; color: #999;">$${3.99.toFixed(2)}</span>
+                  </div>
+                `;
+              } else if (conditionalFees.deliveryFee > 0) {
+                feesHtml += `
+                  <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Delivery Fee:</span>
+                    <span>$${conditionalFees.deliveryFee.toFixed(2)}</span>
+                  </div>
+                `;
+              }
+              
+              if (conditionalFees.packagingFee > 0) {
+                feesHtml += `
+                  <div class="afinity-meals-sidebar-fee-row" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Packaging Fee:</span>
+                    <span>$${conditionalFees.packagingFee.toFixed(2)}</span>
+                  </div>
+                `;
+              }
             }
             
             return feesHtml;
@@ -4514,14 +4551,28 @@
               if (result.success) {
                 showToast('Subscription meals updated successfully!', 'success');
                 
-                // Refresh subscription data to show updated meals
-                setTimeout(async () => {
-                  await refreshSubscriptionData(subscriptionId);
-                }, 1000);
-                
-                // Go back to main page
+                // Navigate back to main page first
                 currentPage = 'main';
                 renderModal();
+                
+                // Add a small delay before refreshing to ensure the update has processed
+                setTimeout(async () => {
+                  console.log('Starting data refresh after subscription meal update (rerender)...');
+                  await refreshSubscriptionData(subscriptionId);
+                  
+                  // Re-fetch available dates and times for the zip code
+                  const currentZip = modalChanges.zip || zip;
+                  const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+                  console.log('Calling fetchAvailableDates with zip:', currentZip, 'pickupLocationId:', currentPickupLocationId);
+                  await fetchAvailableDates(currentZip, currentPickupLocationId);
+                  console.log('fetchAvailableDates completed');
+                  
+                  // Refresh meals display to show/hide products based on new date
+                  refreshMealsDisplayForDateChange();
+                  // Reinitialize the time picker with updated data
+                  reinitializeTimePicker();
+                  console.log('Data refresh completed after subscription meal update (rerender)');
+                }, 1000);
               } else {
                 showToast('Failed to update subscription meals, if you previously just saved. Please wait a minute before trying again.', 'error');
               }
@@ -4645,14 +4696,28 @@
               if (result.success) {
                 showToast('One-time meals added successfully!', 'success');
                 
-                // Refresh subscription data to show updated meals
-                setTimeout(async () => {
-                  await refreshSubscriptionData(subscriptionId);
-                }, 1000);
-                
-                // Go back to main page
+                // Navigate back to main page first
                 currentPage = 'main';
                 renderModal();
+                
+                // Add a small delay before refreshing to ensure the update has processed
+                setTimeout(async () => {
+                  console.log('Starting data refresh after one-time meal addition (rerender)...');
+                  await refreshSubscriptionData(subscriptionId);
+                  
+                  // Re-fetch available dates and times for the zip code
+                  const currentZip = modalChanges.zip || zip;
+                  const currentPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+                  console.log('Calling fetchAvailableDates with zip:', currentZip, 'pickupLocationId:', currentPickupLocationId);
+                  await fetchAvailableDates(currentZip, currentPickupLocationId);
+                  console.log('fetchAvailableDates completed');
+                  
+                  // Refresh meals display to show/hide products based on new date
+                  refreshMealsDisplayForDateChange();
+                  // Reinitialize the time picker with updated data
+                  reinitializeTimePicker();
+                  console.log('Data refresh completed after one-time meal addition (rerender)');
+                }, 1000);
               } else {
                 showToast(result.error || 'Failed to add one-time meals', 'error');
               }
