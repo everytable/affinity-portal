@@ -4458,18 +4458,71 @@
   function rerenderSidebarMeals() {
     // If we're on the meals page, update the sidebar content and re-attach events
     if (currentPage === 'meals') {
-      // Update the sidebar content directly
-      const sidebar = modalOverlay && modalOverlay.querySelector('.afinity-meals-sidebar');
-      if (sidebar) {
-        // Re-render just the sidebar content
-        const sidebarContent = renderMealsPageSidebar();
-        sidebar.innerHTML = sidebarContent;
-      }
-      
-      // Header total stays static and doesn't update during meal selection
-      
-      // Re-attach sidebar quantity events
-      attachSidebarQuantityEvents();
+              // Apply conditional fee logic immediately when meals are added/removed
+        try {
+          // Get current meals and apply conditional fees
+          const currentMeals = getCurrentMealsArray();
+          const conditionalFees = calculateConditionalFeesForMealsPage();
+          
+          // Create a new meals array that includes the conditional fees
+          let updatedMeals = [...currentMeals];
+          
+          // Remove any existing fees from the meals array
+          updatedMeals = updatedMeals.filter(meal => {
+            // Filter out delivery fee and packaging fee by checking if they're fee items
+            return !(meal.isPackagingFee || meal.isDeliveryFee);
+          });
+          
+          // Add packaging fee if needed
+          if (conditionalFees.packagingFee > 0) {
+            updatedMeals.push({
+              id: 'packaging-fee',
+              qty: 1,
+              title: 'Packaging Fee',
+              price: conditionalFees.packagingFee,
+              img: MEAL_IMAGE,
+              isPackagingFee: true
+            });
+          }
+          
+          // Add delivery fee if needed
+          if (conditionalFees.deliveryFee > 0) {
+            updatedMeals.push({
+              id: 'delivery-fee',
+              qty: 1,
+              title: 'Delivery Fee',
+              price: conditionalFees.deliveryFee,
+              img: MEAL_IMAGE,
+              isDeliveryFee: true
+            });
+          }
+          
+          // Update the current meals array with fees included
+          updateCurrentMealsArray(updatedMeals);
+          updateModalChanges(mealsPageMode === 'update' ? 'updateModeMeals' : 'selectedMeals', JSON.parse(JSON.stringify(updatedMeals)));
+          
+          // Update the sidebar content directly
+          const sidebar = modalOverlay && modalOverlay.querySelector('.afinity-meals-sidebar');
+          if (sidebar) {
+            // Re-render just the sidebar content with updated fee calculations
+            const sidebarContent = renderMealsPageSidebar();
+            sidebar.innerHTML = sidebarContent;
+          }
+          
+          // Header total stays static and doesn't update during meal selection
+          
+          // Re-attach sidebar quantity events
+          attachSidebarQuantityEvents();
+        } catch (error) {
+          console.error('Error applying conditional fees:', error);
+          // Continue with normal sidebar rendering if fee logic fails
+          const sidebar = modalOverlay && modalOverlay.querySelector('.afinity-meals-sidebar');
+          if (sidebar) {
+            const sidebarContent = renderMealsPageSidebar();
+            sidebar.innerHTML = sidebarContent;
+          }
+          attachSidebarQuantityEvents();
+        }
       
       // Re-attach swap button event handler
       const swapBtn = modalOverlay.querySelector('.afinity-meals-swap-btn');
