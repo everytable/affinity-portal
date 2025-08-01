@@ -4320,25 +4320,7 @@
             return feesHtml;
           })()}
           
-          ${(() => {
-            const conditionalFees = calculateConditionalFeesForMealsPage();
-            // Show threshold info for debugging (can be removed in production)
-            if (conditionalFees.subtotal > 0) {
-              return `
-                <div style="font-size: 11px; color: #999; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
-                  <div style="display: flex; justify-content: space-between;">
-                    <span>Subtotal:</span>
-                    <span>$${conditionalFees.subtotal.toFixed(2)}</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between;">
-                    <span>Amount till free delivery fee:</span>
-                    <span>$${conditionalFees.threshold.toFixed(2)}</span>
-                  </div>
-                </div>
-              `;
-            }
-            return '';
-          })()}
+
           
           <div class="afinity-meals-sidebar-total-row">
             <span>Total:</span>
