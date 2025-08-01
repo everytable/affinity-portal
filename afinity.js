@@ -2702,6 +2702,33 @@
         
         return;
       }
+
+      // Handle conditional fees for subscription bundle
+      try {
+        // Get current subscription items
+        const currentItems = currentSubscription?.bundle_selections?.items || [];
+        
+        // Apply conditional fee logic
+        const updatedItems = await handleConditionalFees(currentItems, subscriptionId);
+        
+        // If items changed, update the subscription bundle
+        if (JSON.stringify(currentItems) !== JSON.stringify(updatedItems)) {
+          const bundleUpdatePayload = {
+            bundle_selections: {
+              items: updatedItems
+            }
+          };
+          
+          const bundleUpdateData = await updateSubscriptionSafely(subscriptionId, bundleUpdatePayload);
+          if (!bundleUpdateData.success) {
+            console.warn('Failed to update bundle with conditional fees:', bundleUpdateData.error);
+          }
+        }
+      } catch (error) {
+        console.error('Error handling conditional fees:', error);
+        // Don't fail the entire save operation if fee handling fails
+      }
+
       showToast('All changes saved successfully!', 'success');
       // Add a small delay before refreshing to ensure the update has processed
       setTimeout(async () => {
