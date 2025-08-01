@@ -252,14 +252,39 @@
       return '<div class="afinity-no-charges">No charges found.</div>';
     }
 
-    // Get offset days for date calculation
-    const offsetDays = await fetchOffsetDays();
-
     const tableRows = charges.map(charge => {
       let scheduledDate = 'N/A';
       if (charge.scheduled_at) {
-        const dateObj = new Date(charge.scheduled_at);
-        dateObj.setDate(dateObj.getDate() + offsetDays);
+        // Parse the date components and add 2 days
+        const [year, month, day] = charge.scheduled_at.split('-').map(Number);
+        
+        // Add 2 days to the day number
+        let newDay = day + 2;
+        let newMonth = month;
+        let newYear = year;
+        
+        // Handle month boundaries
+        const daysInMonth = new Date(year, month, 0).getDate(); // Get days in current month
+        
+        if (newDay > daysInMonth) {
+          // If we exceed the current month, wrap to the next month
+          newDay = newDay - daysInMonth;
+          newMonth = month + 1;
+          
+          // Handle year boundary
+          if (newMonth > 12) {
+            newMonth = 1;
+            newYear = year + 1;
+          }
+        }
+        
+        // Create the new date string
+        const newDateStr = newYear + '-' + 
+                          String(newMonth).padStart(2, '0') + '-' + 
+                          String(newDay).padStart(2, '0');
+        
+        // Format for display
+        const dateObj = new Date(newDateStr);
         scheduledDate = dateObj.toLocaleDateString();
       }
       const totalPrice = parseFloat(charge.total_price || 0).toFixed(2);
@@ -1454,6 +1479,73 @@
     
     // Convert back to dollars
     return (totalCents / 100).toFixed(2);
+  }
+
+  // Helper function to handle conditional fees for meals page updates
+  async function handleConditionalFees(items, subscriptionId) {
+    try {
+      // Fetch settings to get the delivery fee waiver threshold
+      const settingsResponse = await fetch(`${API_URL}/settings`);
+      const settings = await settingsResponse.json();
+      const subscriptionDeliveryFeeWaiverThreshold = parseFloat(settings.find((s) => s.key === 'subscription_delivery_fee_waiver_threshold')?.value || '0');
+      
+      // Calculate the total of items (excluding fees)
+      let total = 0;
+      items.forEach(item => {
+        // Get price from catalog variants or fallback to item price
+        let price = 0;
+        if (currentCatalogVariants && currentCatalogVariants.variants && currentCatalogVariants.variants.length > 0) {
+          const variant = currentCatalogVariants.variants.find(v => String(v.id) === String(item.external_variant_id));
+          if (variant && variant.price) {
+            if (typeof variant.price === 'string') {
+              price = parseFloat(variant.price);
+            } else if (variant.price.amount) {
+              price = parseFloat(variant.price.amount);
+            } else if (typeof variant.price === 'number') {
+              price = variant.price;
+            }
+          }
+        }
+        
+        // Fallback to item price if not found in catalog
+        if (price === 0) {
+          price = item.price || 0;
+        }
+        
+        total += price * item.quantity;
+      });
+      
+      // Get current fulfillment method
+      const currentFulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
+      
+      // Always add packaging fee for delivery (1 quantity max)
+      if (currentFulfillmentMethod === 'Delivery') {
+        const packagingFee = {
+          collection_id: '308869562425',
+          external_product_id: '7927816716345',
+          external_variant_id: '44558969372729',
+          quantity: 1
+        };
+        items.push(packagingFee);
+      }
+      
+      // Conditionally add delivery fee based on threshold
+      if (total < subscriptionDeliveryFeeWaiverThreshold) {
+        const deliveryFee = {
+          collection_id: '308869562425',
+          external_product_id: '7933253517369',
+          external_variant_id: '44578774089785',
+          quantity: 1
+        };
+        items.push(deliveryFee);
+      }
+      
+      return items;
+    } catch (error) {
+      console.error('Error handling conditional fees:', error);
+      // Return original items if there's an error
+      return items;
+    }
   }
 
   // Calculate total for meals page based on current selections
@@ -4208,7 +4300,7 @@
               }
               
               // Prepare items for bundle selection update (all meals with qty > 0)
-              const items = currentMeals.filter(meal => meal.qty > 0).map(meal => {
+              let items = currentMeals.filter(meal => meal.qty > 0).map(meal => {
                 // Find the collection ID from menuData
                 let collectionId = null;
                 let externalProductId = null;
@@ -4240,7 +4332,8 @@
                   collection_id: '308869562425',
                   external_product_id: externalProductId,
                   external_variant_id: meal.id.replace('gid://shopify/ProductVariant/', ''),
-                  quantity: meal.qty
+                  quantity: meal.qty,
+                  price: meal.price || 0
                 };
               });
               
@@ -4252,6 +4345,9 @@
                 
                 return;
               }
+              
+              // Apply conditional fee logic
+              items = await handleConditionalFees(items, subscriptionId);
               
               // Call the bundle selections endpoint
               const response = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
