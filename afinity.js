@@ -2659,6 +2659,7 @@
 
 
   async function saveDate() {
+    console.log("saveDate called");
     // Check for fulfillment date changes and get confirmation
     if (!(await confirmFulfillmentDateChange())) {
       return; // User cancelled, don't proceed
@@ -2758,18 +2759,43 @@
         timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
       }
       
-      // If fulfillmentTime is empty, get it from the original subscription
-      let timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
-      if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
-        const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
-          obj => obj.hasOwnProperty("Fulfillment Date")
-        );
-        const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
-        if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
-          const timePart = fulfillmentDateAttr.split('T')[1];
-          const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
-          const [hours, minutes] = timeWithOffset.split(':');
-          timeToUse = `${hours}:${minutes}`;
+      // Get time directly from the UI input field using jQuery
+      const timeInput = $('#timepicker');
+      let timeToUse = '';
+      
+      console.log("timeInput:", timeInput);
+      if (timeInput && timeInput.length) {
+        const timeValue = timeInput.val().trim().toLowerCase();
+        console.log("timeInput.val():", timeValue);
+        if (timeValue) {
+          // Handle cases like "8:00pm" and "8:00 pm"
+          const timeParts = timeValue.match(/(\d+):(\d+)\s*([ap]m)/);
+          if (timeParts) {
+            const [_, hour, minute, period] = timeParts;
+            let hour24 = parseInt(hour);
+            if (period === 'pm' && hour24 < 12) hour24 += 12;
+            if (period === 'am' && hour24 === 12) hour24 = 0;
+            timeToUse = `${hour24.toString().padStart(2, '0')}:${minute}`;
+            console.log("Parsed timeToUse:", timeToUse);
+          }
+        }
+      }
+      
+      // Fallback to modalChanges or original subscription if UI value is empty
+      if (!timeToUse) {
+        console.log("No timeToUse, using fulfillmentTime or modalChanges.fulfillmentTime");
+        timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
+        if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
+          const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
+            obj => obj.hasOwnProperty("Fulfillment Date")
+          );
+          const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
+          if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
+            const timePart = fulfillmentDateAttr.split('T')[1];
+            const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+            const [hours, minutes] = timeWithOffset.split(':');
+            timeToUse = `${hours}:${minutes}`;
+          }
         }
       }
       let isoString = '';
@@ -2810,7 +2836,7 @@
       const updatePayload = {
         order_attributes: orderAttributesArr,
         deliveryDate: modalChanges.deliveryDate,
-        fulfillmentTime: fulfillmentTime || modalChanges.fulfillmentTime,
+        fulfillmentTime: timeToUse, // Use the time we extracted from the UI
         selectedFrequency: modalChanges.selectedFrequency,
         ...(frequencyData && { subscription_preferences: frequencyData })
       };
@@ -3019,19 +3045,43 @@
           timeZone = (currentSubscription && currentSubscription.deliveryLocation && currentSubscription.deliveryLocation.locationTimeZone) ? currentSubscription.deliveryLocation.locationTimeZone : 'America/Los_Angeles';
         }
         
-        // If fulfillmentTime is empty, get it from the original subscription
-        let timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
-
-        if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
-          const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
-            obj => obj.hasOwnProperty("Fulfillment Date")
-          );
-          const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
-          if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
-            const timePart = fulfillmentDateAttr.split('T')[1];
-            const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
-            const [hours, minutes] = timeWithOffset.split(':');
-            timeToUse = `${hours}:${minutes}`;
+        // Get time directly from the UI input field using jQuery
+        const timeInput = $('#timepicker');
+        let timeToUse = '';
+        
+        console.log("timeInput:", timeInput);
+        if (timeInput && timeInput.length) {
+          const timeValue = timeInput.val().trim().toLowerCase();
+          console.log("timeInput.val():", timeValue);
+          if (timeValue) {
+            // Handle cases like "8:00pm" and "8:00 pm"
+            const timeParts = timeValue.match(/(\d+):(\d+)\s*([ap]m)/);
+            if (timeParts) {
+              const [_, hour, minute, period] = timeParts;
+              let hour24 = parseInt(hour);
+              if (period === 'pm' && hour24 < 12) hour24 += 12;
+              if (period === 'am' && hour24 === 12) hour24 = 0;
+              timeToUse = `${hour24.toString().padStart(2, '0')}:${minute}`;
+              console.log("Parsed timeToUse:", timeToUse);
+            }
+          }
+        }
+        
+        // Fallback to modalChanges or original subscription if UI value is empty
+        if (!timeToUse) {
+          console.log("No timeToUse, using fulfillmentTime or modalChanges.fulfillmentTime");
+          timeToUse = fulfillmentTime || modalChanges.fulfillmentTime;
+          if (!timeToUse && currentSubscription?.include?.address?.order_attributes) {
+            const fulfillmentDateEntry = currentSubscription.include.address.order_attributes.find(
+              obj => obj.hasOwnProperty("Fulfillment Date")
+            );
+            const fulfillmentDateAttr = fulfillmentDateEntry ? fulfillmentDateEntry["Fulfillment Date"] : null;
+            if (fulfillmentDateAttr && fulfillmentDateAttr.includes('T')) {
+              const timePart = fulfillmentDateAttr.split('T')[1];
+              const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
+              const [hours, minutes] = timeWithOffset.split(':');
+              timeToUse = `${hours}:${minutes}`;
+            }
           }
         }
         
@@ -3081,7 +3131,7 @@
         const updatePayload = {
           order_attributes: orderAttributesArr,
           deliveryDate: modalChanges.deliveryDate,
-          fulfillmentTime: fulfillmentTime || modalChanges.fulfillmentTime,
+          fulfillmentTime: timeToUse, // Use the time we extracted from the UI
           selectedFrequency: modalChanges.selectedFrequency,
           ...(frequencyData && { subscription_preferences: frequencyData })
         };
@@ -5206,13 +5256,12 @@
           $(timeInput).timepicker('remove');
         }
       
-      // Check if the final date is in frequency-based restricted dates
       const restrictedDates = getRestrictedDates();
       if (finalDate && restrictedDates.includes(finalDate)) {
         timeInput.value = '';
         updateModalChanges('fulfillmentTime', '');
         fulfillmentTime = '';
-        return; // Don't initialize time picker for restricted dates
+        return; 
       }
       
       // Generate time options based on the current date
@@ -5221,28 +5270,8 @@
         timeOptions = generateTimeOptions(finalDate);
       }
       
-      // Fallback to default if empty
-      if (timeOptions.length === 0) {
-        timeOptions = [
-          '9:00 AM', '9:15 AM', '9:30 AM', '9:45 AM',
-          '10:00 AM', '10:15 AM', '10:30 AM', '10:45 AM',
-          '11:00 AM', '11:15 AM', '11:30 AM', '11:45 AM',
-          '12:00 PM', '12:15 PM', '12:30 PM', '12:45 PM',
-          '1:00 PM', '1:15 PM', '1:30 PM', '1:45 PM',
-          '2:00 PM', '2:15 PM', '2:30 PM', '2:45 PM',
-          '3:00 PM', '3:15 PM', '3:30 PM', '3:45 PM',
-          '4:00 PM', '4:15 PM', '4:30 PM', '4:45 PM',
-          '5:00 PM'
-        ];
-      }
-      
-      // Set min/max from the generated options
       const minTime = timeOptions[0];
-      const maxTime = timeOptions[timeOptions.length - 1];
-      
-      // Convert current time to 12-hour format for display and find the best match
       let defaultTime12 = minTime; // fallback
-      let selectedTime24 = finalTime; // store the 24-hour time for later use
       
       if (finalTime) {
         const [h, m] = finalTime.split(':');
@@ -5288,185 +5317,19 @@
         fulfillmentTime = selectedTime;
       }
       
-      // Initialize timepicker
-      $(timeInput).timepicker({
-        interval: 15,
-        minTime,
-        maxTime,
-        defaultTime: defaultTime12,
-        startTime: minTime,
-        dynamic: false,
-        dropdown: true,
-        scrollbar: true,
-        change: function(time) {
-          console.log('Time picker change event triggered with time:', time);
-          if (time) {
-            // Convert 12-hour format to 24-hour format for storage
-            const [timeStr, period] = time.split(' ');
-            const [hour, minute] = timeStr.split(':');
-            let hour24 = parseInt(hour);
-            if (period === 'PM' && hour24 < 12) hour24 += 12;
-            if (period === 'AM' && hour24 === 12) hour24 = 0;
-            const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
-            
-            console.log('Converted time to 24-hour format:', time24Format);
-            
-            // Check if this is a different time from the original
-            const originalTime = getFulfillmentTimeFromSubscription();
-            console.log('Original time from subscription:', originalTime);
-            
-            if (time24Format && time24Format !== originalTime) {
-              // Show a warning toast about the consequences
-              showToast('Note: Moving the fulfillment time will affect the charge date on all upcoming orders.', 'info');
-            }
-            
-            console.log('Before updateModalChanges - modalChanges:', modalChanges);
-            updateModalChanges('fulfillmentTime', time24Format);
-            console.log('After updateModalChanges - modalChanges:', modalChanges);
-            
-            fulfillmentTime = time24Format;
-            console.log('Time picker changed to:', time24Format);
-          }
-        }
-      });
-      
-      // Force the timepicker to show the selected time
       try {
         $(timeInput).timepicker('setTime', defaultTime12);
         $(timeInput).trigger('change');
-      try {
-        $(timeInput).timepicker('show');
-      } catch (error) {
-        console.log('Could not trigger timepicker show method:', error);
-      }
-      
-      // Also try to trigger the timepicker's hide method to force it to update
-      try {
-        $(timeInput).timepicker('hide');
-      } catch (error) {
-        console.log('Could not trigger timepicker hide method:', error);
-      }
-        
-        // Also try to update the timepicker's internal state
         const timepickerInstance = $(timeInput).data('timepicker');
         if (timepickerInstance && timepickerInstance.setTime) {
           timepickerInstance.setTime(defaultTime12);
         }
-        
       } catch (error) {
         console.error('Error setting timepicker time:', error);
-        // Fallback: just set the input value directly
         timeInput.value = defaultTime12;
         console.log('Fallback: Set input value directly to:', defaultTime12);
       }
-      
-      // Ensure the time value is set after timepicker initialization
-      setTimeout(() => {
-        if (timeInput.value !== defaultTime12) {
-          timeInput.value = defaultTime12;
-        }
-        // Also try to trigger the timepicker to update its display
-        try {
-          $(timeInput).timepicker('setTime', defaultTime12);
-        } catch (error) {
-          console.error('Error in 100ms timeout setTime:', error);
-        }
-      }, 100);
-      
-      // Additional timeout to ensure the timepicker is fully initialized
-      setTimeout(() => {
-        if (timeInput.value !== defaultTime12) {
-          timeInput.value = defaultTime12;
-          $(timeInput).timepicker('setTime', defaultTime12);
-        }
-        
-        // Try to force the timepicker to update its display
-        const timepickerInstance = $(timeInput).data('timepicker');
-        if (timepickerInstance) {
-          
-          // Try to manually update the timepicker's display
-          if (timepickerInstance.time !== defaultTime12) {
-            timepickerInstance.time = defaultTime12;
-          }
-        }
-      }, 300);
-    } else {
-      // Retry after a short delay in case the plugin is still loading
-      setTimeout(() => {
-        if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
-          initializeDateAndTimePickers();
-                 } else {
-           // Set the time value directly in the input as fallback
-           if (timeInput && finalTime) {
-                        // Generate time options for the current date
-           let timeOptions = [];
-           if (finalDate) {
-             timeOptions = generateTimeOptions(finalDate);
-           }
-             
-             // Fallback to default if empty
-             if (timeOptions.length === 0) {
-               timeOptions = [
-                 '9:00 AM', '9:15 AM', '9:30 AM', '9:45 AM',
-                 '10:00 AM', '10:15 AM', '10:30 AM', '10:45 AM',
-                 '11:00 AM', '11:15 AM', '11:30 AM', '11:45 AM',
-                 '12:00 PM', '12:15 PM', '12:30 PM', '12:45 PM',
-                 '1:00 PM', '1:15 PM', '1:30 PM', '1:45 PM',
-                 '2:00 PM', '2:15 PM', '2:30 PM', '2:45 PM',
-                 '3:00 PM', '3:15 PM', '3:30 PM', '3:45 PM',
-                 '4:00 PM', '4:15 PM', '4:30 PM', '4:45 PM',
-                 '5:00 PM'
-               ];
-             }
-             
-             const minTime = timeOptions[0];
-             
-             // Convert current time to 12-hour format and find best match
-             const [h, m] = finalTime.split(':');
-             let hour = parseInt(h, 10);
-             const minute = m;
-             const ampm = hour >= 12 ? 'PM' : 'AM';
-             let displayHour = hour % 12;
-             if (displayHour === 0) displayHour = 12;
-             const currentTime12 = `${displayHour}:${minute} ${ampm}`;
-             
-             let selectedTime12 = minTime; // fallback
-             
-             // Try to find an exact match first
-             if (timeOptions.includes(currentTime12)) {
-               selectedTime12 = currentTime12;
-             } else {
-               // Find the closest available time
-               const currentTimeMinutes = hour * 60 + parseInt(minute);
-               let closestTime = minTime;
-               let minDifference = Infinity;
-               
-               for (const option of timeOptions) {
-                 const [optHour, optMin] = parseTimeString(option);
-                 const optionMinutes = optHour * 60 + optMin;
-                 const difference = Math.abs(optionMinutes - currentTimeMinutes);
-                 
-                 if (difference < minDifference) {
-                   minDifference = difference;
-                   closestTime = option;
-                 }
-               }
-               
-               selectedTime12 = closestTime;
-             }
-             
-             timeInput.value = selectedTime12;
-             
-             // Update the modalChanges with the selected time
-             const [selHour, selMin] = parseTimeString(selectedTime12);
-             const selectedTime24 = `${selHour.toString().padStart(2, '0')}:${selMin.toString().padStart(2, '0')}`;
-             updateModalChanges('fulfillmentTime', selectedTime24);
-             fulfillmentTime = selectedTime24;
-           }
-         }
-      }, 500);
-    }
-    
+    } 
     // Also ensure the frequency dropdown is properly set
     await loadInitialFrequency();
   }
@@ -5570,6 +5433,7 @@
       }
 
 
+      console.log("FINISHED.")
       $(timeInput).timepicker({
         interval: 15,
         minTime,
