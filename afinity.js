@@ -5297,6 +5297,7 @@
         dropdown: true,
         scrollbar: true,
         change: function(time) {
+          console.log('Time picker change event triggered with time:', time);
           if (time) {
             // Convert 12-hour format to 24-hour format for storage
             const [timeStr, period] = time.split(' ');
@@ -5306,14 +5307,21 @@
             if (period === 'AM' && hour24 === 12) hour24 = 0;
             const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
             
+            console.log('Converted time to 24-hour format:', time24Format);
+            
             // Check if this is a different time from the original
             const originalTime = getFulfillmentTimeFromSubscription();
+            console.log('Original time from subscription:', originalTime);
+            
             if (time24Format && time24Format !== originalTime) {
               // Show a warning toast about the consequences
               showToast('Note: Moving the fulfillment time will affect the charge date on all upcoming orders.', 'info');
             }
             
+            console.log('Before updateModalChanges - modalChanges:', modalChanges);
             updateModalChanges('fulfillmentTime', time24Format);
+            console.log('After updateModalChanges - modalChanges:', modalChanges);
+            
             fulfillmentTime = time24Format;
             console.log('Time picker changed to:', time24Format);
           }
