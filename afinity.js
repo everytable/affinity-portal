@@ -4331,7 +4331,7 @@
                     <span>$${conditionalFees.subtotal.toFixed(2)}</span>
                   </div>
                   <div style="display: flex; justify-content: space-between;">
-                    <span>Threshold:</span>
+                    <span>Amount till free delivery fee:</span>
                     <span>$${conditionalFees.threshold.toFixed(2)}</span>
                   </div>
                 </div>
