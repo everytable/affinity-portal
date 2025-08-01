@@ -4226,7 +4226,39 @@
 
         <h3>New meals to your Subscription</h3>
         <ul class="afinity-meals-sidebar-list swap-meals">
-          ${getCurrentMealsArray().filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+          ${(() => {
+            const currentMeals = getCurrentMealsArray().filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id)));
+            const conditionalFees = calculateConditionalFeesForMealsPage();
+            
+            // Add fees as actual items in the list
+            let allItems = [...currentMeals];
+            
+            // Add packaging fee if needed
+            if (conditionalFees.packagingFee > 0) {
+              allItems.push({
+                id: 'packaging-fee',
+                qty: 1,
+                title: 'Packaging Fee',
+                price: conditionalFees.packagingFee,
+                img: MEAL_IMAGE,
+                isPackagingFee: true
+              });
+            }
+            
+            // Add delivery fee if needed
+            if (conditionalFees.deliveryFee > 0) {
+              allItems.push({
+                id: 'delivery-fee',
+                qty: 1,
+                title: 'Delivery Fee',
+                price: conditionalFees.deliveryFee,
+                img: MEAL_IMAGE,
+                isDeliveryFee: true
+              });
+            }
+            
+            return allItems;
+          })().map(meal => {
             let variant = null;
             let img = MEAL_IMAGE;
             let title = 'Meal';
@@ -4257,15 +4289,18 @@
               img = meal.img || MEAL_IMAGE;
             }
             
-            // Apply 10% discount to the price
-            const discountedPrice = getDiscountedPrice(price);
+            // Don't apply discount to fees
+            let finalPrice = price;
+            if (!meal.isPackagingFee && !meal.isDeliveryFee) {
+              finalPrice = getDiscountedPrice(price);
+            }
             
             return `
               <li class="afinity-meals-sidebar-item" data-meal-id="${meal.id}">
                 <img src="${img}" alt="${title}" />
                 <div class="afinity-meals-sidebar-details">
                   <div class="afinity-meals-sidebar-title">${title}</div>
-                  <div class="afinity-meals-sidebar-price">$${discountedPrice.toFixed(2)}</div>
+                  <div class="afinity-meals-sidebar-price">$${finalPrice.toFixed(2)}</div>
                 </div>
                 <div class="afinity-meals-sidebar-qty-controls">
                   <button class="afinity-meals-sidebar-qty-btn" data-action="decrement" data-meal-id="${meal.id}">-</button>
@@ -4322,7 +4357,39 @@
         </ul>
         <h3>Add one time Meals to your next subscription charge</h3>
         <ul class="afinity-meals-sidebar-list swap-meals">
-          ${getCurrentMealsArray().filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).map(meal => {
+          ${(() => {
+            const currentMeals = getCurrentMealsArray().filter(m => !originalSubscriptionMeals.some(o => String(o.id) === String(m.id)));
+            const conditionalFees = calculateConditionalFeesForMealsPage();
+            
+            // Add fees as actual items in the list
+            let allItems = [...currentMeals];
+            
+            // Add packaging fee if needed
+            if (conditionalFees.packagingFee > 0) {
+              allItems.push({
+                id: 'packaging-fee',
+                qty: 1,
+                title: 'Packaging Fee',
+                price: conditionalFees.packagingFee,
+                img: MEAL_IMAGE,
+                isPackagingFee: true
+              });
+            }
+            
+            // Add delivery fee if needed
+            if (conditionalFees.deliveryFee > 0) {
+              allItems.push({
+                id: 'delivery-fee',
+                qty: 1,
+                title: 'Delivery Fee',
+                price: conditionalFees.deliveryFee,
+                img: MEAL_IMAGE,
+                isDeliveryFee: true
+              });
+            }
+            
+            return allItems;
+          })().map(meal => {
             let variant = null;
             let img = MEAL_IMAGE;
             let title = 'Meal';
@@ -4470,7 +4537,9 @@
           // Remove any existing fees from the meals array
           updatedMeals = updatedMeals.filter(meal => {
             // Filter out delivery fee and packaging fee by checking if they're fee items
-            return !(meal.isPackagingFee || meal.isDeliveryFee);
+            // Also filter out by ID for backward compatibility
+            return !(meal.isPackagingFee || meal.isDeliveryFee || 
+                    meal.id === 'packaging-fee' || meal.id === 'delivery-fee');
           });
           
           // Add packaging fee if needed
