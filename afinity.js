@@ -1215,17 +1215,33 @@
       dateStr = dateStr.split('T')[0];
     }
     
-    // Get offset days from API
-    const offsetDays = await fetchOffsetDays();
+    // Parse the date components
+    const [year, month, day] = dateStr.split('-').map(Number);
     
-    // Simple date calculation: just add the offset days
-    const dateObj = new Date(dateStr);
-    dateObj.setDate(dateObj.getDate() + offsetDays);
+    // Add 2 days to the day number
+    let newDay = day + 2;
+    let newMonth = month;
+    let newYear = year;
     
-    // Use local timezone instead of UTC to avoid date offset issues
-    return dateObj.getFullYear() + '-' + 
-           String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + 
-           String(dateObj.getDate()).padStart(2, '0');
+    // Handle month boundaries
+    const daysInMonth = new Date(year, month, 0).getDate(); // Get days in current month
+    
+    if (newDay > daysInMonth) {
+      // If we exceed the current month, wrap to the next month
+      newDay = newDay - daysInMonth;
+      newMonth = month + 1;
+      
+      // Handle year boundary
+      if (newMonth > 12) {
+        newMonth = 1;
+        newYear = year + 1;
+      }
+    }
+    
+    // Format the result
+    return newYear + '-' + 
+           String(newMonth).padStart(2, '0') + '-' + 
+           String(newDay).padStart(2, '0');
   }
   
   // Helper to get delivery date from currentSubscription order attributes
