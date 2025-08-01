@@ -574,10 +574,24 @@
           // Restore original modalChanges
           modalChanges = originalModalChanges;
           
-          // Update the payload with the new bundle items
-          finalUpdatePayload.bundle_selections = {
+          // Make separate API call to update bundle_selections with fees
+          const bundleUpdatePayload = {
             items: updatedItems
           };
+          
+          const bundleResponse = await fetch(`${API_URL}/subscription/${subscriptionId}/bundle_selections`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bundleUpdatePayload)
+          });
+          
+          const bundleResult = await bundleResponse.json();
+          if (!bundleResult.success) {
+            console.warn('Failed to update bundle with conditional fees:', bundleResult.error);
+          }
+          
+          // Remove bundle_selections from the main update payload since we handled it separately
+          delete finalUpdatePayload.bundle_selections;
         } catch (error) {
           console.error('Error applying conditional fees:', error);
           // Continue with original payload if fee logic fails
