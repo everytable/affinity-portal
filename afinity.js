@@ -4254,25 +4254,6 @@
       <div class="afinity-meals-sidebar-footer">
         <div class="afinity-meals-sidebar-total">
           ${(() => {
-            const hiddenFees = getHiddenFees();
-            const hasFees = hiddenFees.deliveryFee > 0 || hiddenFees.packagingFee > 0;
-            return hasFees ? `
-              ${hiddenFees.deliveryFee > 0 ? `
-                <div class="afinity-meals-sidebar-fee">
-                  <span>Delivery Fee:</span>
-                  <span>$${hiddenFees.deliveryFee.toFixed(2)}</span>
-                </div>
-              ` : ''}
-              ${hiddenFees.packagingFee > 0 ? `
-                <div class="afinity-meals-sidebar-fee">
-                  <span>Packaging Fee:</span>
-                  <span>$${hiddenFees.packagingFee.toFixed(2)}</span>
-                </div>
-              ` : ''}
-            ` : '';
-          })()}
-          
-          ${(() => {
             const conditionalFees = calculateConditionalFeesForMealsPage();
             let feesHtml = '';
             
@@ -4306,6 +4287,13 @@
           (() => {
             // Check if there are any changes to save
             const currentMeals = getCurrentMealsArray();
+            
+            // Check if cart is empty (no meals with qty > 0)
+            const hasMealsInCart = currentMeals.some(meal => meal.qty > 0);
+            if (!hasMealsInCart) {
+              return 'disabled';
+            }
+            
             const hasChanges = currentMeals.some(meal => {
               const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
               if (!originalMeal) {
@@ -4324,7 +4312,11 @@
             
             return (!hasChanges && !hasRemovals) ? 'disabled' : '';
           })() : 
-          (getCurrentMealsArray().filter(m=>m.qty>0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id))).length === 0 ? 'disabled' : '')}>
+          (() => {
+            const currentMeals = getCurrentMealsArray();
+            const oneTimeMeals = currentMeals.filter(m => m.qty > 0 && !originalSubscriptionMeals.some(o => String(o.id) === String(m.id)));
+            return oneTimeMeals.length === 0 ? 'disabled' : '';
+          })()}>
           ${mealsPageMode === 'update' ? 'Update Subscription' : 'Add One Time Meals'}
           </button>
       </div>
@@ -4355,6 +4347,14 @@
             
             // Check if there are any changes to save
             const currentMeals = getCurrentMealsArray();
+            
+            // Check if cart is empty (no meals with qty > 0)
+            const hasMealsInCart = currentMeals.some(meal => meal.qty > 0);
+            if (!hasMealsInCart) {
+              showToast('Cannot save empty cart. Please add meals before updating.', 'error');
+              return;
+            }
+            
             const hasChanges = currentMeals.some(meal => {
               const originalMeal = originalSubscriptionMeals.find(orig => String(orig.id) === String(meal.id));
               if (!originalMeal) {
@@ -4475,7 +4475,7 @@
             const oneTimeMeals = currentMeals.filter(meal => meal.qty > 0);
             
             if (oneTimeMeals.length === 0) {
-              showToast('No one-time meals to add', 'info');
+              showToast('Cannot save empty cart. Please add meals before saving.', 'error');
               return;
             }
             
