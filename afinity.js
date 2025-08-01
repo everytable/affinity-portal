@@ -3406,7 +3406,7 @@
       methodSelect.onchange = async (e) => {
         const newMethod = e.target.value;
         
-        updateModalChanges('fulfillmentMethod', newMethod);
+        await updateModalChanges('fulfillmentMethod', newMethod);
         fulfillmentMethod = newMethod;
         
         // Clear delivery date and time when switching methods to force new selection
@@ -3436,13 +3436,13 @@
           }
           console.log('Fetching available dates for pickup location:', pickupId);
           await fetchAvailableDates(zip, pickupId);
-          setupDatePicker('Pickup');
+          await setupDatePicker('Pickup');
           // Re-initialize time picker for pickup
-          reinitializeTimePicker();
+          await reinitializeTimePicker();
         } else {
           console.log('Switching to Delivery method');
           await fetchAvailableDates(zip, null);
-          setupDatePicker('Delivery');
+          await setupDatePicker('Delivery');
           
           // Re-initialize time picker for delivery
           if (timeInput && typeof jQuery !== 'undefined' && jQuery.fn.timepicker) {
@@ -3459,7 +3459,9 @@
         }
         
         // Re-render the modal to show cleared date/time fields
-        renderModal();
+        await renderModal().finally(() => {
+          hideModalLoading();
+        });
       };
     }
     // Listen for pickup location change
@@ -3535,11 +3537,12 @@
     const pickupRadios = modalOverlay.querySelectorAll('input[name="pickup-location"]');
     pickupRadios.forEach(radio => {
       radio.onchange = async (e) => {
-        updateModalChanges('selectedPickupLocationId', parseInt(e.target.value));
+        await updateModalChanges('selectedPickupLocationId', parseInt(e.target.value));
         selectedPickupLocationId = parseInt(e.target.value);
-        renderPickupLocationsSection();
+        await renderPickupLocationsSection();
         await clearAndResetDateTimeForPickupLocation(parseInt(e.target.value));
-        reinitializeTimePicker();
+        await reinitializeTimePicker();
+        hideModalLoading();
       };
     });
     // Listen for address, city, state, zip changes
