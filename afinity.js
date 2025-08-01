@@ -553,12 +553,16 @@
           }
           
           // Get current subscription items (excluding delivery fee and packaging fee)
-          const currentItems = currentSubscription?.bundle_selections?.items || [];
+          const currentItems = currentSubscription?.include?.bundle_selections?.items || [];
           const itemsWithoutFees = currentItems.filter(item => {
             const productId = item.external_product_id || item.product_id;
             // Filter out delivery fee (7933253517369) and packaging fee (7927816716345)
             return productId !== '7933253517369' && productId !== '7927816716345';
           });
+          
+          console.log('Current items:', currentItems);
+          console.log('Items without fees:', itemsWithoutFees);
+          console.log('Fulfillment type:', fulfillmentType);
           
           // Create a mock modalChanges object with the fulfillment type from payload
           const mockModalChanges = {
@@ -569,7 +573,7 @@
           const originalModalChanges = modalChanges;
           modalChanges = mockModalChanges;
           
-          // Apply conditional fee logic
+          // Apply conditional fee logic (even if itemsWithoutFees is empty)
           const updatedItems = await handleConditionalFees(itemsWithoutFees, subscriptionId);
           
           // Restore original modalChanges
@@ -1564,10 +1568,14 @@
   // Helper function to handle conditional fees for meals page updates
   async function handleConditionalFees(items, subscriptionId) {
     try {
+      console.log('handleConditionalFees', items, subscriptionId);
+      console.log('modalChanges.fulfillmentMethod:', modalChanges.fulfillmentMethod);
+      
       // Fetch settings to get the delivery fee waiver threshold
       const settingsResponse = await fetch(`${API_URL}/settings`);
       const settings = await settingsResponse.json();
       const subscriptionDeliveryFeeWaiverThreshold = parseFloat(settings.find((s) => s.key === 'subscription_delivery_fee_waiver_threshold')?.value || '0');
+      console.log('Threshold:', subscriptionDeliveryFeeWaiverThreshold);
       
       // Calculate the total of items (excluding fees)
       let total = 0;
@@ -1598,6 +1606,9 @@
       // Get current fulfillment method
       const currentFulfillmentMethod = modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
       
+      // Create a new array with original items (excluding existing fees)
+      let updatedItems = [...items];
+      
       // Always add packaging fee for delivery (1 quantity max)
       if (currentFulfillmentMethod === 'Delivery') {
         const packagingFee = {
@@ -1606,21 +1617,22 @@
           external_variant_id: '44558969372729',
           quantity: 1
         };
-        items.push(packagingFee);
+        updatedItems.push(packagingFee);
       }
       
-      // Conditionally add delivery fee based on threshold
-      if (total < subscriptionDeliveryFeeWaiverThreshold) {
+      // Conditionally add delivery fee based on threshold (only for Delivery)
+      if (currentFulfillmentMethod === 'Delivery' && total < subscriptionDeliveryFeeWaiverThreshold) {
         const deliveryFee = {
           collection_id: '308869562425',
           external_product_id: '7933253517369',
           external_variant_id: '44578774089785',
           quantity: 1
         };
-        items.push(deliveryFee);
+        updatedItems.push(deliveryFee);
       }
       
-      return items;
+      console.log('handleConditionalFees returning:', updatedItems);
+      return updatedItems;
     } catch (error) {
       console.error('Error handling conditional fees:', error);
       // Return original items if there's an error
