@@ -780,7 +780,46 @@
   async function fetchAvailableDates(zip, selectedPickupLocationId) {
     
     try {
-      const url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
+      // Determine the fulfillment type from current subscription or modal changes
+      let fulfillmentType = 'Delivery'; // default
+      
+      // First check modalChanges for current selection
+      if (modalChanges.fulfillmentMethod) {
+        fulfillmentType = modalChanges.fulfillmentMethod;
+      } else if (fulfillmentMethod) {
+        // Fallback to global fulfillmentMethod
+        fulfillmentType = fulfillmentMethod;
+      } else if (currentSubscription?.include?.address?.order_attributes) {
+        // Fallback to subscription data
+        const fulfillmentTypeAttr = currentSubscription.include.address.order_attributes.find(attr => {
+          if (attr && typeof attr === 'object') {
+            if ('name' in attr && 'value' in attr) {
+              return attr.name === 'Fulfillment Type';
+            } else {
+              const key = Object.keys(attr)[0];
+              return key === 'Fulfillment Type';
+            }
+          }
+          return false;
+        });
+        
+        if (fulfillmentTypeAttr) {
+          const value = 'value' in fulfillmentTypeAttr ? fulfillmentTypeAttr.value : fulfillmentTypeAttr['Fulfillment Type'];
+          fulfillmentType = value.trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
+        }
+      }
+      
+      // Use different endpoints based on fulfillment type
+      let url;
+      if (fulfillmentType === 'Pickup' && selectedPickupLocationId) {
+        // Use location-based endpoint for pickup
+        url = `${API_URL}/search/availability/location/${encodeURIComponent(selectedPickupLocationId)}`;
+        console.log(`Using pickup location endpoint: ${url}`);
+      } else {
+        // Use zip code endpoint for delivery
+        url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
+        console.log(`Using delivery zip code endpoint: ${url}`);
+      }
       
       const resp = await fetch(url);
       const data = await resp.json();
@@ -1172,7 +1211,56 @@
     pickupLocationsLoading = true;
     renderPickupLocationsSection();
     lastFetchedZip = zip;
-    pickupLocationsPromise = fetch(`${API_URL}/search/availability/${encodeURIComponent(zip)}`)
+    
+    // Determine the fulfillment type from current subscription or modal changes
+    let fulfillmentType = 'Delivery'; // default
+    
+    // First check modalChanges for current selection
+    if (modalChanges.fulfillmentMethod) {
+      fulfillmentType = modalChanges.fulfillmentMethod;
+    } else if (fulfillmentMethod) {
+      // Fallback to global fulfillmentMethod
+      fulfillmentType = fulfillmentMethod;
+    } else if (currentSubscription?.include?.address?.order_attributes) {
+      // Fallback to subscription data
+      const fulfillmentTypeAttr = currentSubscription.include.address.order_attributes.find(attr => {
+        if (attr && typeof attr === 'object') {
+          if ('name' in attr && 'value' in attr) {
+            return attr.name === 'Fulfillment Type';
+          } else {
+            const key = Object.keys(attr)[0];
+            return key === 'Fulfillment Type';
+          }
+        }
+        return false;
+      });
+      
+      if (fulfillmentTypeAttr) {
+        const value = 'value' in fulfillmentTypeAttr ? fulfillmentTypeAttr.value : fulfillmentTypeAttr['Fulfillment Type'];
+        fulfillmentType = value.trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
+      }
+    }
+    
+    // Use different endpoints based on fulfillment type
+    let url;
+    if (fulfillmentType === 'Pickup') {
+      // Use location-based endpoint for pickup
+      const selectedPickupLocationId = modalChanges.selectedPickupLocationId || selectedPickupLocationId;
+      if (selectedPickupLocationId) {
+        url = `${API_URL}/search/availability/location/${encodeURIComponent(selectedPickupLocationId)}`;
+        console.log(`Using pickup location endpoint for fetchPickupLocations: ${url}`);
+      } else {
+        // Fallback to zip code endpoint if no pickup location ID is available
+        url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
+        console.log(`Using zip code endpoint for fetchPickupLocations (no pickup location ID): ${url}`);
+      }
+    } else {
+      // Use zip code endpoint for delivery
+      url = `${API_URL}/search/availability/${encodeURIComponent(zip)}`;
+      console.log(`Using delivery zip code endpoint for fetchPickupLocations: ${url}`);
+    }
+    
+    pickupLocationsPromise = fetch(url)
       .then(resp => resp.json())
       .then(data => {
         pickupLocations = (data.pickupLocations || []).map(loc => ({
