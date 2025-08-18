@@ -3068,12 +3068,12 @@
       <div class="afinity-modal-content">
         <div class="afinity-modal-card afinity-meals-header-card">
           <button class="afinity-modal-back">< Back</button>
-          <div class="afinity-meals-header-flex" style="display:flex;align-items:flex-start;justify-content:space-between;gap:2rem;width:100%;">
+          <div class="afinity-meals-header-flex">
             <div class="afinity-meals-header-left" style="flex:1;min-width:0;">
               <h2 class="afinity-meals-title">${pageTitle}</h2>
               <div class="afinity-meals-desc">${pageDescription}</div>
             </div>
-            <div class="afinity-meals-date-select" style="font-size:16px;min-width:220px;max-width:260px;display:flex;flex-direction:column;align-items:flex-end;">
+            <div class="afinity-meals-date-select">
               <label class="afinity-modal-select-label">Delivery Date</label>
               <input id="afinity-meals-date" type="text" placeholder="Select delivery date" value="${formatDeliveryDate(
                 currentDeliveryDate
