@@ -6928,7 +6928,7 @@
     );
 
     const offsetMinutes = (asUTC - jsDate.getTime()) / 60000;
-    const sign = offsetMinutes <= 0 ? '+' : '-';
+    const sign = offsetMinutes < 0 ? '-' : '+';
     const abs = Math.abs(offsetMinutes);
     const hh = String(Math.floor(abs / 60)).padStart(2, '0');
     const mmOff = String(abs % 60).padStart(2, '0');
