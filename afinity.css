@@ -809,16 +809,59 @@
 .afinity-meals-swap-btn:hover {
   background: #003f3d;
 }
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .afinity-meals-layout {
     flex-direction: column;
     gap: 16px;
+    padding: 1rem 1rem 1rem 1rem;
   }
   .afinity-modal-card.afinity-meals-sidebar {
     position: static;
-    max-width: 100%;
+    max-width: 93%;
     width: 100%;
     margin-top: 16px;
+    overflow: initial;
+  }
+  .afinity-meals-sidebar-list {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .afinity-meals-sidebar-footer .afinity-meals-swap-btn {
+    width: 100%;
+  }
+}
+
+.afinity-meals-header-flex{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:2rem;
+  width:100%;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+}
+
+.afinity-meals-date-select{
+  font-size:16px;
+  min-width:220px;
+  max-width:260px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+
+  @media (max-width: 768px) {
+    align-items:flex-start !important;
+  }
+}
+
+.afinity-meals-header-card{
+  @media (max-width: 768px) {
+    padding:1.5rem 1rem 16px 1rem !important;
   }
 }
 
