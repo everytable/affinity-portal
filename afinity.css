@@ -809,7 +809,7 @@
 .afinity-meals-swap-btn:hover {
   background: #003f3d;
 }
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .afinity-meals-layout {
     flex-direction: column;
     gap: 16px;
@@ -838,7 +838,7 @@
   gap:2rem;
   width:100%;
 
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     flex-direction: column;
     justify-content: center;
     align-items: flex-start;
@@ -854,13 +854,13 @@
   flex-direction:column;
   align-items:flex-end;
 
-  @media (max-width: 900px) {
-    align-items:flex-start;!importantz
+  @media (max-width: 768px) {
+    align-items:flex-start !important;
   }
 }
 
 .afinity-meals-header-card{
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     padding:1.5rem 1rem 16px 1rem !important;
   }
 }
