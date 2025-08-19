@@ -789,34 +789,18 @@
       .map(charge => {
         let scheduledDate = 'N/A';
         if (charge.scheduled_at) {
-          // Simple string-based date arithmetic - just add 2 days
           const [year, month, day] = charge.scheduled_at.split('-').map(Number);
+        
+          const utcDate = new Date(Date.UTC(year, month - 1, day));
+          utcDate.setUTCDate(utcDate.getUTCDate() + 2);
+          
+          const newYear = utcDate.getUTCFullYear();
+          const newMonth = utcDate.getUTCMonth() + 1;
+          const newDay = utcDate.getUTCDate();
 
-          // Add 2 days
-          let newDay = day + 2;
-          let newMonth = month;
-          let newYear = year;
-
-          // Handle month boundaries - get days in current month correctly
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-          if (newDay > daysInMonth) {
-            newDay = newDay - daysInMonth;
-            newMonth = month + 1;
-
-            if (newMonth > 12) {
-              newMonth = 1;
-              newYear = year + 1;
-            }
-          }
-
-          // Format for display - avoid timezone issues by formatting directly
-          const newDateStr = `${newYear}-${String(newMonth).padStart(
-            2,
-            '0'
-          )}-${String(newDay).padStart(2, '0')}`;
-          scheduledDate = `${newMonth}/${newDay}/${newYear}`;
+          scheduledDate = `${String(newMonth).padStart(2, '0')}/${String(newDay).padStart(2, '0')}/${newYear}`;
         }
+
         const totalPrice = parseFloat(charge.total_price || 0).toFixed(2);
         const status = charge.status || 'unknown';
         const isSkipped = status === 'skipped';
