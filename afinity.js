@@ -1609,6 +1609,12 @@
         setTimeout(() => validateDateAndTimeSelection(), 100);
       },
     });
+
+    // Ensure the display value is formatted correctly on initial load
+    if (currentDate && input._flatpickr) {
+      input.value = formatDeliveryDate(currentDate);
+      console.log('Set formatted display value:', formatDeliveryDate(currentDate));
+    }
   }
 
   async function fetchSubscriptionAndPickup(subscriptionId, zip) {
