@@ -4437,10 +4437,12 @@
     // Back button
     const backBtn = modalOverlay.querySelector('.afinity-modal-back');
     if (backBtn)
-      backBtn.onclick = () => {
+      backBtn.onclick = async () => {
         if (currentPage === 'meals') {
           currentPage = 'main';
-          renderModal(); // force rerender to main page
+          renderModal().then(() => {
+            initializeDateAndTimePickers();
+          }); 
         } else {
           modalOverlay.style.display = 'none';
           // Refresh the window when modal is closed via back button
