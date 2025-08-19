@@ -1510,7 +1510,7 @@
   }
 
   // Helper to (re)initialize the date picker with allowed dates
-  function setupDatePicker(fulfillmentType) {
+  async function setupDatePicker(fulfillmentType) {
     const input = document.getElementById('afinity-date');
     if (!input) {
       return;
@@ -1538,8 +1538,18 @@
       date => !restrictedDates.includes(date)
     );
 
-    // Get current date from subscription data
-    const currentDate = modalChanges.deliveryDate || deliveryDate;
+    // Get current date from subscription data - use new calculation method
+    let currentDate = modalChanges.deliveryDate || deliveryDate;
+    
+    // If no date is set, calculate the next fulfillment date
+    if (!currentDate) {
+      try {
+        currentDate = await calculateNextFulfillmentDate();
+      } catch (error) {
+        console.error('Error calculating next fulfillment date:', error);
+        currentDate = '';
+      }
+    }
 
     // Check if current date is in restricted dates
     if (currentDate && restrictedDates.includes(currentDate)) {
@@ -1606,7 +1616,7 @@
       const pickupLocationId =
         modalChanges.selectedPickupLocationId || selectedPickupLocationId;
       await fetchAvailableDates(zip, pickupLocationId);
-      setupDatePicker(
+      await setupDatePicker(
         modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery'
       );
     } catch (error) {
@@ -2005,8 +2015,8 @@
 
     if (method === 'Delivery') {
       // This revalidates the delivery date and times based on zip code.
-      fetchAvailableDates(zip, null).then(() => {
-        setupDatePicker(method);
+      fetchAvailableDates(zip, null).then(async () => {
+        await setupDatePicker(method);
         // Re-initialize time picker for pickup
         reinitializeTimePicker();
         // Validate date and time selection after clearing (should be disabled)
@@ -2182,6 +2192,86 @@
     ).padStart(2, '0')}`;
   }
 
+  // New function to calculate next fulfillment date based on frequency and charge date
+  async function calculateNextFulfillmentDate() {
+    // Get the original fulfillment date from order attributes
+    const originalFulfillmentDate = getDeliveryDateFromSubscription();
+    if (!originalFulfillmentDate) {
+      // Fallback to the old method if no fulfillment date found
+      return await getNextChargeDateFromSubscription();
+    }
+
+    // Check if the original fulfillment date is already in the future (relative to today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+    
+    // Parse the original date consistently - append T00:00:00 to ensure local timezone interpretation
+    const originalDate = new Date(originalFulfillmentDate + 'T00:00:00');
+    originalDate.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+    
+    // If the original fulfillment date is already in the future, return it as-is
+    if (originalDate > today) {
+      return originalFulfillmentDate;
+    }
+
+    // Get the next charge date
+    const nextChargeDate = currentSubscription?.next_charge_scheduled_at;
+    if (!nextChargeDate) {
+      return originalFulfillmentDate;
+    }
+
+    // Get the frequency from the subscription
+    const frequency = selectedFrequency || modalChanges.selectedFrequency;
+    if (!frequency) {
+      return originalFulfillmentDate;
+    }
+
+    const frequencyData = parseFrequency(frequency);
+    if (!frequencyData) {
+      return originalFulfillmentDate;
+    }
+
+    const { order_interval_unit, order_interval_frequency } = frequencyData;
+
+    // Parse the charge date - handle both date strings and ISO strings
+    let chargeDateLocal;
+    if (nextChargeDate.includes('T')) {
+      // ISO string format - extract just the date part
+      const dateOnly = nextChargeDate.split('T')[0];
+      chargeDateLocal = new Date(dateOnly + 'T00:00:00');
+    } else {
+      // Simple date string format
+      chargeDateLocal = new Date(nextChargeDate + 'T00:00:00');
+    }
+    // Calculate the next fulfillment date by incrementing the original date
+    // until it goes past the charge date
+    let nextFulfillmentDate = new Date(originalDate);
+
+    while (nextFulfillmentDate <= chargeDateLocal) {
+      switch (order_interval_unit) {
+        case 'week':
+          nextFulfillmentDate.setDate(nextFulfillmentDate.getDate() + (7 * order_interval_frequency));
+          break;
+        case 'month':
+          nextFulfillmentDate.setMonth(nextFulfillmentDate.getMonth() + order_interval_frequency);
+          break;
+        case 'day':
+          nextFulfillmentDate.setDate(nextFulfillmentDate.getDate() + order_interval_frequency);
+          break;
+        default:
+          // Fallback to weekly if unknown unit
+          nextFulfillmentDate.setDate(nextFulfillmentDate.getDate() + 7);
+      }
+    }
+
+    // Format the result as YYYY-MM-DD
+    const year = nextFulfillmentDate.getFullYear();
+    const month = String(nextFulfillmentDate.getMonth() + 1).padStart(2, '0');
+    const day = String(nextFulfillmentDate.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  }
+
   // Helper to get delivery date from currentSubscription order attributes
   function getDeliveryDateFromSubscription() {
     if (!currentSubscription?.include?.address?.order_attributes) {
@@ -2223,6 +2313,22 @@
 
     // No Fulfillment Date found, return empty string to force user selection
     return '';
+  }
+
+  // Helper to get delivery date with fallback to calculated date
+  async function getDeliveryDateWithFallback() {
+    const orderAttributesDate = getDeliveryDateFromSubscription();
+    if (orderAttributesDate) {
+      return orderAttributesDate;
+    }
+    
+    // If no fulfillment date found in order attributes, calculate the next fulfillment date
+    try {
+      return await calculateNextFulfillmentDate();
+    } catch (error) {
+      console.error('Error calculating next fulfillment date:', error);
+      return '';
+    }
   }
 
   // Helper to get fulfillment time from currentSubscription order attributes
@@ -2751,7 +2857,7 @@
   }
 
   async function renderMainPage() {
-    const currentDeliveryDate = await getNextChargeDateFromSubscription();
+    const currentDeliveryDate = await calculateNextFulfillmentDate();
     // Calculate total price for header
     const headerTotal = calculateSubscriptionTotal();
     // Determine method
@@ -3043,7 +3149,7 @@
     // Fetch delivery fee threshold when meals page loads
     await fetchDeliveryFeeThreshold();
 
-    const currentDeliveryDate = await getNextChargeDateFromSubscription();
+    const currentDeliveryDate = await calculateNextFulfillmentDate();
 
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
     const headerTotal = getMealsPageHeaderTotal();
@@ -3259,7 +3365,7 @@
                       }
                       price = isNaN(price) ? 0 : price;
                     } else {
-                      // Use meal data from subscription
+                      // Use meal data from selection
                       title = meal.title || 'Meal';
                       price = meal.price || 0;
                       img = meal.img || MEAL_IMAGE;
@@ -4888,14 +4994,14 @@
     // Frequency input
     const frequencyInput = modalOverlay.querySelector('#afinity-frequency');
     if (frequencyInput)
-      frequencyInput.onchange = e => {
+      frequencyInput.onchange = async e => {
         updateModalChanges('selectedFrequency', e.target.value);
         selectedFrequency = e.target.value;
 
         // Reinitialize date picker with new frequency-based restrictions
         const currentFulfillmentMethod =
           modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
-        setupDatePicker(currentFulfillmentMethod);
+        await setupDatePicker(currentFulfillmentMethod);
       };
     // Address inputs - ensure they update modalChanges
     const addressInput = modalOverlay.querySelector('#afinity-address');
@@ -5118,7 +5224,7 @@
       };
     });
     // Initialize Flatpickr for date input (main)
-    setupDatePicker(
+    await setupDatePicker(
       modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery'
     );
 
@@ -5133,7 +5239,7 @@
     );
     dateInputs.forEach(async input => {
       try {
-        const deliveryDate = await getNextChargeDateFromSubscription();
+        const deliveryDate = await calculateNextFulfillmentDate();
         if (deliveryDate) {
           input.value = formatDeliveryDate(deliveryDate);
         }
@@ -5148,7 +5254,7 @@
     );
     dateLabels.forEach(async label => {
       try {
-        const deliveryDate = await getNextChargeDateFromSubscription();
+        const deliveryDate = await calculateNextFulfillmentDate();
         if (deliveryDate) {
           label.textContent = formatDeliveryDate(deliveryDate);
         }
@@ -5375,7 +5481,7 @@
         const currentMethod =
           modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
         if (currentMethod === 'Delivery') {
-          setupDatePicker(currentMethod);
+          await setupDatePicker(currentMethod);
 
           // Re-initialize time picker with new availability
           reinitializeTimePicker();
@@ -7073,7 +7179,7 @@
     }
     // 3. Fetch new available dates and reset pickers
     await fetchAvailableDates(zip, locationId);
-    setupDatePicker(fulfillmentType);
+    await setupDatePicker(fulfillmentType);
     // Always re-initialize the time picker after everything else
     reinitializeTimePicker();
 
@@ -7097,7 +7203,7 @@
     const finalTime = orderAttributesTime || currentTime;
 
     // Set up date picker with allowed dates
-    setupDatePicker(currentMethod);
+    await setupDatePicker(currentMethod);
 
     // Set the date input value if we have a valid date and it's not restricted
     const dateInput = document.getElementById('afinity-date');
