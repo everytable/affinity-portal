@@ -2247,7 +2247,7 @@
     // until it goes past the charge date
     let nextFulfillmentDate = new Date(originalDate);
 
-    while (nextFulfillmentDate <= chargeDateLocal) {
+    while (nextFulfillmentDate < chargeDateLocal) {
       switch (order_interval_unit) {
         case 'week':
           nextFulfillmentDate.setDate(nextFulfillmentDate.getDate() + (7 * order_interval_frequency));
