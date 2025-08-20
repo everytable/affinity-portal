@@ -791,11 +791,11 @@
         if (charge.scheduled_at) {
           const [year, month, day] = charge.scheduled_at.split('-').map(Number);
         
-          const utcDate = new Date(Date.UTC(year, month - 1, day));
+          const utcDate = new Date(Date.UTC(year, month, day));
           utcDate.setUTCDate(utcDate.getUTCDate() + 2);
           
           const newYear = utcDate.getUTCFullYear();
-          const newMonth = utcDate.getUTCMonth() + 1;
+          const newMonth = utcDate.getUTCMonth();
           const newDay = utcDate.getUTCDate();
 
           scheduledDate = `${String(newMonth).padStart(2, '0')}/${String(newDay).padStart(2, '0')}/${newYear}`;
@@ -7372,9 +7372,9 @@
 
       // Always prioritize subscription time as default, then modal changes, then global
       let defaultTime24 = subscriptionTime || modalChanges.fulfillmentTime || fulfillmentTime;
-      let defaultTime12 = '10:00 AM'; // Fallback default time
 
-      if (defaultTime24) {
+      // If timeOptions is empty (restricted date), add the default time as the only option
+      if (timeOptions.length === 0 && defaultTime24) {
         // Convert 24-hour format (e.g., '15:30') to 12-hour format (e.g., '3:30 PM')
         const [h, m] = defaultTime24.split(':');
         let hour = parseInt(h, 10);
@@ -7382,35 +7382,34 @@
         const ampm = hour >= 12 ? 'PM' : 'AM';
         let displayHour = hour % 12;
         if (displayHour === 0) displayHour = 12;
-        defaultTime12 = `${displayHour}:${minute} ${ampm}`;
-      }
-
-      // If timeOptions is empty (restricted date), add the default time as the only option
-      if (timeOptions.length === 0) {
+        const defaultTime12 = `${displayHour}:${minute} ${ampm}`;
         const option = document.createElement('option');
         option.value = defaultTime12;
         option.textContent = defaultTime12;
         timeSelect.appendChild(option);
+        timeSelect.value = defaultTime12;
+      } else if (defaultTime24) {
+        // Try to set the select value to the corresponding 12-hour format if present in options
+        const [h, m] = defaultTime24.split(':');
+        let hour = parseInt(h, 10);
+        const minute = m;
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        let displayHour = hour % 12;
+        if (displayHour === 0) displayHour = 12;
+        const defaultTime12 = `${displayHour}:${minute} ${ampm}`;
+        // Only set if the option exists
+        for (let i = 0; i < timeSelect.options.length; i++) {
+          if (timeSelect.options[i].value === defaultTime12) {
+            timeSelect.value = defaultTime12;
+            break;
+          }
+        }
       }
 
-      // Always set the selected value and update state
-      timeSelect.value = defaultTime12;
-      
       // Also update the modal state and global variable
       if (defaultTime24) {
         updateModalChanges('fulfillmentTime', defaultTime24);
         fulfillmentTime = defaultTime24;
-      } else {
-        // Convert the 12-hour default time to 24-hour format for storage
-        const [timeStr, period] = defaultTime12.split(' ');
-        const [hour, minute] = timeStr.split(':');
-        let hour24 = parseInt(hour);
-        if (period === 'PM' && hour24 < 12) hour24 += 12;
-        if (period === 'AM' && hour24 === 12) hour24 = 0;
-        const time24Format = `${hour24.toString().padStart(2, '0')}:${minute}`;
-        
-        updateModalChanges('fulfillmentTime', time24Format);
-        fulfillmentTime = time24Format;
       }
 
       // Add change event listener
