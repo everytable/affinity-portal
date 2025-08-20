@@ -643,7 +643,7 @@
   // Fulfillment state
   let fulfillmentTime = '';
   let fulfillmentMethod = '';
-  let deliveryDate = '';
+  let currentFulfillmentDate = '';
 
   // Add static pickup locations
   let selectedPickupLocationId = null;
@@ -1532,7 +1532,7 @@
     // Update the modal state with the calculated date
     if (currentDate) {
       updateModalChanges('deliveryDate', currentDate);
-      deliveryDate = currentDate;
+      currentFulfillmentDate = currentDate;
       
       // Add the calculated date to the available dates if it's not already there
       if (fulfillmentType === 'Delivery' && !allowedDeliveryDates.includes(currentDate)) {
@@ -1555,7 +1555,7 @@
       
       if (!isCalculatedFulfillmentDate) {
         updateModalChanges('deliveryDate', '');
-        deliveryDate = '';
+        currentFulfillmentDate = '';
         // Clear the input field
         if (input) {
           input.value = '';
@@ -1579,7 +1579,7 @@
         }
 
         updateModalChanges('deliveryDate', dateStr);
-        deliveryDate = dateStr;
+        currentFulfillmentDate = dateStr;
 
         // Update the display value to show MM-DD-YYYY format
         if (instance.input) {
@@ -1697,7 +1697,7 @@
         state = getStateCode(address.province || '');
         zip = address.zip || '';
 
-        deliveryDate = getDeliveryDateFromSubscription();
+        currentFulfillmentDate = getDeliveryDateFromSubscription();
 
         // Update fulfillment method
         if (payload?.include?.address?.order_attributes) {
@@ -1805,7 +1805,7 @@
         updateModalChanges('state', state);
         updateModalChanges('zip', zip);
         updateModalChanges('fulfillmentMethod', fulfillmentMethod);
-        updateModalChanges('deliveryDate', deliveryDate);
+        updateModalChanges('deliveryDate', currentFulfillmentDate);
         updateModalChanges('selectedFrequency', selectedFrequency);
         updateModalChanges('fulfillmentTime', fulfillmentTime);
 
@@ -2157,7 +2157,7 @@
   // Helper to get delivery date calculated from next charge date
   async function getNextChargeDateFromSubscription() {
     if (!currentSubscription?.next_charge_scheduled_at) {
-      return deliveryDate;
+      return currentFulfillmentDate;
     }
 
     const nextChargeDate = currentSubscription.next_charge_scheduled_at;
@@ -2231,7 +2231,8 @@
         order_interval_unit,
         chargeDateStr
       );
-      deliveryDate = calculatedDate;
+      // Set the initial fulfillment date to the calculated date (for the first time)
+      currentFulfillmentDate = calculatedDate;
       return calculatedDate;
     } catch (error) {
       console.error('Error calculating next delivery date:', error);
@@ -2306,7 +2307,7 @@
   // Helper to get delivery date from currentSubscription order attributes
   function getDeliveryDateFromSubscription() {
     if (!currentSubscription?.include?.address?.order_attributes) {
-      return deliveryDate;
+      return currentFulfillmentDate;
     }
 
     // Look for Fulfillment Date in order attributes
@@ -4328,7 +4329,7 @@
         // Use modalChanges.deliveryDate if available, otherwise fall back to global deliveryDate or get from subscription
         let dateToUse =
           modalChanges.deliveryDate ||
-          deliveryDate ||
+          currentFulfillmentDate ||
           getDeliveryDateFromSubscription();
 
         if (!dateToUse) {
@@ -4999,7 +5000,7 @@
         ],
         onChange: function (selectedDates, dateStr, instance) {
           updateModalChanges('deliveryDate', dateStr);
-          deliveryDate = dateStr;
+          currentFulfillmentDate = dateStr;
 
           // Update the display value to show MM-DD-YYYY format
           if (instance.input) {
@@ -5369,7 +5370,7 @@
     // Clear date and time in state
     updateModalChanges('deliveryDate', '');
     updateModalChanges('fulfillmentTime', '');
-    deliveryDate = '';
+    currentFulfillmentDate = '';
     fulfillmentTime = '';
 
     // Clear the input fields in the UI
@@ -7152,7 +7153,7 @@
     // 1. Clear date and time in state
     updateModalChanges('deliveryDate', '');
     updateModalChanges('fulfillmentTime', '');
-    deliveryDate = '';
+    currentFulfillmentDate = '';
     fulfillmentTime = '';
 
     // 2. Clear the input fields in the UI
@@ -7177,7 +7178,7 @@
   // Add this new function to initialize date and time pickers with current values
   async function initializeDateAndTimePickers() {
     // Get current values from subscription data - prioritize calculated date over order_attributes
-    const currentDate = modalChanges.deliveryDate || deliveryDate;
+    const currentDate = modalChanges.deliveryDate || currentFulfillmentDate;
     const currentTime = fulfillmentTime || modalChanges.fulfillmentTime;
     const currentMethod = fulfillmentMethod || modalChanges.fulfillmentMethod;
 
@@ -7200,7 +7201,7 @@
     // Update modal state with the final date
     if (finalDate) {
       updateModalChanges('deliveryDate', finalDate);
-      deliveryDate = finalDate;
+      currentFulfillmentDate = finalDate;
     }
 
     // Set up date picker with allowed dates
@@ -7218,7 +7219,7 @@
         if (!isCalculatedFulfillmentDate) {
           dateInput.value = '';
           updateModalChanges('deliveryDate', '');
-          deliveryDate = '';
+          currentFulfillmentDate = '';
           updateModalChanges('fulfillmentTime', '');
           fulfillmentTime = '';
         } else {
@@ -7308,7 +7309,7 @@
       timeSelect.innerHTML = '<option value="">Select delivery time</option>';
 
       // Generate time options based on the selected date
-      const selectedDate = modalChanges.deliveryDate || deliveryDate;
+      const selectedDate = modalChanges.deliveryDate || currentFulfillmentDate;
       let timeOptions = [];
       if (selectedDate) {
         timeOptions = generateTimeOptions(selectedDate);
@@ -7595,7 +7596,7 @@
                 if (fulfillmentDateTime.includes('T')) {
                   // Format: "2025-07-03T20:15:00-07:00"
                   const [datePart, timePart] = fulfillmentDateTime.split('T');
-                  deliveryDate = datePart;
+                  currentFulfillmentDate = datePart;
                   // Extract time and convert to 24-hour format
                   const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
                   const [hours, minutes] = timeWithOffset.split(':');
@@ -7603,7 +7604,7 @@
                 }
               } else {
                 // No Fulfillment Date found, set empty values to force user selection
-                deliveryDate = '';
+                currentFulfillmentDate = '';
                 fulfillmentTime = '';
               }
 
@@ -7654,7 +7655,7 @@
             updateModalChanges('state', state);
             updateModalChanges('zip', zip);
             updateModalChanges('fulfillmentMethod', fulfillmentMethod);
-            updateModalChanges('deliveryDate', deliveryDate);
+            updateModalChanges('deliveryDate', currentFulfillmentDate);
             updateModalChanges('fulfillmentTime', fulfillmentTime);
             updateModalChanges('selectedFrequency', selectedFrequency);
             updateModalChanges(
