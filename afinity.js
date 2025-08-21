@@ -643,7 +643,7 @@
   // Fulfillment state
   let fulfillmentTime = '';
   let fulfillmentMethod = '';
-  let deliveryDate = '';
+  let currentFulfillmentDate = '';
 
   // Add static pickup locations
   let selectedPickupLocationId = null;
@@ -789,34 +789,18 @@
       .map(charge => {
         let scheduledDate = 'N/A';
         if (charge.scheduled_at) {
-          // Simple string-based date arithmetic - just add 2 days
           const [year, month, day] = charge.scheduled_at.split('-').map(Number);
+        
+          const utcDate = new Date(Date.UTC(year, month, day));
+          utcDate.setUTCDate(utcDate.getUTCDate() + 2);
+          
+          const newYear = utcDate.getUTCFullYear();
+          const newMonth = utcDate.getUTCMonth();
+          const newDay = utcDate.getUTCDate();
 
-          // Add 2 days
-          let newDay = day + 2;
-          let newMonth = month;
-          let newYear = year;
-
-          // Handle month boundaries - get days in current month correctly
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-          if (newDay > daysInMonth) {
-            newDay = newDay - daysInMonth;
-            newMonth = month + 1;
-
-            if (newMonth > 12) {
-              newMonth = 1;
-              newYear = year + 1;
-            }
-          }
-
-          // Format for display - avoid timezone issues by formatting directly
-          const newDateStr = `${newYear}-${String(newMonth).padStart(
-            2,
-            '0'
-          )}-${String(newDay).padStart(2, '0')}`;
-          scheduledDate = `${newMonth}/${newDay}/${newYear}`;
+          scheduledDate = `${String(newMonth).padStart(2, '0')}/${String(newDay).padStart(2, '0')}/${newYear}`;
         }
+
         const totalPrice = parseFloat(charge.total_price || 0).toFixed(2);
         const status = charge.status || 'unknown';
         const isSkipped = status === 'skipped';
@@ -1510,7 +1494,7 @@
   }
 
   // Helper to (re)initialize the date picker with allowed dates
-  function setupDatePicker(fulfillmentType) {
+  async function setupDatePicker(fulfillmentType) {
     const input = document.getElementById('afinity-date');
     if (!input) {
       return;
@@ -1533,31 +1517,56 @@
     // Get frequency-based restricted dates
     const restrictedDates = getRestrictedDates();
 
+    // Get current date from subscription data - use new calculation method
+    let currentDate = await calculateNextFulfillmentDate();
+
     // Filter out restricted dates from allowed dates
     const filteredAllowedDates = allowedDates.filter(
       date => !restrictedDates.includes(date)
     );
+    
+    if (currentDate && !filteredAllowedDates.includes(currentDate) && !restrictedDates.includes(currentDate)) {
+      filteredAllowedDates.push(currentDate);
+    }
 
-    // Get current date from subscription data
-    const currentDate = modalChanges.deliveryDate || deliveryDate;
+    // Update the modal state with the calculated date
+    if (currentDate) {
+      updateModalChanges('deliveryDate', currentDate);
+      currentFulfillmentDate = currentDate;
+      
+      // Add the calculated date to the available dates if it's not already there
+      if (fulfillmentType === 'Delivery' && !allowedDeliveryDates.includes(currentDate)) {
+        allowedDeliveryDates.push(currentDate);
+      } else if (fulfillmentType === 'Pickup' && !allowedPickupDates.includes(currentDate)) {
+        allowedPickupDates.push(currentDate);
+      }
+      
+      // Also ensure the calculated date is in the allowedDates array used for flatpickr
+      if (!allowedDates.includes(currentDate)) {
+        allowedDates.push(currentDate);
+      }
+    }
 
     // Check if current date is in restricted dates
     if (currentDate && restrictedDates.includes(currentDate)) {
-      updateModalChanges('deliveryDate', '');
-      deliveryDate = '';
-      // Clear the input field
-      if (input) {
-        input.value = '';
+      // Only clear the date if it's not the calculated fulfillment date
+      // For calculated fulfillment dates, we want to allow them even if restricted
+      const isCalculatedFulfillmentDate = true; // This is always a calculated date in this context
+      
+      if (!isCalculatedFulfillmentDate) {
+        updateModalChanges('deliveryDate', '');
+        currentFulfillmentDate = '';
+        // Clear the input field
+        if (input) {
+          input.value = '';
+        }
       }
     }
 
     flatpickr(input, {
       dateFormat: 'Y-m-d', // Keep ISO format for internal storage
       enable: filteredAllowedDates,
-      defaultDate:
-        currentDate && !restrictedDates.includes(currentDate)
-          ? currentDate
-          : undefined, // Set default date if available and not restricted
+      defaultDate:currentDate,
       onChange: function (selectedDates, dateStr, instance) {
         // Check if this is a different date from the original
         const originalDate = getDeliveryDateFromSubscription();
@@ -1570,7 +1579,7 @@
         }
 
         updateModalChanges('deliveryDate', dateStr);
-        deliveryDate = dateStr;
+        currentFulfillmentDate = dateStr;
 
         // Update the display value to show MM-DD-YYYY format
         if (instance.input) {
@@ -1585,13 +1594,11 @@
       },
     });
 
-    // If there's a default date, format it properly for display
-    if (currentDate && !restrictedDates.includes(currentDate)) {
-      const displayValue = formatDeliveryDate(currentDate);
-      input.value = displayValue;
+    // Ensure the display value is formatted correctly on initial load
+    if (currentDate && input._flatpickr) {
+      input.value = formatDeliveryDate(currentDate);
+      console.log('Set formatted display value:', formatDeliveryDate(currentDate));
     }
-
-    // Also, if the time input exists, always initialize it with 15-minute increments by default
   }
 
   async function fetchSubscriptionAndPickup(subscriptionId, zip) {
@@ -1606,7 +1613,7 @@
       const pickupLocationId =
         modalChanges.selectedPickupLocationId || selectedPickupLocationId;
       await fetchAvailableDates(zip, pickupLocationId);
-      setupDatePicker(
+      await setupDatePicker(
         modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery'
       );
     } catch (error) {
@@ -1690,7 +1697,7 @@
         state = getStateCode(address.province || '');
         zip = address.zip || '';
 
-        deliveryDate = getDeliveryDateFromSubscription();
+        currentFulfillmentDate = getDeliveryDateFromSubscription();
 
         // Update fulfillment method
         if (payload?.include?.address?.order_attributes) {
@@ -1798,7 +1805,7 @@
         updateModalChanges('state', state);
         updateModalChanges('zip', zip);
         updateModalChanges('fulfillmentMethod', fulfillmentMethod);
-        updateModalChanges('deliveryDate', deliveryDate);
+        updateModalChanges('deliveryDate', currentFulfillmentDate);
         updateModalChanges('selectedFrequency', selectedFrequency);
         updateModalChanges('fulfillmentTime', fulfillmentTime);
 
@@ -2005,8 +2012,8 @@
 
     if (method === 'Delivery') {
       // This revalidates the delivery date and times based on zip code.
-      fetchAvailableDates(zip, null).then(() => {
-        setupDatePicker(method);
+      fetchAvailableDates(zip, null).then(async () => {
+        await setupDatePicker(method);
         // Re-initialize time picker for pickup
         reinitializeTimePicker();
         // Validate date and time selection after clearing (should be disabled)
@@ -2150,7 +2157,7 @@
   // Helper to get delivery date calculated from next charge date
   async function getNextChargeDateFromSubscription() {
     if (!currentSubscription?.next_charge_scheduled_at) {
-      return deliveryDate;
+      return currentFulfillmentDate;
     }
 
     const nextChargeDate = currentSubscription.next_charge_scheduled_at;
@@ -2182,10 +2189,125 @@
     ).padStart(2, '0')}`;
   }
 
+  // New function to calculate next fulfillment date based on frequency and charge date
+  async function calculateNextFulfillmentDate() {
+    // Get the original fulfillment date from order attributes
+    const originalFulfillmentDate = getDeliveryDateFromSubscription();
+    if (!originalFulfillmentDate) {
+      // Fallback to the old method if no fulfillment date found
+      return await getNextChargeDateFromSubscription();
+    }
+
+    // Get the frequency from the subscription
+    const frequency = selectedFrequency || modalChanges.selectedFrequency;
+    if (!frequency) {
+      return originalFulfillmentDate;
+    }
+
+    const frequencyData = parseFrequency(frequency);
+    if (!frequencyData) {
+      return originalFulfillmentDate;
+    }
+
+    const { order_interval_unit, order_interval_frequency } = frequencyData;
+
+    // Get the next charge date to use as the reference point
+    const nextChargeDate = currentSubscription?.next_charge_scheduled_at;
+    if (!nextChargeDate) {
+      return originalFulfillmentDate;
+    }
+
+    let chargeDateStr;
+    if (nextChargeDate.includes('T')) {
+      chargeDateStr = nextChargeDate.split('T')[0];
+    } else {
+      chargeDateStr = nextChargeDate;
+    }
+
+    try {
+      const calculatedDate = getNextRecurringDeliveryDate(
+        originalFulfillmentDate,
+        order_interval_frequency,
+        order_interval_unit,
+        chargeDateStr
+      );
+      // Set the initial fulfillment date to the calculated date (for the first time)
+      currentFulfillmentDate = calculatedDate;
+      return calculatedDate;
+    } catch (error) {
+      console.error('Error calculating next delivery date:', error);
+      return originalFulfillmentDate;
+    }
+  }
+
+  // Function to calculate next recurring delivery date
+  function getNextRecurringDeliveryDate(
+    fulfillmentDateStr,
+    frequency = 1,
+    unit = "week",
+    todayStr = new Date().toISOString().split("T")[0],
+  ) {
+    const startDate = new Date(fulfillmentDateStr);
+    const today = new Date(todayStr);
+  
+    if (isNaN(startDate.getTime()) || isNaN(today.getTime())) {
+      console.error('Invalid date format detected');
+      throw new Error("Invalid date format");
+    }
+  
+    let nextDelivery;
+  
+    if (unit === "week") {
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const daysElapsed = Math.floor(
+        (today.getTime() - startDate.getTime()) / msPerDay,
+      );
+      const periodsElapsed = Math.floor(daysElapsed / (7 * frequency));
+      const exactChargeDate = new Date(startDate.getTime() + periodsElapsed * 7 * frequency * msPerDay);
+      const exactChargeDateStr = exactChargeDate.toISOString().split("T")[0];
+      if (exactChargeDateStr === todayStr) {
+        nextDelivery = exactChargeDate;
+      } else {
+        nextDelivery = new Date(
+          startDate.getTime() + (periodsElapsed + 1) * 7 * frequency * msPerDay,
+        );
+      }
+    } else if (unit === "month") {
+      const start = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+      );
+      const now = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+      const monthsElapsed =
+        (now.getFullYear() - start.getFullYear()) * 12 +
+        (now.getMonth() - start.getMonth());
+      const periodsElapsed = Math.floor(monthsElapsed / frequency);
+      const exactChargeDate = new Date(start);
+      exactChargeDate.setMonth(start.getMonth() + periodsElapsed * frequency);
+      const exactChargeDateStr = exactChargeDate.toISOString().split("T")[0];
+      if (exactChargeDateStr === todayStr) {
+        nextDelivery = exactChargeDate;
+      } else {
+        nextDelivery = new Date(start);
+        nextDelivery.setMonth(start.getMonth() + (periodsElapsed + 1) * frequency);
+      }
+    } else {
+      console.error('Unsupported unit:', unit);
+      throw new Error(`Unsupported unit: ${unit}`);
+    }
+    const result = nextDelivery.toISOString().split("T")[0]; // YYYY-MM-DD
+    return result;
+  }
+
   // Helper to get delivery date from currentSubscription order attributes
   function getDeliveryDateFromSubscription() {
     if (!currentSubscription?.include?.address?.order_attributes) {
-      return deliveryDate;
+      return currentFulfillmentDate;
     }
 
     // Look for Fulfillment Date in order attributes
@@ -2751,7 +2873,7 @@
   }
 
   async function renderMainPage() {
-    const currentDeliveryDate = await getNextChargeDateFromSubscription();
+    const currentDeliveryDate = await calculateNextFulfillmentDate();
     // Calculate total price for header
     const headerTotal = calculateSubscriptionTotal();
     // Determine method
@@ -3043,7 +3165,7 @@
     // Fetch delivery fee threshold when meals page loads
     await fetchDeliveryFeeThreshold();
 
-    const currentDeliveryDate = await getNextChargeDateFromSubscription();
+    const currentDeliveryDate = await calculateNextFulfillmentDate();
 
     // Get appropriate total for header - subscription total if no changes, calculated total if changes made
     const headerTotal = getMealsPageHeaderTotal();
@@ -3259,7 +3381,7 @@
                       }
                       price = isNaN(price) ? 0 : price;
                     } else {
-                      // Use meal data from subscription
+                      // Use meal data from selection
                       title = meal.title || 'Meal';
                       price = meal.price || 0;
                       img = meal.img || MEAL_IMAGE;
@@ -4207,7 +4329,7 @@
         // Use modalChanges.deliveryDate if available, otherwise fall back to global deliveryDate or get from subscription
         let dateToUse =
           modalChanges.deliveryDate ||
-          deliveryDate ||
+          currentFulfillmentDate ||
           getDeliveryDateFromSubscription();
 
         if (!dateToUse) {
@@ -4306,10 +4428,12 @@
     // Back button
     const backBtn = modalOverlay.querySelector('.afinity-modal-back');
     if (backBtn)
-      backBtn.onclick = () => {
+      backBtn.onclick = async () => {
         if (currentPage === 'meals') {
           currentPage = 'main';
-          renderModal(); // force rerender to main page
+          renderModal().then(() => {
+            initializeDateAndTimePickers();
+          }); 
         } else {
           modalOverlay.style.display = 'none';
           // Refresh the window when modal is closed via back button
@@ -4876,7 +5000,7 @@
         ],
         onChange: function (selectedDates, dateStr, instance) {
           updateModalChanges('deliveryDate', dateStr);
-          deliveryDate = dateStr;
+          currentFulfillmentDate = dateStr;
 
           // Update the display value to show MM-DD-YYYY format
           if (instance.input) {
@@ -4888,14 +5012,14 @@
     // Frequency input
     const frequencyInput = modalOverlay.querySelector('#afinity-frequency');
     if (frequencyInput)
-      frequencyInput.onchange = e => {
+      frequencyInput.onchange = async e => {
         updateModalChanges('selectedFrequency', e.target.value);
         selectedFrequency = e.target.value;
 
         // Reinitialize date picker with new frequency-based restrictions
         const currentFulfillmentMethod =
           modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
-        setupDatePicker(currentFulfillmentMethod);
+        await setupDatePicker(currentFulfillmentMethod);
       };
     // Address inputs - ensure they update modalChanges
     const addressInput = modalOverlay.querySelector('#afinity-address');
@@ -5118,7 +5242,7 @@
       };
     });
     // Initialize Flatpickr for date input (main)
-    setupDatePicker(
+    await setupDatePicker(
       modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery'
     );
 
@@ -5126,36 +5250,6 @@
     if (saveAllBtn) {
       saveAllBtn.onclick = saveDate;
     }
-
-    // Update all date input fields with properly formatted dates
-    const dateInputs = modalOverlay.querySelectorAll(
-      '#afinity-date, #afinity-meals-date'
-    );
-    dateInputs.forEach(async input => {
-      try {
-        const deliveryDate = await getNextChargeDateFromSubscription();
-        if (deliveryDate) {
-          input.value = formatDeliveryDate(deliveryDate);
-        }
-      } catch (error) {
-        console.error('Error updating date input:', error);
-      }
-    });
-
-    // Update date labels in headers
-    const dateLabels = modalOverlay.querySelectorAll(
-      '.afinity-modal-date-label'
-    );
-    dateLabels.forEach(async label => {
-      try {
-        const deliveryDate = await getNextChargeDateFromSubscription();
-        if (deliveryDate) {
-          label.textContent = formatDeliveryDate(deliveryDate);
-        }
-      } catch (error) {
-        console.error('Error updating date label:', error);
-      }
-    });
 
     // Add character count for delivery instructions
     const instructionsTextarea = modalOverlay.querySelector(
@@ -5276,7 +5370,7 @@
     // Clear date and time in state
     updateModalChanges('deliveryDate', '');
     updateModalChanges('fulfillmentTime', '');
-    deliveryDate = '';
+    currentFulfillmentDate = '';
     fulfillmentTime = '';
 
     // Clear the input fields in the UI
@@ -5375,7 +5469,7 @@
         const currentMethod =
           modalChanges.fulfillmentMethod || fulfillmentMethod || 'Delivery';
         if (currentMethod === 'Delivery') {
-          setupDatePicker(currentMethod);
+          await setupDatePicker(currentMethod);
 
           // Re-initialize time picker with new availability
           reinitializeTimePicker();
@@ -7059,7 +7153,7 @@
     // 1. Clear date and time in state
     updateModalChanges('deliveryDate', '');
     updateModalChanges('fulfillmentTime', '');
-    deliveryDate = '';
+    currentFulfillmentDate = '';
     fulfillmentTime = '';
 
     // 2. Clear the input fields in the UI
@@ -7073,7 +7167,7 @@
     }
     // 3. Fetch new available dates and reset pickers
     await fetchAvailableDates(zip, locationId);
-    setupDatePicker(fulfillmentType);
+    await setupDatePicker(fulfillmentType);
     // Always re-initialize the time picker after everything else
     reinitializeTimePicker();
 
@@ -7083,33 +7177,63 @@
 
   // Add this new function to initialize date and time pickers with current values
   async function initializeDateAndTimePickers() {
-    // Get current values from subscription data - ALWAYS prioritize order_attributes
-    const currentDate = modalChanges.deliveryDate || deliveryDate;
+    // Get current values from subscription data - prioritize calculated date over order_attributes
+    const currentDate = modalChanges.deliveryDate || currentFulfillmentDate;
     const currentTime = fulfillmentTime || modalChanges.fulfillmentTime;
     const currentMethod = fulfillmentMethod || modalChanges.fulfillmentMethod;
 
-    // Ensure we're using the values from order_attributes as the primary source
+    // Get the calculated next fulfillment date if available
+    let calculatedDate = null;
+    try {
+      calculatedDate = await calculateNextFulfillmentDate();
+    } catch (error) {
+      console.error('Error calculating next fulfillment date:', error);
+    }
+
+    // Prioritize calculated date, then order_attributes, then fallback values
     const orderAttributesDate = getDeliveryDateFromSubscription();
     const orderAttributesTime = getFulfillmentTimeFromSubscription();
 
-    // Use order_attributes values if available, otherwise fall back to modalChanges/global variables
-    const finalDate = orderAttributesDate || currentDate;
+    // Use calculated date if available, otherwise fall back to order_attributes or current values
+    const finalDate = calculatedDate || orderAttributesDate || currentDate;
     const finalTime = orderAttributesTime || currentTime;
 
-    // Set up date picker with allowed dates
-    setupDatePicker(currentMethod);
+    // Update modal state with the final date
+    if (finalDate) {
+      updateModalChanges('deliveryDate', finalDate);
+      currentFulfillmentDate = finalDate;
+    }
 
-    // Set the date input value if we have a valid date and it's not restricted
+    // Set up date picker with allowed dates
+    await setupDatePicker(currentMethod);
+
+    // Set the date input value if we have a valid date
     const dateInput = document.getElementById('afinity-date');
     if (dateInput && finalDate) {
       // Check if the final date is in restricted dates (3 days out)
       const restrictedDates = getRestrictedDates();
       if (restrictedDates.includes(finalDate)) {
-        dateInput.value = '';
-        updateModalChanges('deliveryDate', '');
-        deliveryDate = '';
-        updateModalChanges('fulfillmentTime', '');
-        fulfillmentTime = '';
+        // For calculated fulfillment dates, we want to allow them even if restricted
+        const isCalculatedFulfillmentDate = calculatedDate === finalDate;
+        
+        if (!isCalculatedFulfillmentDate) {
+          dateInput.value = '';
+          updateModalChanges('deliveryDate', '');
+          currentFulfillmentDate = '';
+          updateModalChanges('fulfillmentTime', '');
+          fulfillmentTime = '';
+        } else {
+          // Set display value as MM-DD-YYYY - Day of week format
+          const displayValue = formatDeliveryDate(finalDate);
+          dateInput.value = displayValue;
+
+          // Also update the flatpickr instance if it exists to ensure consistency
+          if (dateInput._flatpickr) {
+            dateInput._flatpickr.setDate(finalDate, false, 'Y-m-d');
+            // Force the display value to show the formatted date
+            dateInput._flatpickr.input.value = displayValue;
+          }
+        }
       } else {
         // Set display value as MM-DD-YYYY - Day of week format
         const displayValue = formatDeliveryDate(finalDate);
@@ -7121,9 +7245,6 @@
           // Force the display value to show the formatted date
           dateInput._flatpickr.input.value = displayValue;
         }
-
-        // Add this:
-        reinitializeTimePicker();
       }
     }
 
@@ -7188,23 +7309,23 @@
       timeSelect.innerHTML = '<option value="">Select delivery time</option>';
 
       // Generate time options based on the selected date
-      const selectedDate = modalChanges.deliveryDate || deliveryDate;
+      const selectedDate = modalChanges.deliveryDate || currentFulfillmentDate;
       let timeOptions = [];
       if (selectedDate) {
         timeOptions = generateTimeOptions(selectedDate);
       }
-
+      // Get the subscription time (order attribute) to use as default
+      const subscriptionTime = getFulfillmentTimeFromSubscription();
+      
       // Check if the selected date is in frequency-based restricted dates
       const restrictedDates = getRestrictedDates();
-      if (selectedDate && restrictedDates.includes(selectedDate)) {
-        timeSelect.value = '';
-        updateModalChanges('fulfillmentTime', '');
-        fulfillmentTime = '';
-        return; // Don't populate time options for restricted dates
-      }
-
-      // Fallback to default if empty
-      if (timeOptions.length === 0) {
+      const isRestrictedDate = selectedDate && restrictedDates.includes(selectedDate);
+      
+      // If it's a restricted date, don't populate time options but still set the default time
+      if (isRestrictedDate) {
+        // Don't populate timeOptions - keep it empty
+      } else if (timeOptions.length === 0) {
+        // On initial load, if timeOptions is empty (past date), populate with default times
         timeOptions = [
           '9:00 AM',
           '9:15 AM',
@@ -7250,13 +7371,11 @@
         timeSelect.appendChild(option);
       });
 
-      const subscriptionTime = getFulfillmentTimeFromSubscription();
+      // Always prioritize subscription time as default, then modal changes, then global
+      let defaultTime24 = subscriptionTime || modalChanges.fulfillmentTime || fulfillmentTime;
 
-      let defaultTime24 =
-        modalChanges.fulfillmentTime || subscriptionTime || fulfillmentTime;
-      let defaultTime12 = timeOptions[0]; // fallback to first available time
-
-      if (defaultTime24) {
+      // If timeOptions is empty (restricted date), add the default time as the only option
+      if (timeOptions.length === 0 && defaultTime24) {
         // Convert 24-hour format (e.g., '15:30') to 12-hour format (e.g., '3:30 PM')
         const [h, m] = defaultTime24.split(':');
         let hour = parseInt(h, 10);
@@ -7264,16 +7383,35 @@
         const ampm = hour >= 12 ? 'PM' : 'AM';
         let displayHour = hour % 12;
         if (displayHour === 0) displayHour = 12;
-        defaultTime12 = `${displayHour}:${minute} ${ampm}`;
+        const defaultTime12 = `${displayHour}:${minute} ${ampm}`;
+        const option = document.createElement('option');
+        option.value = defaultTime12;
+        option.textContent = defaultTime12;
+        timeSelect.appendChild(option);
+        timeSelect.value = defaultTime12;
+      } else if (defaultTime24) {
+        // Try to set the select value to the corresponding 12-hour format if present in options
+        const [h, m] = defaultTime24.split(':');
+        let hour = parseInt(h, 10);
+        const minute = m;
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        let displayHour = hour % 12;
+        if (displayHour === 0) displayHour = 12;
+        const defaultTime12 = `${displayHour}:${minute} ${ampm}`;
+        // Only set if the option exists
+        for (let i = 0; i < timeSelect.options.length; i++) {
+          if (timeSelect.options[i].value === defaultTime12) {
+            timeSelect.value = defaultTime12;
+            break;
+          }
+        }
       }
 
-      // If the default time is not in the available options, fallback to first available time
-      if (!timeOptions.includes(defaultTime12)) {
-        defaultTime12 = timeOptions[0];
+      // Also update the modal state and global variable
+      if (defaultTime24) {
+        updateModalChanges('fulfillmentTime', defaultTime24);
+        fulfillmentTime = defaultTime24;
       }
-
-      // Set the selected value
-      timeSelect.value = defaultTime12;
 
       // Add change event listener
       timeSelect.addEventListener('change', function () {
@@ -7458,7 +7596,7 @@
                 if (fulfillmentDateTime.includes('T')) {
                   // Format: "2025-07-03T20:15:00-07:00"
                   const [datePart, timePart] = fulfillmentDateTime.split('T');
-                  deliveryDate = datePart;
+                  currentFulfillmentDate = datePart;
                   // Extract time and convert to 24-hour format
                   const timeWithOffset = timePart.split('-')[0]; // Remove timezone offset
                   const [hours, minutes] = timeWithOffset.split(':');
@@ -7466,7 +7604,7 @@
                 }
               } else {
                 // No Fulfillment Date found, set empty values to force user selection
-                deliveryDate = '';
+                currentFulfillmentDate = '';
                 fulfillmentTime = '';
               }
 
@@ -7517,7 +7655,7 @@
             updateModalChanges('state', state);
             updateModalChanges('zip', zip);
             updateModalChanges('fulfillmentMethod', fulfillmentMethod);
-            updateModalChanges('deliveryDate', deliveryDate);
+            updateModalChanges('deliveryDate', currentFulfillmentDate);
             updateModalChanges('fulfillmentTime', fulfillmentTime);
             updateModalChanges('selectedFrequency', selectedFrequency);
             updateModalChanges(
