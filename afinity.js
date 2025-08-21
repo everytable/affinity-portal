@@ -2242,12 +2242,12 @@
 
   // Function to calculate next recurring delivery date
   function getNextRecurringDeliveryDate(
-    startDateStr,
+    fulfillmentDateStr,
     frequency = 1,
     unit = "week",
     todayStr = new Date().toISOString().split("T")[0],
   ) {
-    const startDate = new Date(startDateStr);
+    const startDate = new Date(fulfillmentDateStr);
     const today = new Date(todayStr);
   
     if (isNaN(startDate.getTime()) || isNaN(today.getTime())) {
