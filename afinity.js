@@ -7537,6 +7537,123 @@
     }
   }
 
+  async function updateLocationIDBasedOffDelivery() {
+    try {
+      // Determine fulfillment type
+      let fulfillmentType = 'Delivery';
+      if (modalChanges && modalChanges.fulfillmentMethod) {
+        fulfillmentType = modalChanges.fulfillmentMethod;
+      } else if (typeof fulfillmentMethod !== 'undefined' && fulfillmentMethod) {
+        fulfillmentType = fulfillmentMethod;
+      } else if (currentSubscription?.include?.address?.order_attributes) {
+        const ftAttr = currentSubscription.include.address.order_attributes.find(attr => {
+          if (attr && typeof attr === 'object') {
+            if ('name' in attr && 'value' in attr) {
+              return attr.name === 'Fulfillment Type';
+            } else {
+              const key = Object.keys(attr)[0];
+              return key === 'Fulfillment Type';
+            }
+          }
+          return false;
+        });
+        if (ftAttr) {
+          const v = 'value' in ftAttr ? ftAttr.value : ftAttr['Fulfillment Type'];
+          fulfillmentType = v && String(v).trim().toLowerCase() === 'pickup' ? 'Pickup' : 'Delivery';
+        }
+      }
+
+      const deliveryLocationId = window.deliveryLocation?.location_id;
+      if (fulfillmentType === 'Delivery' && deliveryLocationId) {
+        showModalLoading();
+        // Build order attributes preserving existing, override LocationID
+        const orderAttributesArr = [];
+        if (currentSubscription?.include?.address?.order_attributes) {
+          currentSubscription.include.address.order_attributes.forEach(attr => {
+            if (attr && typeof attr === 'object') {
+              if ('name' in attr && 'value' in attr) {
+                orderAttributesArr.push({ [attr.name]: attr.value });
+              } else {
+                orderAttributesArr.push(attr);
+              }
+            }
+          });
+        }
+        const existingIdx = orderAttributesArr.findIndex(a => Object.keys(a)[0] === 'LocationID');
+        if (existingIdx !== -1) {
+          orderAttributesArr[existingIdx] = { LocationID: deliveryLocationId };
+        } else {
+          orderAttributesArr.push({ LocationID: deliveryLocationId });
+        }
+        // Persist update
+        const subId = currentSubscription?.id;
+        if (subId) {
+          await updateSubscriptionSafely(subId, { order_attributes: orderAttributesArr });
+        }
+
+        // Retry: find the delivery location from globally stored pickup locations and load catalog
+        const pickupLocations = Array.isArray(window.pickupLocationsData) ? window.pickupLocationsData : [];
+        const retryMatch = pickupLocations.find(loc => {
+          const cand = String(deliveryLocationId);
+          return String(loc.id) === cand || String(loc.location_id) === cand;
+        });
+        const retryName = retryMatch ? retryMatch.name : null;
+        if (retryName) {
+          await fetchCatalog(deliveryLocationId, retryName);
+        } else {
+          hideModalLoading();
+          console.error('No matching pickup location for deliveryLocation.location_id:', deliveryLocationId);
+        }
+      } else {
+        console.error('updateLocationIDBasedOffDelivery: Not Delivery or missing deliveryLocation');
+      }
+    } catch (err2) {
+      console.error('Error in updateLocationIDBasedOffDelivery:', err2);
+    }
+  }
+
+  async function fetchCatalog(locationId, locationName) {
+    fetch(
+      `${API_URL}/location/catalog/${locationId}/${encodeURIComponent(
+        locationName
+      )}`
+    )
+      .then(resp => resp.json())
+      .then(catalogPayload => {
+        currentCatalogPayload = catalogPayload;
+        if (catalogPayload && catalogPayload.catalogId) {
+          const catalogId = catalogPayload.catalogId.replace(
+            'gid://shopify/MarketCatalog/',
+            ''
+          );
+          fetch(
+            `${API_URL}/subscriptions/${catalogId}/variants`
+          )
+            .then(resp => resp.json())
+            .then(async variantsData => {
+              currentCatalogVariants = variantsData;
+              await rerenderModalCartList();
+              await renderModal();
+              await initializeDateAndTimePickers();
+            })
+            .catch(err => {
+              currentCatalogVariants = null;
+              console.error(
+                'Failed to load catalog variants:',
+                err
+              );
+            })
+            .finally(() => {
+              hideModalLoading();
+            });
+        }
+      })
+      .catch(err => {
+        currentCatalogPayload = null;
+        console.error('Failed to load catalog payload:', err);
+      });
+  }
+
   // Listen for the event on document
   document.addEventListener(
     'Recharge::click::manageSubscription',
@@ -7792,7 +7909,7 @@
 
             if (locationId && zip) {
               fetchPickupLocations(zip)
-                .then(pickupLocations => {
+                .then(async pickupLocations => {
                   const matchedLocation = pickupLocations.find(
                     loc => String(loc.id) === String(locationId)
                   );
@@ -7801,51 +7918,10 @@
                     : null;
                   if (locationName) {
                     showModalLoading();
-                    fetch(
-                      `${API_URL}/location/catalog/${locationId}/${encodeURIComponent(
-                        locationName
-                      )}`
-                    )
-                      .then(resp => resp.json())
-                      .then(catalogPayload => {
-                        currentCatalogPayload = catalogPayload;
-                        if (catalogPayload && catalogPayload.catalogId) {
-                          const catalogId = catalogPayload.catalogId.replace(
-                            'gid://shopify/MarketCatalog/',
-                            ''
-                          );
-                          fetch(
-                            `${API_URL}/subscriptions/${catalogId}/variants`
-                          )
-                            .then(resp => resp.json())
-                            .then(async variantsData => {
-                              currentCatalogVariants = variantsData;
-                              await rerenderModalCartList();
-                              await renderModal();
-                              await initializeDateAndTimePickers();
-                            })
-                            .catch(err => {
-                              currentCatalogVariants = null;
-                              console.error(
-                                'Failed to load catalog variants:',
-                                err
-                              );
-                            })
-                            .finally(() => {
-                              hideModalLoading();
-                            });
-                        }
-                      })
-                      .catch(err => {
-                        currentCatalogPayload = null;
-                        console.error('Failed to load catalog payload:', err);
-                      });
+                    await fetchCatalog(locationId, locationName);
                   } else {
                     currentCatalogPayload = null;
-                    console.error(
-                      'No matching locationName found for locationId:',
-                      locationId
-                    );
+                    await updateLocationIDBasedOffDelivery();
                   }
                 })
                 .catch(err => {
