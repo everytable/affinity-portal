@@ -2228,7 +2228,6 @@
       const calculatedDate = getNextRecurringDeliveryDate(
         originalFulfillmentDate,
         order_interval_frequency,
-        order_interval_unit,
         chargeDateStr
       );
       // Set the initial fulfillment date to the calculated date (for the first time)
@@ -2244,11 +2243,15 @@
   function getNextRecurringDeliveryDate(
     fulfillmentDateStr,
     frequency = 1,
-    unit = "week",
     todayStr = new Date().toISOString().split("T")[0],
   ) {
     const startDate = new Date(fulfillmentDateStr);
     const today = new Date(todayStr);
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    const daysElapsed = Math.floor(
+      (today.getTime() - startDate.getTime()) / msPerDay,
+    );
   
     if (isNaN(startDate.getTime()) || isNaN(today.getTime())) {
       console.error('Invalid date format detected');
@@ -2256,50 +2259,18 @@
     }
   
     let nextDelivery;
-  
-    if (unit === "week") {
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const daysElapsed = Math.floor(
-        (today.getTime() - startDate.getTime()) / msPerDay,
-      );
-      const periodsElapsed = Math.floor(daysElapsed / (7 * frequency));
-      const exactChargeDate = new Date(startDate.getTime() + periodsElapsed * 7 * frequency * msPerDay);
-      const exactChargeDateStr = exactChargeDate.toISOString().split("T")[0];
-      if (exactChargeDateStr === todayStr) {
-        nextDelivery = exactChargeDate;
-      } else {
-        nextDelivery = new Date(
-          startDate.getTime() + (periodsElapsed + 1) * 7 * frequency * msPerDay,
-        );
-      }
-    } else if (unit === "month") {
-      const start = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-      );
-      const now = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-      );
-      const monthsElapsed =
-        (now.getFullYear() - start.getFullYear()) * 12 +
-        (now.getMonth() - start.getMonth());
-      const periodsElapsed = Math.floor(monthsElapsed / frequency);
-      const exactChargeDate = new Date(start);
-      exactChargeDate.setMonth(start.getMonth() + periodsElapsed * frequency);
-      const exactChargeDateStr = exactChargeDate.toISOString().split("T")[0];
-      if (exactChargeDateStr === todayStr) {
-        nextDelivery = exactChargeDate;
-      } else {
-        nextDelivery = new Date(start);
-        nextDelivery.setMonth(start.getMonth() + (periodsElapsed + 1) * frequency);
-      }
+
+    const periodLength = 7 * frequency;
+    // Check if today is exactly on a delivery day
+    if (daysElapsed % periodLength === 0 && daysElapsed >= 0) {
+      nextDelivery = today;
     } else {
-      console.error('Unsupported unit:', unit);
-      throw new Error(`Unsupported unit: ${unit}`);
+      const periodsElapsed = Math.floor(daysElapsed / periodLength);
+      nextDelivery = new Date(
+        startDate.getTime() + (periodsElapsed + 1) * periodLength * msPerDay,
+      );
     }
+
     const result = nextDelivery.toISOString().split("T")[0]; // YYYY-MM-DD
     return result;
   }
