@@ -2415,6 +2415,16 @@
     return '';
   }
 
+  // Helper: date used for filtering menu availability
+  // Prefer the calculated next delivery date over the date stored on the subscription
+  function getMealsFilteringDate() {
+    if (currentFulfillmentDate) {
+      return currentFulfillmentDate;
+    }
+    const subDate = getDeliveryDateFromSubscription();
+    return subDate || '';
+  }
+
   // Helper to get fulfillment time from currentSubscription order attributes
   function getFulfillmentTimeFromSubscription() {
     if (!currentSubscription?.include?.address?.order_attributes) {
@@ -2905,7 +2915,7 @@
   function getMealsPageHeaderTotal() {
     // Check if any changes have been made to the meals
     const currentMeals = getCurrentMealsArray();
-    const subscriptionDate = getDeliveryDateFromSubscription();
+    const subscriptionDate = getMealsFilteringDate();
     const availableOriginalMeals = filterSelectedMealsByAvailability(
       originalSubscriptionMeals,
       subscriptionDate
@@ -3555,7 +3565,7 @@
                   )
                   .filter(meal => {
                     // Filter one-time meals based on availability for the subscription date
-                    const subscriptionDate = getDeliveryDateFromSubscription();
+                    const subscriptionDate = getMealsFilteringDate();
                     return (
                       filterSelectedMealsByAvailability(
                         [meal],
@@ -3856,7 +3866,7 @@
     }
 
     // Get the subscription date for filtering
-    const subscriptionDate = getDeliveryDateFromSubscription();
+    const subscriptionDate = getMealsFilteringDate();
 
     // Check if product is available for the subscription date
     if (!isProductAvailableForDate(product, subscriptionDate)) {
@@ -5748,7 +5758,7 @@
   // Update rerenderSidebarMeals and renderSidebarMeals to recalculate and update the cart total
   function renderSidebarMeals() {
     // Get the subscription date for filtering
-    const subscriptionDate = getDeliveryDateFromSubscription();
+    const subscriptionDate = getMealsFilteringDate();
 
     // Filter original subscription meals by availability
     const availableOriginalMeals = filterSelectedMealsByAvailability(
@@ -5927,7 +5937,7 @@
   // Helper function to render just the sidebar content for meals page
   function renderMealsPageSidebar() {
     // Get the subscription date for filtering
-    const subscriptionDate = getDeliveryDateFromSubscription();
+    const subscriptionDate = getMealsFilteringDate();
 
     // Filter original subscription meals by availability
     const availableOriginalMeals = filterSelectedMealsByAvailability(
@@ -6039,7 +6049,7 @@
                   )
                   .filter(meal => {
                     // Filter new meals based on availability for the subscription date
-                    const subscriptionDate = getDeliveryDateFromSubscription();
+                    const subscriptionDate = getMealsFilteringDate();
                     return (
                       filterSelectedMealsByAvailability(
                         [meal],
@@ -6346,7 +6356,7 @@
               })()
             : (() => {
                 const currentMeals = getCurrentMealsArray();
-                const subscriptionDate = getDeliveryDateFromSubscription();
+                const subscriptionDate = getMealsFilteringDate();
                 const availableOriginalMeals =
                   filterSelectedMealsByAvailability(
                     originalSubscriptionMeals,
@@ -6405,7 +6415,7 @@
             const currentMeals = getCurrentMealsArray();
 
             // Get the subscription date for filtering
-            const subscriptionDate = getDeliveryDateFromSubscription();
+            const subscriptionDate = getMealsFilteringDate();
             const availableOriginalMeals = filterSelectedMealsByAvailability(
               originalSubscriptionMeals,
               subscriptionDate
@@ -6612,7 +6622,7 @@
 
             // Check if there are any one-time meals to add
             const currentMeals = getCurrentMealsArray();
-            const subscriptionDate = getDeliveryDateFromSubscription();
+            const subscriptionDate = getMealsFilteringDate();
             const oneTimeMeals = currentMeals
               .filter(meal => meal.qty > 0)
               .filter(meal => {
