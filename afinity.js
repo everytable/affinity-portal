@@ -4443,6 +4443,30 @@
         }
       }
 
+      // Update Delivery Instructions attribute
+      if (typeof modalChanges.deliveryInstructions !== 'undefined') {
+        const instructionsValue = String(
+          modalChanges.deliveryInstructions || ''
+        ).trim();
+        const existingIndex = orderAttributesArr.findIndex(
+          attr => Object.keys(attr)[0] === 'Delivery Instructions'
+        );
+        if (instructionsValue) {
+          if (existingIndex !== -1) {
+            orderAttributesArr[existingIndex] = {
+              'Delivery Instructions': instructionsValue,
+            };
+          } else {
+            orderAttributesArr.push({
+              'Delivery Instructions': instructionsValue,
+            });
+          }
+        } else if (existingIndex !== -1) {
+          // Remove Delivery Instructions if user cleared the field
+          orderAttributesArr.splice(existingIndex, 1);
+        }
+      }
+
       // Parse frequency if changed
       let frequencyData = null;
       if (
