@@ -5291,6 +5291,8 @@
         } else {
           await fetchAvailableDates(zip, null);
           await setupDatePicker('Delivery');
+          // Check Uber deliverability when switching to Delivery
+          await checkUberDeliverability();
 
           // Re-initialize time picker for delivery
           if (
@@ -5575,6 +5577,8 @@
 
           // Re-initialize time picker with new availability
           reinitializeTimePicker();
+          // After availability is fetched and delivery location is known, check Uber deliverability
+          await checkUberDeliverability();
         }
 
         showToast(`Zip code ${zipCode} is deliverable!`, 'success');
@@ -5608,6 +5612,67 @@
       return false;
     } finally {
       hideModalLoading();
+    }
+  }
+
+  // Check Uber deliverability for the current address and delivery location
+  async function checkUberDeliverability() {
+    try {
+      const locationId = window.deliveryLocation?.location_id;
+      // If we don't yet have a delivery location (e.g., Pickup), skip silently
+      if (!locationId) return true;
+
+      const line1 = (modalChanges.address1 || address1 || '').trim();
+      const line2 = (modalChanges.address2 || address2 || '').trim();
+      const cityVal = (modalChanges.city || city || '').trim();
+      const stateVal = (modalChanges.state || state || '').trim();
+      const zipVal = (modalChanges.zip || zip || '').trim();
+
+      const streetAddress = [];
+      if (line1) streetAddress.push(line1);
+      if (line2) streetAddress.push(line2);
+
+      const addressPayload = {
+        street_address: streetAddress.length ? streetAddress : [''],
+        city: cityVal,
+        state: stateVal,
+        zip_code: zipVal,
+        country: 'US',
+      };
+
+      const payload = {
+        is_b2b: false,
+        location_id: locationId,
+        delivery_address: JSON.stringify(addressPayload),
+      };
+
+      const resp = await fetch(`${API_URL}/api/uber/check-deliverable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        console.warn('Uber check-deliverable returned non-200');
+        return true; // Do not block; just skip the toast on transport errors
+      }
+      const data = await resp.json().catch(() => ({}));
+
+      const isDeliverable = Boolean(
+        data?.deliverable === true ||
+          data?.is_deliverable === true ||
+          data?.isDeliverable === true ||
+          data?.success === true,
+      );
+
+      if (!isDeliverable) {
+        showToast('This address is not deliverable by courier.', 'error');
+      }
+
+      return isDeliverable;
+    } catch (err) {
+      console.error('Error checking Uber deliverability:', err);
+      return true;
     }
   }
 
