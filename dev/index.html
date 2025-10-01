@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Affinity Modal</title>
+  <!-- jQuery -->
+  <script src="https://cdn.jsdelivr.net/jquery/latest/jquery.min.js"></script>
+  <!-- Moment.js -->
+  <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+  <!-- Flatpickr CSS & JS -->
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <!-- jQuery Timepicker CSS & JS -->
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/timepicker@1.14.1/jquery.timepicker.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/timepicker@1.14.1/jquery.timepicker.min.js"></script>
+  <script src="./afinity.js"></script>
+  <style>
+    body { background: #f5f5f5; font-family: sans-serif; }
+    #test-btn { font-size: 1.2em; padding: 0.5em 1.5em; margin: 40px; }
+  </style>
+  <script>
+    const API_URL = "https://admin-app-stage.everytable-sh.com/api";
+    //const API_URL = "https://shoapenglee.jp.ngrok.io/api";
+    const apiToken = "strfnt_b64b8b63e8a51dddfa74b96361a8efc9623beb2bead49665f021fc1f2561dad1" 
+  </script>
+</head>
+<body>
+  <h2>Test: Fire Recharge::click::manageSubscription Event</h2>
+  <button id="test-btn" onclick="fireEvent()">Fire Event</button>
+  
+  <h2>Test: Orders Page</h2>
+  <button id="orders-btn" onclick="fireOrdersEvent()">Test Orders Page</button>
+  
+  <div id="orders-container" style="margin-top: 20px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h3>Orders Section</h3>
+    <div class="recharge-section-orders-previous">
+      <!-- Orders will be loaded here -->
+    </div>
+  </div>
+  
+  <script>
+    // Set up the URL structure for testing
+    const testHash = '2848447ee78fe3672452e952cec924';
+    const testUrl = `/portal/${testHash}`;
+    
+    // Override window.location for testing
+    Object.defineProperty(window, 'location', {
+      value: {
+        pathname: '/orders',
+        href: `http://localhost:3000${testUrl}/orders`,
+        toString: function() { return this.href; }
+      },
+      writable: true
+    });
+    
+    function fireEvent() {
+     const event = new CustomEvent('Recharge::click::manageSubscription', {
+        bubbles: true,
+        cancelable: true,
+        detail: {
+          payload: {
+            subscriptionId: 680400905
+          }
+        }
+        });
+        document.dispatchEvent(event);
+    }
+    
+    function fireOrdersEvent() {
+      // Simulate the location change to orders page
+      const event = new CustomEvent('Recharge::location::change', {
+        bubbles: true,
+        cancelable: true,
+        detail: {
+          pathname: '/orders'
+        }
+      });
+      document.dispatchEvent(event);
+      
+      // Also trigger the orders loading directly
+      setTimeout(() => {
+        if (typeof loadCustomerOrders === 'function') {
+          loadCustomerOrders(testHash);
+        }
+      }, 100);
+    }
+    
+    // Auto-fire the orders event on page load
+    setTimeout(() => {
+      fireOrdersEvent();
+    }, 500);
+  </script>
+</body>
+</html>
