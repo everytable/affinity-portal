@@ -159,7 +159,7 @@
   // Run the function to start observing
   limitUpcomingOrdersToFour();
 
-  // Change text of address payment
+  // Change text of address payment and discount
   const replacements = [
     {
       target: 'Your addresses & payment details',
@@ -168,6 +168,10 @@
     {
       target: 'Address & payment details',
       replacement: 'Payment details',
+    },
+    {
+      target: 'Add discount',
+      replacement: 'Redeem Rewards or Apply Discount',
     },
   ];
 
@@ -188,12 +192,50 @@
     }
   }
 
+  // Handle discount modal/pop-up text replacements
+  function replaceDiscountModalText() {
+    const elements = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, label, div, span');
+    for (let el of elements) {
+      const text = el.textContent?.trim() || '';
+      
+      // Replace modal title: "Apply a discount code" → "Redeem Rewards or Apply a Discount"
+      if (text === 'Apply a discount code' && el.childNodes.length === 1 && el.childNodes[0].nodeType === Node.TEXT_NODE) {
+        el.textContent = 'Redeem Rewards or Apply a Discount';
+      }
+      
+      // Replace modal description
+      if (text.includes('If you have a discount code, add it here') && 
+          el.childNodes.length === 1 && 
+          el.childNodes[0].nodeType === Node.TEXT_NODE) {
+        el.textContent = 'Paste the reward points code copied from your rewards dashboard below or if you have a discount code, enter it below.';
+      }
+      
+      // Also handle if the description is split differently
+      if (text === 'If you have a discount code, add it here. This will apply to all orders that get sent to this address.' &&
+          el.childNodes.length === 1 && 
+          el.childNodes[0].nodeType === Node.TEXT_NODE) {
+        el.textContent = 'Paste the reward points code copied from your rewards dashboard below or if you have a discount code, enter it below.';
+      }
+    }
+    
+    // Update input placeholders
+    const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+    for (let input of inputs) {
+      const placeholder = input.getAttribute('placeholder') || '';
+      if (placeholder.toLowerCase().includes('discount code')) {
+        input.setAttribute('placeholder', 'Reward points code or discount code');
+      }
+    }
+  }
+
   // Run once in case it's already rendered
   replaceTextContent();
+  replaceDiscountModalText();
 
   // Set up observer to handle dynamic rendering
   const addressObserver = new MutationObserver(() => {
     replaceTextContent();
+    replaceDiscountModalText();
   });
 
   addressObserver.observe(document.body, {
