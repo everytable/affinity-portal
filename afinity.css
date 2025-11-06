@@ -12,7 +12,7 @@
 @keyframes afinity-fadein {
   from { opacity: 0; } to { opacity: 1; }
 }
-.afinity-modal-content {
+/* .afinity-modal-content {
   background: transparent;
   width: 100vw;
   margin: 0 auto;
@@ -27,7 +27,7 @@
   animation: afinity-slideup 0.45s cubic-bezier(0.4, 0.8, 0.2, 1) forwards;
   scrollbar-width: thin;
   scrollbar-color: #c1c1c1 #f1f1f1;
-}
+} */
 
 .afinity-modal-content::-webkit-scrollbar {
   width: 8px;
@@ -46,7 +46,206 @@
 .afinity-modal-content::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+
+
+
+
+/* Accordion container */
+/* === Accordion container === */
+.afinity-modal-content {
+  background-color: #f8f9fb;
+  padding:24px;
+  border-radius: 10px;
+  font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+  color: #333;
+  max-width: 80vw;
+  margin: 0 auto;
+}
+
+/* Accordion Wrapper */
+.afinity-accordion-section {
+  background: #fff;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.afinity-accordion-section.open {
+  border-color: #0d3c3a;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+/* Header Button */
+.afinity-accordion-toggle {
+  width: 100%;
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  background-color: #0d3c3a;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px 18px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.afinity-accordion-toggle:hover {
+  background-color: #0d3c3a;
+}
+
+.afinity-accordion-toggle .accordion-icon {
+  font-size: 18px;
+  transition: transform 0.25s ease;
+}
+
+.afinity-accordion-section.open .accordion-icon {
+  transform: rotate(45deg);
+}
+
+/* Accordion Content */
+.afinity-accordion {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+  background: #fff;
+  padding: 0 22px;
+}
+
+/* Ensure content inside accordions fits nicely */
+.afinity-accordion > * {
+  padding: 16px 0;
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+/* Input + Labels */
+.afinity-modal-row label {
+  display: block;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.afinity-modal-row input,
+.afinity-modal-row select,
+.afinity-modal-row textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #cfd8e3;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.25s ease;
+}
+
+.afinity-modal-row input:focus,
+.afinity-modal-row select:focus,
+.afinity-modal-row textarea:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* Card Titles */
+.afinity-modal-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #222;
+}
+
+/* Buttons */
+.afinity-modal-save-btn,
+.afinity-modal-update-meals {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.25s ease, transform 0.1s ease;
+}
+
+
+
+.afinity-modal-cancel-btn {
+  background-color: transparent;
+  color: #444;
+  border: 1px solid #ccc;
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.afinity-modal-cancel-btn:hover {
+  background-color: #f7f7f7;
+}
+
+/* Footer */
+.afinity-modal-footer-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  margin-top: 24px;
+  text-align: right;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Scroll inside modal for long content */
+.afinity-modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cfd8e3 #f8f9fb;
+}
+
+/* Custom scrollbar */
+.afinity-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-thumb {
+  background-color: #cfd8e3;
+  border-radius: 4px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-thumb:hover {
+  background-color: #a5b3c2;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .afinity-modal-content {
+    padding: 16px;
+  }
+
+  .afinity-accordion-toggle {
+    font-size: 14px;
+    padding: 12px 16px;
+  }
+
+  .afinity-accordion > * {
+    padding: 12px 0;
+  }
+}
+
+
+
 @media (max-width: 800px) {
+  h2 {
+    font-size: 17px;
+  }
   .afinity-modal-content {
     max-width: 100vw;
     border-radius: 12px 12px 0 0;
@@ -132,7 +331,6 @@
   background: #fff;
   border-radius: 8px;
   width: 90vw;
-  max-width: 1264px;
   margin: auto 20px auto 19px;
   margin: 32px auto 0 auto;
   padding: 24px 24px 16px 24px;
@@ -639,6 +837,7 @@
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
   padding-bottom: 2rem;
+      width: 77vw;
 }
 
 /* Meal Selection Modal Styles */
@@ -854,13 +1053,11 @@
   flex-direction:column;
   align-items:flex-end;
 
-  @media (max-width: 768px) {
-    align-items:flex-start !important;
-  }
+
 }
+  @media (max-width: 768px) {
 
 .afinity-meals-header-card{
-  @media (max-width: 768px) {
     padding:1.5rem 1rem 16px 1rem !important;
   }
 }
