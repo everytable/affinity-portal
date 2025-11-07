@@ -93,10 +93,6 @@
   transition: transform 0.25s ease;
 }
 
-/* .afinity-accordion-section.open .accordion-icon {
-  transform: rotate(45deg);
-} */
-
 /* Accordion Content */
 .afinity-accordion {
   max-height: 0;
@@ -149,9 +145,6 @@
 }
 
 /* Buttons */
-
-
-
 .afinity-modal-cancel-btn {
   background-color: transparent;
   color: #444;
