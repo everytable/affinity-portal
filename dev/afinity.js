@@ -3160,8 +3160,10 @@
 
             return;
         }
-      });
     });
+
+
+
 
   async function renderMealsPage() {
     // Fetch delivery fee threshold when meals page loads
