@@ -248,6 +248,8 @@
   // ============================================
   
   let contactUsInjected = false;
+  let contactUsContainer = null;
+  let hiddenReactContent = null;
 
   function injectContactUsNav() {
     if (contactUsInjected) return;
@@ -316,8 +318,23 @@
     }
   }
 
-  // Render Contact Us page content
+  function cleanupContactUsPage() {
+    // Show React content again
+    if (hiddenReactContent) {
+      hiddenReactContent.style.display = '';
+      hiddenReactContent = null;
+    }
+    
+    // Remove our container
+    if (contactUsContainer && contactUsContainer.parentElement) {
+      contactUsContainer.remove();
+      contactUsContainer = null;
+    }
+  }
+
   function renderContactUsPage() {
+    cleanupContactUsPage();
+    
     let mainContent = null;
     
     const allDivs = document.querySelectorAll('div');
@@ -371,7 +388,14 @@
       return;
     }
 
-    mainContent.innerHTML = `
+    // Hide React content instead of removing it (keeps React's DOM intact)
+    hiddenReactContent = mainContent;
+    mainContent.style.display = 'none';
+    
+    // Create our container as a sibling
+    contactUsContainer = document.createElement('div');
+    contactUsContainer.id = 'et-contact-us-container';
+    contactUsContainer.innerHTML = `
       <div style="max-width: 720px; margin: 0 auto; padding: 0;">
         <div style="background: #0d3c3a; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; margin-bottom: 0;">
           <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #fff;">Contact us</h1>
@@ -443,7 +467,10 @@
       </div>
     `;
 
-    const options = mainContent.querySelectorAll('a[href*="mailto"], a[href*="callback"], a[href*="faq"]');
+    // Insert our container after the hidden React content
+    mainContent.parentElement.insertBefore(contactUsContainer, mainContent.nextSibling);
+
+    const options = contactUsContainer.querySelectorAll('a[href*="mailto"], a[href*="callback"], a[href*="faq"]');
     options.forEach(option => {
       option.addEventListener('mouseenter', function() {
         this.style.background = '#f8f9fa';
@@ -470,8 +497,16 @@
   setTimeout(injectContactUsNav, 1000);
   setTimeout(injectContactUsNav, 2000);
   
-  document.addEventListener('Recharge::location::change', function() {
-    contactUsInjected = false;
-    setTimeout(injectContactUsNav, 500);
-  });
+    document.addEventListener('Recharge::location::change', function() {
+      cleanupContactUsPage();
+      contactUsInjected = false;
+      setTimeout(injectContactUsNav, 500);
+    }, true);
+
+    document.addEventListener('click', function(e) {
+      const link = e.target.closest('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"], a[href*="/customer"], a[href*="/overview"]');
+      if (link && contactUsContainer) {
+        cleanupContactUsPage();
+      }
+    }, true);
 })();
