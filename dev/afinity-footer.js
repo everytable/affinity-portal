@@ -414,7 +414,6 @@
               </div>
               <div style="flex: 1;">
                 <div style="font-size: 18px; font-weight: 600; color: #222; margin-bottom: 4px;">Schedule callback</div>
-                <div style="font-size: 14px; color: #666;">Skip the hold time and receive a call in 10-15 mins.</div>
               </div>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2">
                 <path d="M9 18l6-6-6-6"/>
