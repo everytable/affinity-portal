@@ -2907,6 +2907,77 @@
               </select>
             </div>
             <button class="afinity-modal-update-meals">Update Meals</button>
+
+          </div>
+           <div class="afinity-modal-cart-list">
+            ${
+              currentCatalogVariants &&
+              currentCatalogVariants.variants &&
+              currentSubscription &&
+              currentSubscription.include &&
+              currentSubscription.include.bundle_selections &&
+              Array.isArray(currentSubscription.include.bundle_selections.items)
+                ? currentSubscription.include.bundle_selections.items
+                    .filter(item => {
+                      // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+                      const productId =
+                        item.external_product_id || item.product_id;
+                      return (
+                        productId !== '7927816716345' &&
+                        productId !== '7933253517369'
+                      );
+                    })
+                    .map(item => {
+                      const variant = getVariantById(item.external_variant_id);
+                      if (!variant) return '';
+                      const img =
+                        variant?.product?.featuredMedia?.preview?.image?.url ||
+                        variant?.product?.featuredMedia?.preview?.url ||
+                        variant?.image?.url ||
+                        MEAL_IMAGE;
+                      const title = variant
+                        ? variant.product?.title || variant.sku || 'Meal'
+                        : item.title || item.external_variant_id;
+                      const qty = item.quantity || 1;
+
+                      // Get the price from subscription data (already discounted)
+                      const discountedPrice = Number(item.price) || 0;
+
+                      // Get the original price from catalog variants
+                      let originalPrice = discountedPrice; // fallback to discounted price if not found
+                      if (variant && variant.price) {
+                        if (typeof variant.price === 'string') {
+                          originalPrice = parseFloat(variant.price);
+                        } else if (variant.price.amount) {
+                          originalPrice = parseFloat(variant.price.amount);
+                        } else if (typeof variant.price === 'number') {
+                          originalPrice = variant.price;
+                        }
+                      }
+
+                      return `
+                      <div class="afinity-modal-cart-item">
+                        <img src="${img}" alt="${title}" />
+                        <div>
+                          <div class="afinity-modal-cart-title">${title}</div>
+                          <div class="afinity-modal-cart-details">
+                            <div class="afinity-modal-cart-qty">x ${qty}</div>
+                            <div class="afinity-modal-cart-price">
+                              <span class="afinity-modal-cart-price--discount">$${discountedPrice.toFixed(
+                                2
+                              )}</span>
+                              <span class="afinity-modal-cart-price--original">$${originalPrice.toFixed(
+                                2
+                              )}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                    })
+                    .join('')
+                : ''
+            }
           </div>
         `;
       }
