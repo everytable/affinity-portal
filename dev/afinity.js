@@ -2853,21 +2853,34 @@
     }
   }
 
-  async function renderMainPage() {
-    const currentDeliveryDate = await calculateNextFulfillmentDate();
-    // Calculate total price for header
-    const headerTotal = calculateSubscriptionTotal();
-    // Determine method
-    return `
-      <button class="afinity-modal-close" title="Close">&times;</button>
-      <div class="afinity-modal-header">
-        <span class="afinity-modal-date"><span class="afinity-modal-date-label">${formatDeliveryDate(
-          currentDeliveryDate
-        )}</span> <span class="afinity-modal-price">$${headerTotal}</span></span>
-      </div>
-      <div class="afinity-modal-content">
-        <div class="afinity-modal-card-frequency">
-          <button class="afinity-modal-back">< Back</button>
+    async function renderMainPage() {
+      const currentDeliveryDate = await calculateNextFulfillmentDate();
+      const headerTotal = calculateSubscriptionTotal();
+
+      // helper: generic accordion wrapper
+      function renderAccordion(title, content, isOpen = false) {
+        console.log(isOpen);
+        const openClass = isOpen ? "open" : "";
+        const iconSymbol = isOpen ? "×" : "+";
+        console.log(iconSymbol)
+
+        return `
+          <div class="afinity-accordion-section ${openClass}">
+            <button class="afinity-accordion-toggle" type="button">
+              <span class="accordion-text">${title}</span>
+              <span class="accordion-icon">${iconSymbol}</span>
+            </button>
+            <div class="afinity-accordion" style="${isOpen ? "max-height:1000px;" : "max-height:0;"}">
+              ${content}
+            </div>
+          </div>
+        `;
+      }
+
+
+      // helper: frequency section
+      function renderFrequencySection() {
+        return `
           <div class="afinity-modal-card-frequency-content">
             <div class="afinity-modal-row-frequency">
               <label class="afinity-modal-label-frequency" for="afinity-frequency">Frequency</label>
@@ -2878,27 +2891,25 @@
                         .map(freq =>
                           freq.options
                             .map(
-                              option =>
-                                `<option value="${freq.unit}-${option}" ${
-                                  selectedFrequency === `${freq.unit}-${option}`
-                                    ? 'selected'
-                                    : ''
+                              option => `
+                                <option value="${freq.unit}-${option}" ${
+                                  selectedFrequency === `${freq.unit}-${option}` ? "selected" : ""
                                 }>
-                          ${option} ${freq.unit}${
-                                  option > 1 ? 's' : ''
-                                } subscription
-                        </option>`
+                                  ${option} ${freq.unit}${option > 1 ? "s" : ""} subscription
+                                </option>
+                              `
                             )
-                            .join('')
+                            .join("")
                         )
-                        .join('')
-                    : '<option>Loading frequencies...</option>'
+                        .join("")
+                    : "<option>Loading frequencies...</option>"
                 }
               </select>
             </div>
             <button class="afinity-modal-update-meals">Update Meals</button>
+
           </div>
-          <div class="afinity-modal-cart-list">
+           <div class="afinity-modal-cart-list">
             ${
               currentCatalogVariants &&
               currentCatalogVariants.variants &&
@@ -2968,179 +2979,251 @@
                 : ''
             }
           </div>
-        </div>
-        <div class="afinity-modal-card">
-          <div class="afinity-modal-card-title">Update Subscription Delivery or Pickup</div>
-          <div id="afinity-method-section">
-            ${renderMethodSection()}
-          </div>
-        </div>
-        <div class="afinity-modal-card">
-          <div class="afinity-modal-card-title">Update Subscription Date</div>
-          <div class="afinity-modal-row">
-            <label for="afinity-date" class="afinity-modal-select-label">Date</label>
-            <input id="afinity-date" type="text" placeholder="Select delivery date" value="${formatDeliveryDate(
-              currentDeliveryDate
-            )}" readonly />
-          </div>
-          <div class="afinity-modal-row">
-            <label for="afinity-time" class="afinity-modal-select-label">Time</label>
-            <select id="timepicker" class="timepicker">
-              <option value="">Select delivery time</option>
-            </select>
-          </div>
-          <div style="display:flex; justify-content:flex-end; margin-top:8px;">
-            <button id="afinity-save-date-btn" class="afinity-modal-save-btn" type="button" onclick="saveDate()" disabled style="opacity: 0.5; cursor: not-allowed;">Save</button>
-          </div>
-        </div>
-        <div class="afinity-modal-card">
-          <div class="afinity-modal-card-title">Delivery Instructions</div>
-          <div class="afinity-modal-row">
-            <label for="afinity-delivery-instructions" class="afinity-modal-select-label">Instructions</label>
-            <textarea id="afinity-delivery-instructions" placeholder="Enter delivery instructions (e.g., gate code, building access, special instructions)" rows="3" maxlength="280">${getDeliveryInstructions()}</textarea>
-          </div>
-          <div style="display:flex; justify-content:flex-start; align-items:center; margin-top:8px;">
-            <div class="afinity-character-count">
-              <span id="afinity-instructions-char-count"> Character limit: ${
-                getDeliveryInstructions().length
-              }</span>/280 characters
-            </div>
-          </div>
-        </div>
-        <div class="afinity-modal-card">
-          <a href="#" class="afinity-modal-add-extra">&#8853; <span>Add extra meal to order</span></a>
-        </div>
-        
-        <!-- Charges Table Section -->
-        <div class="afinity-modal-card">
-          <div class="afinity-modal-card-title">Manage Your Upcoming Deliveries or Pickups</div>
-          <div class="afinity-modal-row">
-            <p style="margin: 0; color: #666; font-size: 14px;">
-              View and manage your upcoming Deliveries or Pickups. Skip or unskip individual Deliveries or Pickups as needed.
-            </p>
-          </div>
-          <div id="afinity-charges-table-container">
-            <div class="afinity-charges-loading">Loading charges...</div>
-          </div>
-        </div>
-        
-        <!-- One-time Items Section -->
-        ${
-          currentSubscription?.include?.onetimes &&
-          currentSubscription.include.onetimes.length > 0
-            ? `
+        `;
+      }
+
+        // helper: delivery instructions section
+      function renderInstructionsSection() {
+        return `
           <div class="afinity-modal-card">
-            <div class="afinity-modal-card-title">One off items to next Order</div>
-            <div class="afinity-modal-onetime-list">
-              ${currentSubscription.include.onetimes
-                .map(onetime => {
-                  // Try to find variant in catalog data to get proper image and title
-                  let variant = null;
-                  let img = MEAL_IMAGE; // Default fallback
-                  let title = onetime.product_title || 'One-time Item';
-                  let price = parseFloat(onetime.price) || 0;
-                  const qty = onetime.quantity || 1;
-
-                  // Look for variant in catalog data using external_variant_id
-                  if (
-                    currentCatalogVariants &&
-                    currentCatalogVariants.variants &&
-                    currentCatalogVariants.variants.length > 0
-                  ) {
-                    // Extract the variant ID from the one-time item data
-                    let variantId = null;
-                    if (onetime.external_variant_id) {
-                      if (
-                        typeof onetime.external_variant_id === 'object' &&
-                        onetime.external_variant_id.ecommerce
-                      ) {
-                        // Format: {ecommerce: "44637278863417"}
-                        variantId = onetime.external_variant_id.ecommerce;
-                      } else if (
-                        typeof onetime.external_variant_id === 'string'
-                      ) {
-                        // Format: "44637278863417" or "gid://shopify/ProductVariant/44637278863417"
-                        variantId = onetime.external_variant_id.replace(
-                          'gid://shopify/ProductVariant/',
-                          ''
-                        );
-                      }
-                    }
-
-                    if (variantId) {
-                      variant = currentCatalogVariants.variants.find(
-                        v =>
-                          String(v.id) === String(variantId) ||
-                          String(v.id) ===
-                            String(variantId).replace(
-                              'gid://shopify/ProductVariant/',
-                              ''
-                            ) ||
-                          String(v.id).replace(
-                            'gid://shopify/ProductVariant/',
-                            ''
-                          ) === String(variantId)
-                      );
-                    }
-                  }
-
-                  if (variant) {
-                    img = getVariantImageFromVariantsData(variant);
-                    title =
-                      variant.title ||
-                      variant.product?.title ||
-                      onetime.product_title ||
-                      'One-time Item';
-                    // For one-time items, always use the price from the subscription, not the variant price
-                    // price is already set to parseFloat(onetime.price) || 0 above
-                  }
-
-                  return `
-                  <div class="afinity-modal-onetime-item" data-onetime-id="${
-                    onetime.id
-                  }">
-                    <img src="${img}" alt="${title}" />
-                    <div class="afinity-modal-onetime-details">
-                      <div class="afinity-modal-onetime-title">${title}</div>
-                      <div class="afinity-modal-onetime-meta">
-                        <div class="afinity-modal-onetime-qty">x ${qty}</div>
-                        <div class="afinity-modal-onetime-price">$${price.toFixed(
-                          2
-                        )}</div>
-                      </div>
-                    </div>
-                    <button class="afinity-modal-onetime-delete" data-onetime-id="${
-                      onetime.id
-                    }" title="Remove item">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/>
-                      </svg>
-                    </button>
-                  </div>
-                `;
-                })
-                .join('')}
+            <div class="afinity-modal-card-title">Delivery Instructions</div>
+            <div class="afinity-modal-row">
+              <label for="afinity-delivery-instructions" class="afinity-modal-select-label">Instructions</label>
+              <textarea id="afinity-delivery-instructions"
+                placeholder="Enter delivery instructions (e.g., gate code, building access, special instructions)"
+                rows="3" maxlength="280">${getDeliveryInstructions()}</textarea>
+            </div>
+            <div style="display:flex; justify-content:flex-start; align-items:center; margin-top:8px;">
+              <div class="afinity-character-count">
+                <span id="afinity-instructions-char-count">
+                  Character limit: ${getDeliveryInstructions().length}
+                </span>/280 characters
+              </div>
             </div>
           </div>
-        `
-            : ''
-        }
-        <div class="afinity-modal-card afinity-modal-footer-card">
-          <div class="afinity-modal-footer-actions">
-            <div style="display:flex;">
-              <a href="#" class="afinity-cancel-subscription">
-                Cancel subscription
-              </a>
+        `;
+      }
+
+      // helper: upcoming deliveries section
+      function renderUpcomingSection() {
+        return `
+          <div class="afinity-modal-card">
+            <div class="afinity-modal-card-title">Manage Your Upcoming Deliveries or Pickups</div>
+            <div class="afinity-modal-row">
+              <p style="margin: 0; color: #666; font-size: 14px;">
+                View and manage your upcoming Deliveries or Pickups. Skip or unskip individual Deliveries or Pickups as needed.
+              </p>
             </div>
-            <div>
-              <button class="afinity-modal-cancel-btn" type="button">Cancel</button>
-                              <button class="afinity-modal-save-btn afinity-modal-footer-save-btn" type="button">Save Changes</button>
+            <div id="afinity-charges-table-container">
+              <div class="afinity-charges-loading">Loading charges...</div>
+            </div>
+          </div>
+        `;
+      }
+      // helper: delivery/pickup + instructions section combined
+      function renderFulfillmentSection() {
+        return `
+          <div class="afinity-modal-card">
+            <div class="afinity-modal-card-title">Update Subscription Delivery or Pickup</div>
+            <div id="afinity-method-section">
+              ${renderMethodSection()}
+            </div>
+          </div>
+          ${renderInstructionsSection()}
+          ${renderUpcomingSection()}
+          ${renderOnetimeSection()}
+        `;
+      }
+      // helper: date/time section
+      function renderDateTimeSection() {
+        return `
+          <div class="afinity-modal-card">
+            <div class="afinity-modal-card-title">Update Subscription Date</div>
+            <div class="afinity-modal-row">
+              <label for="afinity-date" class="afinity-modal-select-label">Date</label>
+              <input id="afinity-date" type="text" placeholder="Select delivery date"
+                value="${formatDeliveryDate(currentDeliveryDate)}" readonly />
+            </div>
+            <div class="afinity-modal-row">
+              <label for="afinity-time" class="afinity-modal-select-label">Time</label>
+              <select id="timepicker" class="timepicker">
+                <option value="">Select delivery time</option>
+              </select>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+              <button id="afinity-save-date-btn" class="afinity-modal-save-btn"
+                type="button" onclick="saveDate()" disabled
+                style="opacity: 0.5; cursor: not-allowed;">Save</button>
+            </div>
+          </div>
+        `;
+      }
+      // helper: one-time items section
+      function renderOnetimeSection() {
+        if (
+          !currentSubscription?.include?.onetimes ||
+          currentSubscription.include.onetimes.length === 0
+        ) return "";
+
+        const onetimeItems = currentSubscription.include.onetimes
+          .map(onetime => {
+            let variant = null;
+            let img = MEAL_IMAGE;
+            let title = onetime.product_title || "One-time Item";
+            let price = parseFloat(onetime.price) || 0;
+            const qty = onetime.quantity || 1;
+
+            if (currentCatalogVariants?.variants?.length > 0) {
+              let variantId = null;
+              if (onetime.external_variant_id) {
+                if (typeof onetime.external_variant_id === "object" && onetime.external_variant_id.ecommerce) {
+                  variantId = onetime.external_variant_id.ecommerce;
+                } else if (typeof onetime.external_variant_id === "string") {
+                  variantId = onetime.external_variant_id.replace("gid://shopify/ProductVariant/", "");
+                }
+              }
+
+              if (variantId) {
+                variant = currentCatalogVariants.variants.find(
+                  v =>
+                    String(v.id) === String(variantId) ||
+                    String(v.id).replace("gid://shopify/ProductVariant/", "") === String(variantId)
+                );
+              }
+            }
+
+            if (variant) {
+              img = getVariantImageFromVariantsData(variant);
+              title = variant.title || variant.product?.title || onetime.product_title || "One-time Item";
+            }
+
+            return `
+              <div class="afinity-modal-onetime-item" data-onetime-id="${onetime.id}">
+                <img src="${img}" alt="${title}" />
+                <div class="afinity-modal-onetime-details">
+                  <div class="afinity-modal-onetime-title">${title}</div>
+                  <div class="afinity-modal-onetime-meta">
+                    <div class="afinity-modal-onetime-qty">x ${qty}</div>
+                    <div class="afinity-modal-onetime-price">$${price.toFixed(2)}</div>
+                  </div>
+                </div>
+                <button class="afinity-modal-onetime-delete" data-onetime-id="${onetime.id}" title="Remove item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            `;
+          })
+          .join("");
+
+        return `
+          <div class="afinity-modal-card">
+            <div class="afinity-modal-card-title">One-off Items to Next Order</div>
+            <div class="afinity-modal-onetime-list">${onetimeItems}</div>
+          </div>
+        `;
+      }
+
+      // final return layout
+      return `
+        <button class="afinity-modal-close" title="Close">&times;</button>
+        <div class="afinity-modal-header">
+          <span class="afinity-modal-date">
+            <span class="afinity-modal-date-label">${formatDeliveryDate(currentDeliveryDate)}</span>
+            <span class="afinity-modal-price">$${headerTotal}</span>
+          </span>
+        </div>
+
+        <div class="afinity-modal-content">
+          <button class="afinity-modal-back">< Back</button>
+
+          ${renderAccordion("Update Meals", renderFrequencySection(), true)}
+
+
+          
+          ${renderAccordion("Add Extra Meals", `
+            <div class="afinity-modal-card">
+              <div class="afinity-modal-card-title">Add Extra Meals</div>
+              <div class="afinity-modal-row">
+                <p style="margin: 0; color: #666; font-size: 14px;">
+                  Add additional one-time meals to your next subscription delivery.
+                  Browse the available menu and include extra meals as desired.
+                </p>
+              </div>
+              <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                <button class="afinity-modal-save-btn afinity-modal-add-extra" type="button">
+                  Add Extra Meals
+                </button>
+              </div>
+            </div>
+          `)}
+          ${renderAccordion("Fulfillment", renderFulfillmentSection())}
+          ${renderAccordion("Date & Time", renderDateTimeSection())}
+          
+        
+          <div class="afinity-modal-card afinity-modal-footer-card">
+            <div class="afinity-modal-footer-actions">
+              <div style="display:flex;">
+                <a href="#" class="afinity-cancel-subscription">Cancel subscription</a>
+              </div>
+              <div>
+                <button class="afinity-modal-cancel-btn" type="button">Cancel</button>
+                <button class="afinity-modal-save-btn afinity-modal-footer-save-btn" type="button">Save Changes</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    `;
-  }
+      `;
+    }
+    // Accordion open/close handler
+    document.addEventListener("click", async function (e) {
+      const toggle = e.target.closest(".afinity-accordion-toggle");
+      if (toggle) {
+        const section = toggle.closest(".afinity-accordion-section");
+        const accordion = section.querySelector(".afinity-accordion");
+        const icon = toggle.querySelector(".accordion-icon");
+        const isOpen = section.classList.contains("open");
+
+        // Safety check for missing icon element
+        if (!icon) {
+          console.warn("Accordion icon not found in toggle:", toggle);
+        }
+
+        if (isOpen) {
+          // Close
+          section.classList.remove("open");
+          accordion.style.maxHeight = null;
+          if (icon) icon.innerText = "+"; // use innerText (more consistent than textContent)
+        } else {
+          // Open
+          section.classList.add("open");
+          accordion.style.maxHeight = accordion.scrollHeight + "px";
+          if (icon) icon.innerText = "×"; // show cross
+        }
+
+        return;
+      }
+
+       if (e.target && e.target.id === "afinity-add-extra-meals-btn") {
+        const modalContent = document.querySelector(".afinity-modal");
+          if (!modalContent) return;
+            modalContent.innerHTML = `
+              <div class="afinity-meals-loading" style="text-align:center;padding:40px;">
+                <div class="afinity-meals-loading-spinner"></div>
+                <p>Loading meals...</p>
+              </div>
+            `;
+            // Load meals page and replace modal content
+            const mealsHTML = await renderMealsPage();
+            modalContent.innerHTML = mealsHTML;
+
+            return;
+        }
+    });
+
 
   async function renderMealsPage() {
     // Fetch delivery fee threshold when meals page loads
