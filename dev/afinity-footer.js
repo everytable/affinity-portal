@@ -294,10 +294,6 @@
 
     if (allNavLinks.length < 2) return;
 
-    // Find the common parent container for these links
-    const linkParents = allNavLinks.map(link => link.parentElement).filter(Boolean);
-    const linksContainer = linkParents[0]?.parentElement || linkParents[0] || navContainer;
-
     // Identify target links
     let manageLink = null;
     let previousOrderLink = null;
@@ -332,8 +328,19 @@
     const manageEl = getReorderableElement(manageLink);
     const previousEl = getReorderableElement(previousOrderLink);
 
-    // Get all children of the container
-    const children = Array.from(linksContainer.children);
+    // Find the actual container that holds the reorderable elements
+    // This handles cases where links are direct children or wrapped
+    const manageParent = manageEl.parentElement;
+    const previousParent = previousEl.parentElement;
+    
+    // If both reorderable elements share the same parent, use that
+    // Otherwise, fall back to navContainer
+    const actualContainer = (manageParent === previousParent && manageParent) 
+      ? manageParent 
+      : navContainer;
+
+    // Get all children of the actual container
+    const children = Array.from(actualContainer.children);
     const manageIdx = children.indexOf(manageEl);
     const previousIdx = children.indexOf(previousEl);
 
@@ -361,13 +368,13 @@
     // Apply reordering to DOM using insertBefore
     children.forEach((child, index) => {
       if (index === 0) {
-        if (child !== linksContainer.firstChild) {
-          linksContainer.insertBefore(child, linksContainer.firstChild);
+        if (child !== actualContainer.firstChild) {
+          actualContainer.insertBefore(child, actualContainer.firstChild);
         }
       } else {
         const prevChild = children[index - 1];
         if (prevChild.nextSibling !== child) {
-          linksContainer.insertBefore(child, prevChild.nextSibling);
+          actualContainer.insertBefore(child, prevChild.nextSibling);
         }
       }
     });
