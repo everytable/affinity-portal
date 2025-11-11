@@ -470,7 +470,12 @@
   font-weight: 500;
   color: #3f3f3f;
 }
-
+.afinity-modal-update-meals {
+  margin: 0 0 0 12px;
+  font-size: 16px;
+  align-self: stretch;
+  height: 40px;
+}
 /* Modal Footer Styles */
 .afinity-modal-footer {
   display: flex;
@@ -1989,6 +1994,10 @@
   .afinity-modal-update-meals {
     min-width: 110px;
   }
+   .afinity-modal-content {
+    padding: 16px;
+  }
+
   .afinity-accordion-toggle {
     font-size: 14px;
     padding: 12px 16px;

@@ -242,4 +242,271 @@
     childList: true,
     subtree: true,
   });
+
+  // ============================================
+  // Contact Us Tab Injection
+  // ============================================
+  
+  let contactUsInjected = false;
+  let contactUsContainer = null;
+  let hiddenReactContent = null;
+
+  function injectContactUsNav() {
+    if (contactUsInjected) return;
+
+    // Find the navigation sidebar (look for common patterns)
+    const navSelectors = [
+      'nav[data-testid="customer-portal-sidebar"]',
+      '[data-testid="navigation"]',
+      'nav[role="navigation"]',
+      '.recharge-sidebar',
+      // Look for the container that has links like "View upcoming orders"
+      'a[href*="/upcoming"], a[href*="/orders"]'
+    ];
+
+    let navContainer = null;
+    
+    const existingLinks = document.querySelectorAll('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"]');
+    if (existingLinks.length > 0) {
+      navContainer = existingLinks[0].parentElement?.parentElement || existingLinks[0].parentElement;
+    }
+
+    if (!navContainer) {
+      for (const selector of navSelectors) {
+        navContainer = document.querySelector(selector);
+        if (navContainer) break;
+      } 
+    }
+
+    if (!navContainer) {
+      return;
+    }
+
+    if (document.querySelector('#et-contact-us-nav-link')) {
+      contactUsInjected = true;
+      return;
+    }
+
+    const referenceLink = navContainer.querySelector('a[href*="/upcoming"], a[href*="/subscriptions"]');
+    
+    if (referenceLink) {
+      const contactLink = referenceLink.cloneNode(true);
+      contactLink.id = 'et-contact-us-nav-link';
+      contactLink.href = '#contact-us';
+      
+      const textSpan = contactLink.querySelector('span') || contactLink;
+      textSpan.textContent = 'Contact us';
+      
+      if (textSpan.style) {
+        textSpan.style.color = '#222';
+      }
+      contactLink.style.color = '#222';
+            
+      contactLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        renderContactUsPage();
+      });
+
+      const logoutLink = navContainer.querySelector('a[href*="logout"], button[type="submit"]');
+      if (logoutLink && logoutLink.parentElement) {
+        logoutLink.parentElement.parentElement.insertBefore(contactLink.parentElement || contactLink, logoutLink.parentElement);
+      } else {
+        navContainer.appendChild(contactLink);
+      }
+
+      contactUsInjected = true;
+    }
+  }
+
+  function cleanupContactUsPage() {
+    // Show React content again
+    if (hiddenReactContent) {
+      hiddenReactContent.style.display = '';
+      hiddenReactContent = null;
+    }
+    
+    // Remove our container
+    if (contactUsContainer && contactUsContainer.parentElement) {
+      contactUsContainer.remove();
+      contactUsContainer = null;
+    }
+  }
+
+  function renderContactUsPage() {
+    cleanupContactUsPage();
+    
+    let mainContent = null;
+    
+    const allDivs = document.querySelectorAll('div');
+    for (const div of allDivs) {
+      const text = div.textContent || '';
+      if ((text.includes('Your next order') || text.includes('upcoming orders') || text.includes('Deliver to')) 
+          && !text.includes('View upcoming orders') 
+          && !text.includes('Manage subscriptions')) {
+        let parent = div;
+        while (parent && parent.parentElement) {
+          const siblings = Array.from(parent.parentElement.children);
+          const hasSidebarSibling = siblings.some(sibling => {
+            return sibling !== parent && (
+              sibling.textContent.includes('View upcoming orders') ||
+              sibling.textContent.includes('Manage subscriptions')
+            );
+          });
+          
+          if (hasSidebarSibling) {
+            mainContent = parent;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        
+        if (!mainContent) {
+          mainContent = div;
+        }
+        break;
+      }
+    }
+
+    if (!mainContent) {
+      const contentSelectors = [
+        'main[role="main"] > div:first-child',
+        '[data-testid="main-content"] > div:first-child',
+        'main > div:first-child',
+      ];
+      
+      for (const selector of contentSelectors) {
+        const el = document.querySelector(selector);
+        if (el && !el.textContent.includes('View upcoming orders')) {
+          mainContent = el;
+          break;
+        }
+      }
+    }
+
+    if (!mainContent) {
+      console.error('❌ Could not find main content area');
+      return;
+    }
+
+    // Hide React content instead of removing it (keeps React's DOM intact)
+    hiddenReactContent = mainContent;
+    mainContent.style.display = 'none';
+    
+    // Create our container as a sibling
+    contactUsContainer = document.createElement('div');
+    contactUsContainer.id = 'et-contact-us-container';
+    contactUsContainer.innerHTML = `
+      <div style="max-width: 720px; margin: 0 auto; padding: 0;">
+        <div style="background: #0d3c3a; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; margin-bottom: 0;">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #fff;">Contact us</h1>
+        </div>
+
+        <!-- Content -->
+        <div style="background: #f7f6ef; padding: 32px 24px; border-radius: 0 0 8px 8px;">
+          <div style="margin-bottom: 24px;">
+            <h2 style="font-size: 32px; font-weight: 700; color: #222; margin: 0 0 8px 0;">Hi there,</h2>
+            <p style="font-size: 16px; color: #666; margin: 0;">Here are the ways for you to get in touch.</p>
+          </div>
+
+          <!-- Contact Options -->
+          <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+            
+            <!-- Email Us -->
+            <a href="mailto:support@everytable.com" style="display: flex; align-items: center; gap: 16px; padding: 24px 20px; border-bottom: 1px solid #f0f0f0; text-decoration: none; color: inherit; transition: background 0.2s; cursor: pointer;">
+              <div style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#0d3c3a" stroke-width="2">
+                  <rect x="3" y="5" width="18" height="14" rx="2"/>
+                  <path d="M3 7l9 6 9-6"/>
+                </svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 18px; font-weight: 600; color: #222; margin-bottom: 4px;">Email us</div>
+                <div style="font-size: 14px; color: #666;">support@everytable.com</div>
+              </div>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </a>
+
+            <!-- Schedule Callback -->
+            <a href="https://calendly.com/everytable-support/30min" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center; gap: 16px; padding: 24px 20px; border-bottom: 1px solid #f0f0f0; text-decoration: none; color: inherit; transition: background 0.2s; cursor: pointer;">
+              <div style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#0d3c3a" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 18px; font-weight: 600; color: #222; margin-bottom: 4px;">Schedule callback</div>
+              </div>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </a>
+
+            <!-- FAQs -->
+            <a href="https://everytable.com/pages/faqs" target="_blank" style="display: flex; align-items: center; gap: 16px; padding: 24px 20px; text-decoration: none; color: inherit; transition: background 0.2s; cursor: pointer;">
+              <div style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#0d3c3a" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                  <circle cx="12" cy="17" r="0.5" fill="#0d3c3a"/>
+                </svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 18px; font-weight: 600; color: #222; margin-bottom: 4px;">FAQs</div>
+                <div style="font-size: 14px; color: #666;">Find answers to commonly asked questions.</div>
+              </div>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </a>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Insert our container after the hidden React content
+    mainContent.parentElement.insertBefore(contactUsContainer, mainContent.nextSibling);
+
+    const options = contactUsContainer.querySelectorAll('a[href*="mailto"], a[href*="callback"], a[href*="faq"]');
+    options.forEach(option => {
+      option.addEventListener('mouseenter', function() {
+        this.style.background = '#f8f9fa';
+      });
+      option.addEventListener('mouseleave', function() {
+        this.style.background = 'transparent';
+      });
+    });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  const contactNavObserver = new MutationObserver(() => {
+    if (!contactUsInjected) {
+      injectContactUsNav();
+    }
+  });
+
+  contactNavObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  setTimeout(injectContactUsNav, 1000);
+  setTimeout(injectContactUsNav, 2000);
+  
+    document.addEventListener('Recharge::location::change', function() {
+      cleanupContactUsPage();
+      contactUsInjected = false;
+      setTimeout(injectContactUsNav, 500);
+    }, true);
+
+    document.addEventListener('click', function(e) {
+      const link = e.target.closest('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"], a[href*="/customer"], a[href*="/overview"]');
+      if (link && contactUsContainer) {
+        cleanupContactUsPage();
+      }
+    }, true);
 })();
