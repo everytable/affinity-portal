@@ -163,7 +163,6 @@
 .afinity-modal-footer-card {
   background: #fff;
   border-radius: 10px;
-  padding: 20px;
   margin-top: 24px;
   text-align: right;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
@@ -269,10 +268,9 @@
 .afinity-modal-card {
   background: #fff;
   border-radius: 8px;
-  width: 90vw;
+  width: auto;
   margin: auto 20px auto 19px;
   margin: 32px auto 0 auto;
-  padding: 24px 24px 16px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -498,16 +496,19 @@
   align-items: center;
   font-size: 16px;
   transition: color 0.2s;
+  padding: 20px;
 }
 .afinity-cancel-subscription:hover {
   color: #004f4d;
   text-decoration: underline;
+  padding: 20px;
 }
 
 .afinity-modal-footer-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 16px;
+  align-items: center;
 }
 
 .afinity-modal-cancel-btn {
@@ -671,8 +672,7 @@
   box-shadow: none;
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
-  padding-bottom: 2rem;
-  width: 77vw;
+  width: max-content;
 }
 
 /* Meal Selection Modal Styles */
@@ -1875,9 +1875,20 @@
 .pagination-btn.next {
   min-width: 80px;
 }
-
+.afinity-accordion button {
+    padding: 8px 20px !important;
+    font-size: 15px !important;
+    font-weight: 500;
+}
 /* Mobile Responsive */
 @media (max-width: 765px) {
+
+.afinity-accordion button {
+    padding: 8px 20px !important;
+    font-size: 15px !important;
+    font-weight: 500;
+    margin: auto !important;
+}
   .afinity-modal-header {
     padding: 16px 10px 6px 10px;
     font-size: 16px;
@@ -1999,11 +2010,16 @@
     max-width: 95vw;
     margin: 10px auto;
   }
+  .afinity-cancel-subscription{
+    padding: 0px;
+  }
+
 }
 @media (max-width: 800px) {
   h2 {
     font-size: 17px;
   }
+  
   .afinity-modal-content {
     max-width: 100vw;
     border-radius: 12px 12px 0 0;
