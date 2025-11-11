@@ -173,6 +173,26 @@
       target: 'Add discount',
       replacement: 'Redeem Rewards or Apply Discount',
     },
+    {
+      target: 'Manage subscriptions',
+      replacement: 'Manage',
+    },
+    {
+      target: 'View your next order',
+      replacement: 'Next Order',
+    },
+    {
+      target: 'View upcoming orders',
+      replacement: 'Upcoming Orders',
+    },
+    {
+      target: 'View previous orders',
+      replacement: 'Previous Orders',
+    },
+    {
+      target: 'Payment details',
+      replacement: 'Update Payment',
+    },
   ];
 
   function replaceTextContent() {
@@ -242,6 +262,206 @@
     childList: true,
     subtree: true,
   });
+
+  // ============================================
+  // Navigation Reordering
+  // ============================================
+  
+  let navReordered = false;
+
+  function reorderNavigation() {
+    const existingLinks = document.querySelectorAll('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"]');
+    if (existingLinks.length === 0) return;
+
+    const navContainer = existingLinks[0].closest('nav') || 
+                        existingLinks[0].parentElement?.parentElement || 
+                        existingLinks[0].parentElement;
+    if (!navContainer) return;
+
+    // Get all navigation links (excluding Contact us)
+    const allNavLinks = Array.from(navContainer.querySelectorAll('a')).filter(link => {
+      if (link.id === 'et-contact-us-nav-link') return false;
+      const href = link.getAttribute('href') || '';
+      const text = link.textContent?.trim().toLowerCase();
+      return href.includes('/upcoming') || 
+             href.includes('/previous') || 
+             href.includes('/subscriptions') ||
+             text.includes('upcoming') ||
+             text.includes('next order') ||
+             text.includes('manage') ||
+             text.includes('previous');
+    });
+
+    if (allNavLinks.length < 2) return;
+
+    // Find the common parent container for these links
+    const linkParents = allNavLinks.map(link => link.parentElement).filter(Boolean);
+    const linksContainer = linkParents[0]?.parentElement || linkParents[0] || navContainer;
+
+    // Identify target links
+    let manageLink = null;
+    let previousOrderLink = null;
+
+    allNavLinks.forEach(link => {
+      const text = link.textContent?.trim().toLowerCase();
+      const href = link.getAttribute('href') || '';
+      
+      // Match "Manage" - check href first (most reliable), then text
+      if (!manageLink) {
+        if (href.includes('/subscriptions') || text === 'manage' || (text.includes('manage') && !text.includes('previous'))) {
+          manageLink = link;
+        }
+      }
+      
+      // Match "Previous Orders" - check href first (most reliable), then text
+      if (!previousOrderLink) {
+        if (href.includes('/previous') || text.includes('previous order') || (text.includes('previous') && !text.includes('manage'))) {
+          previousOrderLink = link;
+        }
+      }
+    });
+
+    if (!manageLink || !previousOrderLink) return;
+
+    // Get reorderable elements (link or its wrapper)
+    const getReorderableElement = (link) => {
+      const parent = link.parentElement;
+      return (parent && parent.children.length === 1) ? parent : link;
+    };
+
+    const manageEl = getReorderableElement(manageLink);
+    const previousEl = getReorderableElement(previousOrderLink);
+
+    // Get all children of the container
+    const children = Array.from(linksContainer.children);
+    const manageIdx = children.indexOf(manageEl);
+    const previousIdx = children.indexOf(previousEl);
+
+    if (manageIdx === -1 || previousIdx === -1) return;
+
+    // Check if already in correct positions (3rd and 4th, indices 2 and 3)
+    if (manageIdx === 2 && previousIdx === 3) {
+      navReordered = true;
+      return;
+    }
+
+    // Remove from current positions (remove higher index first to avoid index shift)
+    if (manageIdx > previousIdx) {
+      children.splice(manageIdx, 1);
+      children.splice(previousIdx, 1);
+    } else {
+      children.splice(previousIdx, 1);
+      children.splice(manageIdx, 1);
+    }
+
+    // Insert at positions 3 and 4 (index 2 and 3)
+    const targetIndex = Math.min(2, children.length);
+    children.splice(targetIndex, 0, manageEl, previousEl);
+
+    // Apply reordering to DOM using insertBefore
+    children.forEach((child, index) => {
+      if (index === 0) {
+        if (child !== linksContainer.firstChild) {
+          linksContainer.insertBefore(child, linksContainer.firstChild);
+        }
+      } else {
+        const prevChild = children[index - 1];
+        if (prevChild.nextSibling !== child) {
+          linksContainer.insertBefore(child, prevChild.nextSibling);
+        }
+      }
+    });
+
+    navReordered = true;
+  }
+
+  const navReorderObserver = new MutationObserver(() => {
+    if (!navReordered) {
+      // Small delay to ensure text replacement has completed first
+      setTimeout(() => {
+        if (!navReordered) {
+          reorderNavigation();
+        }
+      }, 100);
+    }
+  });
+
+  navReorderObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  // Run after text replacement has had time to complete
+  setTimeout(reorderNavigation, 600);
+
+  // ============================================
+  // Hide Logout Button
+  // ============================================
+  
+  function hideLogoutButton() {
+    // Find logout button/link using various selectors
+    const logoutSelectors = [
+      'a[href*="logout"]',
+      'button[type="submit"]',
+      'a[href*="/logout"]',
+      'button:contains("Logout")',
+      'button:contains("Log out")',
+      'a:contains("Logout")',
+      'a:contains("Log out")'
+    ];
+
+    logoutSelectors.forEach(selector => {
+      try {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          const text = el.textContent?.trim().toLowerCase() || '';
+          const href = el.getAttribute('href') || '';
+          
+          // Check if it's actually a logout element
+          if (text.includes('logout') || text.includes('log out') || href.includes('logout')) {
+            el.style.display = 'none';
+            // Also mark it to prevent showing again
+            el.dataset.etLogoutHidden = 'true';
+          }
+        });
+      } catch (e) {
+        // Some selectors like :contains might not work, skip them
+      }
+    });
+
+    // Also check all buttons and links for logout text
+    const allButtons = document.querySelectorAll('button, a');
+    allButtons.forEach(el => {
+      if (el.dataset.etLogoutHidden === 'true') return;
+      
+      const text = el.textContent?.trim().toLowerCase() || '';
+      const href = el.getAttribute('href') || '';
+      const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+      
+      if (text.includes('logout') || 
+          text.includes('log out') || 
+          href.includes('logout') ||
+          ariaLabel.includes('logout') ||
+          ariaLabel.includes('log out')) {
+        el.style.display = 'none';
+        el.dataset.etLogoutHidden = 'true';
+      }
+    });
+  }
+
+  const logoutObserver = new MutationObserver(() => {
+    hideLogoutButton();
+  });
+
+  logoutObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  // Run immediately and with delays to catch dynamic content
+  hideLogoutButton();
+  setTimeout(hideLogoutButton, 500);
+  setTimeout(hideLogoutButton, 1500);
 
   // ============================================
   // Contact Us Tab Injection
@@ -500,7 +720,11 @@
     document.addEventListener('Recharge::location::change', function() {
       cleanupContactUsPage();
       contactUsInjected = false;
+      navReordered = false;
       setTimeout(injectContactUsNav, 500);
+      // Run reordering after text replacement has completed
+      setTimeout(reorderNavigation, 700);
+      setTimeout(hideLogoutButton, 800);
     }, true);
 
     document.addEventListener('click', function(e) {
