@@ -273,6 +273,7 @@
     const existingLinks = document.querySelectorAll('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"]');
     if (existingLinks.length === 0) return;
 
+    // Find navigation container
     const navContainer = existingLinks[0].closest('nav') || 
                         existingLinks[0].parentElement?.parentElement || 
                         existingLinks[0].parentElement;
@@ -302,47 +303,79 @@
       const text = link.textContent?.trim().toLowerCase();
       const href = link.getAttribute('href') || '';
       
-      // Match "Manage" - check href first (most reliable), then text
-      if (!manageLink) {
-        if (href.includes('/subscriptions') || text === 'manage' || (text.includes('manage') && !text.includes('previous'))) {
-          manageLink = link;
-        }
+      if (!manageLink && (href.includes('/subscriptions') || text === 'manage' || (text.includes('manage') && !text.includes('previous')))) {
+        manageLink = link;
       }
       
-      // Match "Previous Orders" - check href first (most reliable), then text
-      if (!previousOrderLink) {
-        if (href.includes('/previous') || text.includes('previous order') || (text.includes('previous') && !text.includes('manage'))) {
-          previousOrderLink = link;
-        }
+      if (!previousOrderLink && (href.includes('/previous') || text.includes('previous order') || (text.includes('previous') && !text.includes('manage')))) {
+        previousOrderLink = link;
       }
     });
 
     if (!manageLink || !previousOrderLink) return;
 
-    // Get reorderable elements (link or its wrapper)
-    const getReorderableElement = (link) => {
-      const parent = link.parentElement;
-      return (parent && parent.children.length === 1) ? parent : link;
+    // Find the container that holds navigation items as direct children
+    const findContainer = () => {
+      // Get all unique immediate parents of navigation links
+      const immediateParents = new Set(allNavLinks.map(link => link.parentElement).filter(Boolean));
+      
+      // If all links share the same immediate parent
+      if (immediateParents.size === 1) {
+        const commonParent = Array.from(immediateParents)[0];
+        // Count how many of this parent's children contain nav links
+        const navLinkContainers = Array.from(commonParent.children).filter(child => 
+          allNavLinks.some(link => child === link || child.contains(link))
+        );
+        // If multiple children contain nav links, this is our container
+        if (navLinkContainers.length >= 2) {
+          return commonParent;
+        }
+      }
+      
+      // Fallback: use navContainer (links are direct children or more complex structure)
+      return navContainer;
     };
 
-    const manageEl = getReorderableElement(manageLink);
-    const previousEl = getReorderableElement(previousOrderLink);
+    const container = findContainer();
 
-    // Find the actual container that holds the reorderable elements
-    // This handles cases where links are direct children or wrapped
-    const manageParent = manageEl.parentElement;
-    const previousParent = previousEl.parentElement;
-    
-    // If both reorderable elements share the same parent, use that
-    // Otherwise, fall back to navContainer
-    const actualContainer = (manageParent === previousParent && manageParent) 
-      ? manageParent 
-      : navContainer;
+    // Get the wrapper element that is a direct child of the container
+    // This handles wrappers with single or multiple children (e.g., <div><icon/><a></a></div>)
+    const getWrapperElement = (link) => {
+      // If link is already a direct child of container, return it
+      if (link.parentElement === container) {
+        return link;
+      }
+      
+      // Walk up the DOM tree until we find an element whose parent is the container
+      let current = link;
+      while (current) {
+        const parent = current.parentElement;
+        if (!parent) break;
+        
+        // Found the wrapper that's a direct child of container
+        if (parent === container) {
+          return current;
+        }
+        
+        // Safety check: don't go beyond navContainer
+        if (parent === navContainer && container !== navContainer) {
+          return link;
+        }
+        
+        current = parent;
+      }
+      
+      // Fallback: return link itself
+      return link;
+    };
 
-    // Get all children of the actual container
-    const children = Array.from(actualContainer.children);
-    const manageIdx = children.indexOf(manageEl);
-    const previousIdx = children.indexOf(previousEl);
+    const manageWrapper = getWrapperElement(manageLink);
+    const previousWrapper = getWrapperElement(previousOrderLink);
+
+    // Get all children of the container
+    const children = Array.from(container.children);
+    const manageIdx = children.indexOf(manageWrapper);
+    const previousIdx = children.indexOf(previousWrapper);
 
     if (manageIdx === -1 || previousIdx === -1) return;
 
@@ -353,28 +386,29 @@
     }
 
     // Remove from current positions (remove higher index first to avoid index shift)
+    const childrenArray = [...children];
     if (manageIdx > previousIdx) {
-      children.splice(manageIdx, 1);
-      children.splice(previousIdx, 1);
+      childrenArray.splice(manageIdx, 1);
+      childrenArray.splice(previousIdx, 1);
     } else {
-      children.splice(previousIdx, 1);
-      children.splice(manageIdx, 1);
+      childrenArray.splice(previousIdx, 1);
+      childrenArray.splice(manageIdx, 1);
     }
 
     // Insert at positions 3 and 4 (index 2 and 3)
-    const targetIndex = Math.min(2, children.length);
-    children.splice(targetIndex, 0, manageEl, previousEl);
+    const targetIndex = Math.min(2, childrenArray.length);
+    childrenArray.splice(targetIndex, 0, manageWrapper, previousWrapper);
 
-    // Apply reordering to DOM using insertBefore
-    children.forEach((child, index) => {
+    // Apply reordering to DOM
+    childrenArray.forEach((child, index) => {
       if (index === 0) {
-        if (child !== actualContainer.firstChild) {
-          actualContainer.insertBefore(child, actualContainer.firstChild);
+        if (child !== container.firstChild) {
+          container.insertBefore(child, container.firstChild);
         }
       } else {
-        const prevChild = children[index - 1];
+        const prevChild = childrenArray[index - 1];
         if (prevChild.nextSibling !== child) {
-          actualContainer.insertBefore(child, prevChild.nextSibling);
+          container.insertBefore(child, prevChild.nextSibling);
         }
       }
     });
