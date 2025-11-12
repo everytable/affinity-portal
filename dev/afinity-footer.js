@@ -612,7 +612,6 @@
     cleanupContactUsPage();
     
     let mainContent = null;
-    let layoutContainer = null;
     
     // Strategy 1: Look for the layout container with sidebar structure
     const allDivs = document.querySelectorAll('div');
@@ -631,7 +630,6 @@
         const hasSidebar = children.some(isSidebar);
         
         if (hasSidebar) {
-          layoutContainer = div;
           // Find the main content (the child that's NOT the sidebar)
           mainContent = children.find(child => !isSidebar(child));
           break;
@@ -653,7 +651,6 @@
             && !text.includes('Manage')
             && div.children.length > 0) {
           mainContent = div;
-          layoutContainer = div.parentElement;
           break;
         }
       }
@@ -676,7 +673,6 @@
           // Make sure it's not the sidebar (check for NEW renamed tab names)
           if (!text.includes('Upcoming Orders') || text.length > 1000) {
             mainContent = el;
-            layoutContainer = el.parentElement;
             break;
           }
         }
