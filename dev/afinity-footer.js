@@ -650,7 +650,29 @@
             && !text.includes('Upcoming Orders') 
             && !text.includes('Manage')
             && div.children.length > 0) {
-          mainContent = div;
+          
+          // Walk up the DOM to find the column wrapper (parent with sidebar sibling)
+          let parent = div;
+          while (parent && parent.parentElement) {
+            const siblings = Array.from(parent.parentElement.children);
+            const hasSidebarSibling = siblings.some(sibling => {
+              if (sibling === parent) return false;
+              const siblingText = sibling.textContent || '';
+              return (siblingText.includes('Next Order') || siblingText.includes('Upcoming Orders')) &&
+                     (siblingText.includes('Manage') || siblingText.includes('Previous Orders') || siblingText.includes('Update Payment'));
+            });
+            
+            if (hasSidebarSibling) {
+              mainContent = parent;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          // If no sidebar sibling found, use the div itself
+          if (!mainContent) {
+            mainContent = div;
+          }
           break;
         }
       }
