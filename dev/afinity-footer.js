@@ -691,9 +691,9 @@
       for (const selector of contentSelectors) {
         const el = document.querySelector(selector);
         if (el) {
-          const text = el.textContent || '';
-          // Make sure it's not the sidebar or a wrapper containing the sidebar
-          if (!text.includes('Upcoming Orders')) {
+          const text = (el.textContent || '').toLowerCase();
+          // Make sure it's not the sidebar or a wrapper containing the sidebar (case-insensitive)
+          if (!text.includes('upcoming orders') && !text.includes('next order')) {
             mainContent = el;
             break;
           }
