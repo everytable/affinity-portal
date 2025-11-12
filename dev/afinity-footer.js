@@ -274,9 +274,24 @@
     if (existingLinks.length === 0) return;
 
     // Find navigation container
-    const navContainer = existingLinks[0].closest('nav') || 
-                        existingLinks[0].parentElement?.parentElement || 
-                        existingLinks[0].parentElement;
+    // Prioritize list elements (ul/ol) for list-based sidebars, matching contact-us injection logic
+    const firstLink = existingLinks[0];
+    let navContainer = null;
+    
+    // Check if parent or grandparent is a list element (for <nav><ul><li><a> structure)
+    if (firstLink.parentElement?.parentElement?.tagName === 'UL' || 
+        firstLink.parentElement?.parentElement?.tagName === 'OL') {
+      navContainer = firstLink.parentElement.parentElement;
+    } else if (firstLink.parentElement?.tagName === 'UL' || 
+               firstLink.parentElement?.tagName === 'OL') {
+      navContainer = firstLink.parentElement;
+    } else {
+      // Fall back to parent chain or nav element
+      navContainer = firstLink.parentElement?.parentElement || 
+                     firstLink.parentElement ||
+                     firstLink.closest('nav');
+    }
+    
     if (!navContainer) return;
 
     // Get all navigation links (excluding Contact us)
