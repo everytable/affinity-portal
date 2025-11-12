@@ -526,6 +526,7 @@
   let contactUsInjected = false;
   let contactUsContainer = null;
   let hiddenReactContent = null;
+  let resizeHandler = null;
 
   function injectContactUsNav() {
     if (contactUsInjected) return;
@@ -599,6 +600,12 @@
     if (hiddenReactContent) {
       hiddenReactContent.style.display = '';
       hiddenReactContent = null;
+    }
+    
+    // Remove resize listener
+    if (resizeHandler) {
+      window.removeEventListener('resize', resizeHandler);
+      resizeHandler = null;
     }
     
     // Remove our container
@@ -713,7 +720,8 @@
     // Create our container as a sibling
     contactUsContainer = document.createElement('div');
     contactUsContainer.id = 'et-contact-us-container';
-    contactUsContainer.style.width = '65.7%';
+    // Responsive width: 100% on mobile (sidebar stacks below), 65.7% on desktop (sidebar beside)
+    contactUsContainer.style.width = window.innerWidth < 1024 ? '100%' : '65.7%';
     contactUsContainer.style.minHeight = '600px';
     contactUsContainer.innerHTML = `
       <div style="background: #0d3c3a; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; margin-bottom: 0;">
@@ -797,6 +805,14 @@
         this.style.background = 'transparent';
       });
     });
+
+    // Handle responsive width on window resize
+    resizeHandler = () => {
+      if (contactUsContainer) {
+        contactUsContainer.style.width = window.innerWidth < 1024 ? '100%' : '65.7%';
+      }
+    };
+    window.addEventListener('resize', resizeHandler);
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
