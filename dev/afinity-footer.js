@@ -621,19 +621,19 @@
       
       // Check if this div has exactly 2 children where one is the sidebar
       if (children.length === 2) {
-        const hasSidebar = children.some(child => {
+        // Helper function to identify if a child is the sidebar
+        const isSidebar = (child) => {
           const text = child.textContent || '';
           return (text.includes('Next Order') || text.includes('Upcoming Orders')) &&
                  (text.includes('Manage') || text.includes('Previous Orders') || text.includes('Update Payment'));
-        });
+        };
+        
+        const hasSidebar = children.some(isSidebar);
         
         if (hasSidebar) {
           layoutContainer = div;
           // Find the main content (the child that's NOT the sidebar)
-          mainContent = children.find(child => {
-            const text = child.textContent || '';
-            return !(text.includes('Next Order') && text.includes('Manage') && text.length < 1000);
-          });
+          mainContent = children.find(child => !isSidebar(child));
           break;
         }
       }
