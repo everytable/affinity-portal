@@ -12,23 +12,10 @@
 @keyframes afinity-fadein {
   from { opacity: 0; } to { opacity: 1; }
 }
-.afinity-modal-content {
-  background: transparent;
-  width: 100vw;
-  margin: 0 auto;
-  padding: 0 0 40px 0;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: 90vh;
-  overflow-y: auto;
-  transform: translateY(100%);
-  animation: afinity-slideup 0.45s cubic-bezier(0.4, 0.8, 0.2, 1) forwards;
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
-}
 
+.afinity-modal-card-frequency-content select, .afinity-modal-content p, .afinity-cancel-subscription, .afinity-modal-select-label,.afinity-modal-row input, .afinity-modal-row select, .afinity-modal-content label, .afinity-modal-content input,.afinity-modal-content button, .afinity-character-count span{
+  font-family: "Martian Mono", monospace;
+}
 .afinity-modal-content::-webkit-scrollbar {
   width: 8px;
 }
@@ -46,11 +33,164 @@
 .afinity-modal-content::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
-@media (max-width: 800px) {
-  .afinity-modal-content {
-    max-width: 100vw;
-    border-radius: 12px 12px 0 0;
-  }
+
+
+
+
+
+/* Accordion container */
+/* === Accordion container === */
+.afinity-modal-content {
+  background-color: #f8f9fb;
+  padding:24px;
+  border-radius: 10px;
+  font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+  color: #333;
+  max-width: 80vw;
+  margin: 0 auto;
+}
+
+
+/* Accordion Wrapper */
+.afinity-accordion-section {
+  background: #fff;
+  border: 1px solid #e0e6ed;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.afinity-accordion-section.open {
+  border-color: #0d3c3a;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+/* Header Button */
+.afinity-accordion-toggle {
+  width: 100%;
+  font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  background-color: #0d3c3a;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px 18px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.afinity-accordion-toggle:hover {
+  background-color: #0d3c3a;
+}
+
+.afinity-accordion-toggle .accordion-icon {
+  font-size: 18px;
+  transition: transform 0.25s ease;
+}
+
+/* Accordion Content */
+.afinity-accordion {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+  background: #fff;
+  padding: 0 22px;
+}
+
+/* Ensure content inside accordions fits nicely */
+.afinity-accordion > * {
+  padding: 16px 0;
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+/* Input + Labels */
+.afinity-modal-row label {
+  display: block;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.afinity-modal-row input,
+.afinity-modal-row select,
+.afinity-modal-row textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #cfd8e3;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.25s ease;
+}
+
+.afinity-modal-row input:focus,
+.afinity-modal-row select:focus,
+.afinity-modal-row textarea:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* Card Titles */
+.afinity-modal-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #222;
+  font-family: "Martian Mono", monospace;
+}
+
+/* Buttons */
+.afinity-modal-cancel-btn {
+  background-color: transparent;
+  color: #444;
+  border: 1px solid #ccc;
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.afinity-modal-cancel-btn:hover {
+  background-color: #f7f7f7;
+}
+
+/* Footer */
+.afinity-modal-footer-card {
+  background: #fff;
+  border-radius: 10px;
+  margin-top: 24px;
+  text-align: right;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Scroll inside modal for long content */
+.afinity-modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cfd8e3 #f8f9fb;
+}
+
+/* Custom scrollbar */
+.afinity-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-thumb {
+  background-color: #cfd8e3;
+  border-radius: 4px;
+}
+
+.afinity-modal-content::-webkit-scrollbar-thumb:hover {
+  background-color: #a5b3c2;
 }
 @keyframes afinity-slideup {
   from { transform: translateY(100%); }
@@ -131,11 +271,9 @@
 .afinity-modal-card {
   background: #fff;
   border-radius: 8px;
-  width: 90vw;
-  max-width: 1264px;
+  width: auto;
   margin: auto 20px auto 19px;
   margin: 32px auto 0 auto;
-  padding: 24px 24px 16px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -253,6 +391,7 @@
   font-weight: 500;
   color: #3f3f3f;
   margin-bottom: 10px;
+  font-family: "Martian Mono", monospace;
 }
 .afinity-modal-price{
   font-size: 18px;
@@ -272,7 +411,7 @@
   gap: 10px;
 }
 .afinity-modal-update-meals {
-  background: #0b3c3c;
+  background: #005a57;
   color: #FFF;
   text-align: center;
   font-size: 16px;
@@ -293,7 +432,7 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 .afinity-modal-update-meals:hover {
-  background: #0056b3;
+  background: #0b3c3c;
 }
 .afinity-modal-add-extra {
   display: inline-block;
@@ -341,111 +480,6 @@
   align-self: stretch;
   height: 40px;
 }
-
-@media (max-width: 765px) {
-  .afinity-modal-header {
-    padding: 16px 10px 6px 10px;
-    font-size: 16px;
-  }
-  .afinity-modal-date {
-    font-size: 16px;
-  }
-  .afinity-modal-desc {
-    font-size: 16px;
-  }
-  .afinity-modal-content {
-    max-width: 100vw;
-    padding: 0 0 24px 0;
-    border-radius: 10px 10px 0 0;
-  }
-  .afinity-modal-card {
-    max-width: 90vw;
-    margin: 27px auto 0 auto;
-    padding: 20px;
-    border-radius: 6px;
-    font-size: 16px;
-  }
-
-  .afinity-modal-card-frequency{
-    max-width: 90vw;
-    margin: 27px auto 0 auto;
-    padding: 20px;
-    border-radius: 6px;
-    font-size: 16px;
-  }
-  .afinity-modal-card-title {
-    color: #434A4A;
-    font-size: 18px;
-    font-style: normal;
-    font-weight: 500;
-    line-height: 27.966px; /* 155.365% */
-  }
-  .afinity-modal-row {
-    gap: 6px;
-    margin-bottom: 6px;
-    font-size: 16px;
-  }
-  .afinity-modal-row label {
-    min-width: 70px;
-    font-size: 16px;
-  }
-  .afinity-modal-row input, .afinity-modal-row select {
-    font-size: 16px;
-    padding: 6px 7px;
-  }
-  .afinity-modal-cart-item {
-    gap: 7px;
-    padding: 6px 6px;
-  }
-  .afinity-modal-cart-item img {
-    width: 36px;
-    height: 36px;
-    border-radius: 4px;
-  }
-  .afinity-modal-cart-title {
-    font-size: 16px;
-  }
-  .afinity-modal-cart-qty {
-    font-size: 16px;
-  }
-  .afinity-modal-close {
-    top: 10px;
-    right: 10px;
-    font-size: 22px;
-    padding: 0 4px;
-  }
-  .afinity-modal-back {
-    font-size: 16px;
-    margin-bottom: 6px;
-  }
-  .afinity-modal-update-meals {
-    font-size: 16px;
-    padding: 6px 10px;
-    border-radius: 4px;
-  }
-  .afinity-modal-add-extra {
-    font-size: 18px;
-    margin: 18px auto 0 auto;
-  }
-  .afinity-modal-card-frequency-content {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .afinity-modal-row-frequency-inner {
-    flex-direction: row;
-    margin-bottom: 10px;
-  }
-  .afinity-modal-card-frequency-content label {
-    margin-bottom: 2px;
-  }
-  .afinity-modal-card-frequency-content select {
-    flex: 1;
-  }
-  .afinity-modal-update-meals {
-    min-width: 110px;
-  }
-}
-
 /* Modal Footer Styles */
 .afinity-modal-footer {
   display: flex;
@@ -466,16 +500,19 @@
   align-items: center;
   font-size: 16px;
   transition: color 0.2s;
+  padding: 20px;
 }
 .afinity-cancel-subscription:hover {
   color: #004f4d;
   text-decoration: underline;
+  padding: 20px;
 }
 
 .afinity-modal-footer-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 16px;
+  align-items: center;
 }
 
 .afinity-modal-cancel-btn {
@@ -507,6 +544,7 @@
 }
 .afinity-modal-save-btn:hover {
   background: #003f3d;
+  color:#fff;
 }
 
 .afinity-modal-search-save-btn {
@@ -638,7 +676,7 @@
   box-shadow: none;
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
-  padding-bottom: 2rem;
+  width: max-content;
 }
 
 /* Meal Selection Modal Styles */
@@ -809,28 +847,6 @@
 .afinity-meals-swap-btn:hover {
   background: #003f3d;
 }
-@media (max-width: 768px) {
-  .afinity-meals-layout {
-    flex-direction: column;
-    gap: 16px;
-    padding: 1rem 1rem 1rem 1rem;
-  }
-  .afinity-modal-card.afinity-meals-sidebar {
-    position: static;
-    max-width: 93%;
-    width: 100%;
-    margin-top: 16px;
-    overflow: initial;
-  }
-  .afinity-meals-sidebar-list {
-    max-height: 180px;
-    overflow-y: auto;
-  }
-  .afinity-meals-sidebar-footer .afinity-meals-swap-btn {
-    width: 100%;
-  }
-}
-
 .afinity-meals-header-flex{
   display:flex;
   align-items:flex-start;
@@ -853,18 +869,7 @@
   display:flex;
   flex-direction:column;
   align-items:flex-end;
-
-  @media (max-width: 768px) {
-    align-items:flex-start !important;
-  }
 }
-
-.afinity-meals-header-card{
-  @media (max-width: 768px) {
-    padding:1.5rem 1rem 16px 1rem !important;
-  }
-}
-
 .afinity-meals-header-card {
   background: #fff;
   border-radius: 8px 8px 8px 8px;
@@ -1010,9 +1015,6 @@
 }
 .afinity-r-card__add-btn:hover {
   background-color: #094237;
-}
-.afinity-r-card__add-btn--smart {
-  /* No extra style, but keep for markup compatibility */
 }
 .price-action-wrapper {
   display: flex;
@@ -1461,17 +1463,6 @@
   margin-bottom: 20px;
 }
 
-@media (max-width: 768px) {
-  .afinity-meals-category-tabs {
-    gap: 6px;
-  }
-  
-  .afinity-meals-category-tab {
-    padding: 6px 12px;
-    font-size: 13px;
-  }
-}
-
 /* Collection Sections Styles */
 .afinity-collection-section {
   margin-bottom: 32px;
@@ -1501,23 +1492,6 @@
   margin: 0;
 }
 
-@media (max-width: 768px) {
-  .afinity-collection-title {
-    font-size: 18px;
-    margin-bottom: 12px;
-  }
-  
-  .afinity-meals-content .afinity-meals-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 12px;
-  }
-  
-  .afinity-r-meals-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    max-width: calc(2 * 250px + 1rem); /* 2 cards max on mobile */
-  }
-}
 
 /* One-time Items Styles */
 .afinity-modal-onetime-list {
@@ -1588,36 +1562,6 @@
   width: 16px;
   height: 16px;
 }
-
-@media (max-width: 768px) {
-  .afinity-modal-onetime-item {
-    padding: 10px;
-  }
-  
-  .afinity-modal-onetime-item img {
-    width: 50px;
-    height: 50px;
-  }
-  
-  .afinity-modal-onetime-title {
-    font-size: 14px;
-  }
-  
-  .afinity-modal-onetime-price {
-    font-size: 13px;
-  }
-  
-  .afinity-modal-onetime-delete {
-    width: 28px;
-    height: 28px;
-  }
-  
-  .afinity-modal-onetime-delete svg {
-    width: 14px;
-    height: 14px;
-  }
-}
-
 /* Checkbox styling for Update All Future Orders */
 .afinity-modal-checkbox-label {
   font-size: 14px;
@@ -1935,8 +1879,243 @@
 .pagination-btn.next {
   min-width: 80px;
 }
-
+.afinity-accordion button {
+    padding: 8px 20px !important;
+    font-size: 15px !important;
+    font-weight: 500;
+}
 /* Mobile Responsive */
+@media (max-width: 765px) {
+
+.afinity-accordion button {
+    padding: 8px 20px !important;
+    font-size: 15px !important;
+    font-weight: 500;
+    margin: auto !important;
+}
+  .afinity-modal-header {
+    padding: 16px 10px 6px 10px;
+    font-size: 16px;
+  }
+  .afinity-modal-date {
+    font-size: 16px;
+  }
+  .afinity-modal-desc {
+    font-size: 16px;
+  }
+  .afinity-modal-content {
+    max-width: 100vw;
+    padding: 0 0 24px 0;
+    border-radius: 10px 10px 0 0;
+  }
+  .afinity-modal-card {
+    max-width: 100%;
+    padding: 20px;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  .afinity-accordion-section.open {
+
+    margin-top:20px;
+  }
+
+  .afinity-modal-card-frequency{
+    max-width: 90vw;
+    margin: 27px auto 0 auto;
+    padding: 20px;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  .afinity-modal-card-title {
+    color: #434A4A;
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 27.966px; /* 155.365% */
+  }
+  .afinity-modal-row {
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 16px;
+  }
+  #afinity-search-save-address-btn{
+    margin-top: 20px;
+  }
+  .afinity-modal-row label {
+    min-width: 70px;
+    font-size: 16px;
+  }
+  .afinity-modal-row input, .afinity-modal-row select {
+    font-size: 16px;
+    padding: 6px 7px;
+  }
+  .afinity-modal-cart-item {
+    gap: 7px;
+    padding: 6px 6px;
+  }
+  .afinity-modal-cart-item img {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+  }
+  .afinity-modal-cart-title {
+    font-size: 16px;
+  }
+  .afinity-modal-cart-qty {
+    font-size: 16px;
+  }
+  .afinity-modal-close {
+    top: 10px;
+    right: 10px;
+    font-size: 22px;
+    padding: 0 4px;
+  }
+  .afinity-modal-back {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .afinity-modal-update-meals {
+    font-size: 16px;
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+  .afinity-modal-add-extra {
+    font-size: 18px;
+    margin: 18px auto 0 auto;
+  }
+  .afinity-modal-card-frequency-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .afinity-modal-row-frequency-inner {
+    flex-direction: row;
+    margin-bottom: 10px;
+  }
+  .afinity-modal-card-frequency-content label {
+    margin-bottom: 22px;
+  }
+  .afinity-modal-card-frequency-content select {
+    flex: 1;
+  }
+  .afinity-modal-update-meals {
+    min-width: 110px;
+  }
+   .afinity-modal-content {
+    padding: 16px;
+  }
+
+  .afinity-accordion-toggle {
+    font-size: 14px;
+    padding: 12px 16px;
+  }
+
+  .afinity-accordion > * {
+    padding: 12px 0;
+  }
+  .afinity-accordion-section{
+    max-width: 95vw;
+    margin: 10px auto;
+  }
+  .afinity-cancel-subscription{
+    padding: 0px;
+  }
+
+}
+@media (max-width: 800px) {
+  h2 {
+    font-size: 17px;
+  }
+  
+  .afinity-modal-content {
+    max-width: 100vw;
+    border-radius: 12px 12px 0 0;
+  }
+}
+@media (max-width: 768px) {
+  .afinity-meals-layout {
+    flex-direction: column;
+    gap: 16px;
+    padding: 1rem 1rem 1rem 1rem;
+  }
+  .afinity-modal-card.afinity-meals-sidebar {
+    position: static;
+    max-width: 93%;
+    width: 100%;
+    margin-top: 16px;
+    overflow: initial;
+  }
+  .afinity-meals-sidebar-list {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .afinity-meals-sidebar-footer .afinity-meals-swap-btn {
+    width: 100%;
+  }
+}
+
+  @media (max-width: 768px) {
+
+.afinity-meals-header-card{
+    padding:1.5rem 1rem 16px 1rem !important;
+  }
+}
+@media (max-width: 768px) {
+  .afinity-meals-category-tabs {
+    gap: 6px;
+  }
+  
+  .afinity-meals-category-tab {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 768px) {
+  .afinity-collection-title {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+  
+  .afinity-meals-content .afinity-meals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  
+  .afinity-r-meals-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    max-width: calc(2 * 250px + 1rem); /* 2 cards max on mobile */
+  }
+}
+@media (max-width: 768px) {
+  .afinity-modal-onetime-item {
+    padding: 10px;
+  }
+  
+  .afinity-modal-onetime-item img {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .afinity-modal-onetime-title {
+    font-size: 14px;
+  }
+  
+  .afinity-modal-onetime-price {
+    font-size: 13px;
+  }
+  
+  .afinity-modal-onetime-delete {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .afinity-modal-onetime-delete svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 @media (max-width: 768px) {
   .orders-container {
     padding: 16px;
