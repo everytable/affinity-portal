@@ -819,9 +819,6 @@
           <td>${scheduledDate}</td>
           <td>$${totalPrice}</td>
           <td>
-            <span class="afinity-charge-status afinity-status-${status}">${status}</span>
-          </td>
-          <td>
             ${
               isSkipped
                 ? `<button class="afinity-unskip-btn" data-charge-id="${charge.id}" data-purchase-item-ids='${purchaseItemIdsJson}'>Unskip</button>`
@@ -840,7 +837,6 @@
             <tr>
               <th>Scheduled Date</th>
               <th>Total</th>
-              <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -3032,6 +3028,7 @@
           ${renderInstructionsSection()}
           ${renderUpcomingSection()}
           ${renderOnetimeSection()}
+          ${renderDateTimeSection()}
         `;
       }
       // helper: date/time section
@@ -3160,19 +3157,15 @@
               </div>
             </div>
           `)}
-          ${renderAccordion("Fulfillment", renderFulfillmentSection())}
-          ${renderAccordion("Date & Time", renderDateTimeSection())}
+          ${renderAccordion("Update Subscription", renderFulfillmentSection())}
           
         
           <div class="afinity-modal-card afinity-modal-footer-card">
             <div class="afinity-modal-footer-actions">
-              <div style="display:flex;">
+              <div>
                 <a href="#" class="afinity-cancel-subscription">Cancel subscription</a>
               </div>
-              <div>
-                <button class="afinity-modal-cancel-btn" type="button">Cancel</button>
-                <button class="afinity-modal-save-btn afinity-modal-footer-save-btn" type="button">Save Changes</button>
-              </div>
+               
             </div>
           </div>
         </div>
@@ -3242,7 +3235,7 @@
     const pageDescription =
       mealsPageMode === 'update'
         ? 'Update your subscription meals. Add, remove, or change quantities of your regular meals.'
-        : 'Add one time meal to your next Charge. Remove or add one time meals to your next order.';
+        : '';
 
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
