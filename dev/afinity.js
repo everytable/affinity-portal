@@ -3235,7 +3235,7 @@
     const pageDescription =
       mealsPageMode === 'update'
         ? 'Update your subscription meals. Add, remove, or change quantities of your regular meals.'
-        : 'Add one time meal to your next Charge. Remove or add one time meals to your next order.';
+        : '';
 
     return `
       <button class="afinity-modal-close" title="Close">&times;</button>
