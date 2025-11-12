@@ -670,8 +670,8 @@
         const el = document.querySelector(selector);
         if (el) {
           const text = el.textContent || '';
-          // Make sure it's not the sidebar (check for NEW renamed tab names)
-          if (!text.includes('Upcoming Orders') || text.length > 1000) {
+          // Make sure it's not the sidebar or a wrapper containing the sidebar
+          if (!text.includes('Upcoming Orders')) {
             mainContent = el;
             break;
           }
