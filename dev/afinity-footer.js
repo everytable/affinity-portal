@@ -612,49 +612,73 @@
     cleanupContactUsPage();
     
     let mainContent = null;
+    let layoutContainer = null;
     
+    // Strategy 1: Look for the layout container with sidebar structure
     const allDivs = document.querySelectorAll('div');
     for (const div of allDivs) {
-      const text = div.textContent || '';
-      if ((text.includes('Your next order') || text.includes('upcoming orders') || text.includes('Deliver to')) 
-          && !text.includes('View upcoming orders') 
-          && !text.includes('Manage subscriptions')) {
-        let parent = div;
-        while (parent && parent.parentElement) {
-          const siblings = Array.from(parent.parentElement.children);
-          const hasSidebarSibling = siblings.some(sibling => {
-            return sibling !== parent && (
-              sibling.textContent.includes('View upcoming orders') ||
-              sibling.textContent.includes('Manage subscriptions')
-            );
-          });
-          
-          if (hasSidebarSibling) {
-            mainContent = parent;
-            break;
-          }
-          parent = parent.parentElement;
-        }
+      const children = Array.from(div.children);
+      
+      // Check if this div has exactly 2 children where one is the sidebar
+      if (children.length === 2) {
+        const hasSidebar = children.some(child => {
+          const text = child.textContent || '';
+          return (text.includes('Next Order') || text.includes('Upcoming Orders')) &&
+                 (text.includes('Manage') || text.includes('Previous Orders') || text.includes('Update Payment'));
+        });
         
-        if (!mainContent) {
-          mainContent = div;
+        if (hasSidebar) {
+          layoutContainer = div;
+          // Find the main content (the child that's NOT the sidebar)
+          mainContent = children.find(child => {
+            const text = child.textContent || '';
+            return !(text.includes('Next Order') && text.includes('Manage') && text.length < 1000);
+          });
+          break;
         }
-        break;
+      }
+    }
+    
+    // Strategy 2: If no sidebar layout found, look for main content patterns
+    if (!mainContent) {
+      for (const div of allDivs) {
+        const text = div.textContent || '';
+        // Look for page-specific content indicators (avoid sidebar with renamed tabs)
+        if ((text.includes('Your next order') || 
+             text.includes('Deliver to') ||
+             text.includes('Charge to card ending') ||
+             text.includes('Order total') ||
+             text.includes('Shipping:')) 
+            && !text.includes('Upcoming Orders') 
+            && !text.includes('Manage')
+            && div.children.length > 0) {
+          mainContent = div;
+          layoutContainer = div.parentElement;
+          break;
+        }
       }
     }
 
+    // Strategy 3: Generic fallback selectors
     if (!mainContent) {
       const contentSelectors = [
+        'main[role="main"] > div:first-child > div:first-child',
         'main[role="main"] > div:first-child',
         '[data-testid="main-content"] > div:first-child',
+        'main > div:first-child > div:first-child',
         'main > div:first-child',
       ];
       
       for (const selector of contentSelectors) {
         const el = document.querySelector(selector);
-        if (el && !el.textContent.includes('View upcoming orders')) {
-          mainContent = el;
-          break;
+        if (el) {
+          const text = el.textContent || '';
+          // Make sure it's not the sidebar (check for NEW renamed tab names)
+          if (!text.includes('Upcoming Orders') || text.length > 1000) {
+            mainContent = el;
+            layoutContainer = el.parentElement;
+            break;
+          }
         }
       }
     }
@@ -671,21 +695,22 @@
     // Create our container as a sibling
     contactUsContainer = document.createElement('div');
     contactUsContainer.id = 'et-contact-us-container';
+    contactUsContainer.style.width = '65.7%';
+    contactUsContainer.style.minHeight = '600px';
     contactUsContainer.innerHTML = `
-      <div style="max-width: 720px; margin: 0 auto; padding: 0;">
-        <div style="background: #0d3c3a; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; margin-bottom: 0;">
-          <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #fff;">Contact us</h1>
+      <div style="background: #0d3c3a; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; margin-bottom: 0;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #fff;">Contact us</h1>
+      </div>
+
+      <!-- Content -->
+      <div style="background: #f7f6ef; padding: 32px 24px; border-radius: 0 0 8px 8px; min-height: 500px;">
+        <div style="margin-bottom: 24px;">
+          <h2 style="font-size: 32px; font-weight: 700; color: #222; margin: 0 0 8px 0;">Hi there,</h2>
+          <p style="font-size: 16px; color: #666; margin: 0;">Here are the ways for you to get in touch.</p>
         </div>
 
-        <!-- Content -->
-        <div style="background: #f7f6ef; padding: 32px 24px; border-radius: 0 0 8px 8px;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 32px; font-weight: 700; color: #222; margin: 0 0 8px 0;">Hi there,</h2>
-            <p style="font-size: 16px; color: #666; margin: 0;">Here are the ways for you to get in touch.</p>
-          </div>
-
-          <!-- Contact Options -->
-          <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <!-- Contact Options -->
+        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); max-width: 600px;">
             
             <!-- Email Us -->
             <a href="mailto:support@everytable.com" style="display: flex; align-items: center; gap: 16px; padding: 24px 20px; border-bottom: 1px solid #f0f0f0; text-decoration: none; color: inherit; transition: background 0.2s; cursor: pointer;">
@@ -738,7 +763,6 @@
               </svg>
             </a>
 
-          </div>
         </div>
       </div>
     `;
