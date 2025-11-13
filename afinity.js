@@ -110,6 +110,13 @@
   let lastFetchedZip = null;
   let availableFrequencies = [];
   let selectedFrequency = null;
+
+  // Business rule: never hide more than a 3-day lead time
+  // This ensures the earliest selectable date matches API availability
+  // as soon as 3 days from "today".
+  // Subscriptions can only be set up to 3 days in advance from "Today" as recharge needs to be able to bill 2 days in advance
+  const MAX_LEAD_TIME_DAYS = 3;
+  
   // Use the same image for all meals
   const MEAL_IMAGE =
     'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=facearea&w=400&h=400';
@@ -1441,7 +1448,9 @@
             // Fallback to 3 days for unknown units
             daysToRestrict = 3;
         }
-
+        
+        daysToRestrict = Math.min(daysToRestrict, MAX_LEAD_TIME_DAYS);
+        
         // Add restricted dates based on frequency
         for (let i = 0; i < daysToRestrict; i++) {
           const date = new Date(today);
