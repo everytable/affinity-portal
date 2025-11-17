@@ -847,4 +847,622 @@
         cleanupContactUsPage();
       }
     }, true);
+
+  // ============================================
+  // Redeem Rewards Tab Injection & One-Click Redemption
+  // ============================================
+  
+  let redeemRewardsInjected = false;
+  let redeemRewardsContainer = null;
+  let hiddenReactContentForRewards = null;
+  let rewardResizeHandler = null;
+  let loyaltyLionWidgetLoaded = false;
+
+  function injectRedeemRewardsNav() {
+    if (redeemRewardsInjected) return;
+
+    const existingLinks = document.querySelectorAll('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"]');
+    if (existingLinks.length === 0) return;
+
+    let navContainer = existingLinks[0].parentElement?.parentElement || existingLinks[0].parentElement;
+    if (!navContainer) return;
+
+    if (document.querySelector('#et-redeem-rewards-nav-link')) {
+      redeemRewardsInjected = true;
+      return;
+    }
+
+    const referenceLink = navContainer.querySelector('a[href*="/upcoming"], a[href*="/subscriptions"]');
+    
+    if (referenceLink) {
+      const redeemLink = referenceLink.cloneNode(true);
+      redeemLink.id = 'et-redeem-rewards-nav-link';
+      redeemLink.href = '#redeem-rewards';
+      
+      const textSpan = redeemLink.querySelector('span') || redeemLink;
+      textSpan.textContent = 'Redeem Rewards';
+      
+      if (textSpan.style) {
+        textSpan.style.color = '#222';
+      }
+      redeemLink.style.color = '#222';
+            
+      redeemLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        renderRedeemRewardsPage();
+      });
+
+      // Insert after "Next Order" / "Upcoming Orders" link, before other links
+      const nextOrderLink = navContainer.querySelector('a[href*="/upcoming"]');
+      if (nextOrderLink && nextOrderLink.parentElement) {
+        const insertAfter = nextOrderLink.parentElement.nextSibling || nextOrderLink.parentElement;
+        if (insertAfter && insertAfter.parentElement) {
+          insertAfter.parentElement.insertBefore(redeemLink.parentElement || redeemLink, insertAfter.nextSibling);
+        } else {
+          navContainer.appendChild(redeemLink);
+        }
+      } else {
+        navContainer.appendChild(redeemLink);
+      }
+
+      redeemRewardsInjected = true;
+    }
+  }
+
+  function cleanupRedeemRewardsPage() {
+    // Show React content again
+    if (hiddenReactContentForRewards) {
+      hiddenReactContentForRewards.style.display = '';
+      hiddenReactContentForRewards = null;
+    }
+    
+    // Remove resize listener
+    if (rewardResizeHandler) {
+      window.removeEventListener('resize', rewardResizeHandler);
+      rewardResizeHandler = null;
+    }
+    
+    // Remove our container
+    if (redeemRewardsContainer && redeemRewardsContainer.parentElement) {
+      redeemRewardsContainer.remove();
+      redeemRewardsContainer = null;
+    }
+  }
+
+  function loadLoyaltyLionWidget() {
+    if (loyaltyLionWidgetLoaded) return;
+    
+    // Check if LoyaltyLion script is already loaded
+    if (window.LoyaltyLion || document.querySelector('script[src*="loyaltylion"]')) {
+      loyaltyLionWidgetLoaded = true;
+      return;
+    }
+
+    // Load LoyaltyLion widget script
+    const script = document.createElement('script');
+    script.src = 'https://cdn.loyaltylion.com/sdk.js';
+    script.async = true;
+    script.onload = function() {
+      loyaltyLionWidgetLoaded = true;
+      console.log('✅ LoyaltyLion widget loaded');
+    };
+    document.head.appendChild(script);
+  }
+
+  function applyDiscountCode(code) {
+    // Find discount code input field
+    const discountInputs = document.querySelectorAll('input[placeholder*="discount"], input[placeholder*="gift"], input[type="text"]');
+    let discountInput = null;
+    
+    for (const input of discountInputs) {
+      const placeholder = (input.getAttribute('placeholder') || '').toLowerCase();
+      const name = (input.getAttribute('name') || '').toLowerCase();
+      if (placeholder.includes('discount') || placeholder.includes('code') || placeholder.includes('gift') || 
+          name.includes('discount') || name.includes('code')) {
+        discountInput = input;
+        break;
+      }
+    }
+
+    if (!discountInput) {
+      // Try to find by looking for nearby "Apply" button
+      const applyButtons = Array.from(document.querySelectorAll('button')).filter(btn => {
+        const text = (btn.textContent || '').toLowerCase().trim();
+        return text === 'apply' || text.includes('apply');
+      });
+      
+      for (const btn of applyButtons) {
+        const input = btn.previousElementSibling || 
+                     btn.parentElement?.querySelector('input[type="text"]') ||
+                     btn.closest('div')?.querySelector('input[type="text"]');
+        if (input) {
+          discountInput = input;
+          break;
+        }
+      }
+    }
+
+    if (discountInput) {
+      discountInput.value = code;
+      discountInput.dispatchEvent(new Event('input', { bubbles: true }));
+      discountInput.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      // Find and click apply button
+      setTimeout(() => {
+        const applyBtn = discountInput.nextElementSibling ||
+                        discountInput.parentElement?.querySelector('button') ||
+                        discountInput.closest('div')?.querySelector('button');
+        
+        if (applyBtn && (applyBtn.textContent || '').toLowerCase().includes('apply')) {
+          applyBtn.click();
+        } else {
+          // Try pressing Enter on the input
+          const enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            keyCode: 13,
+            bubbles: true
+          });
+          discountInput.dispatchEvent(enterEvent);
+        }
+      }, 100);
+      
+      return true;
+    }
+    
+    return false;
+  }
+
+  function setupOneClickRedemption() {
+    // Monitor for reward redemption buttons and points display
+    const observer = new MutationObserver(() => {
+      // Look for "Redeem" buttons in the rewards section
+      const redeemButtons = Array.from(document.querySelectorAll('button')).filter(btn => {
+        const text = (btn.textContent || '').toLowerCase();
+        return text.includes('redeem') && (text.includes('$5') || text.includes('$10') || text.includes('5.00') || text.includes('10.00'));
+      });
+
+      redeemButtons.forEach(btn => {
+        if (btn.dataset.etRewardHandler === 'true') return;
+        btn.dataset.etRewardHandler = 'true';
+        
+        btn.addEventListener('click', async function(e) {
+          // Wait a moment for redemption to process
+          setTimeout(() => {
+            // Look for generated discount code
+            const codeElements = document.querySelectorAll('input[readonly], code, .code, [class*="code"]');
+            let discountCode = null;
+            
+            for (const el of codeElements) {
+              const value = el.value || el.textContent || '';
+              if (value && value.length > 5 && /^[A-Z0-9-]+$/.test(value.trim())) {
+                discountCode = value.trim();
+                break;
+              }
+            }
+
+            // Also check for copied-to-clipboard messages or code displays
+            if (!discountCode) {
+              const textElements = document.querySelectorAll('div, span, p');
+              for (const el of textElements) {
+                const text = el.textContent || '';
+                if (text.includes('code') && /[A-Z0-9-]{6,}/.test(text)) {
+                  const match = text.match(/[A-Z0-9-]{6,}/);
+                  if (match) {
+                    discountCode = match[0];
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (discountCode) {
+              // Store code for auto-application
+              sessionStorage.setItem('et_redeemed_discount_code', discountCode);
+              
+              // Navigate back to "View your next order" and apply code
+              const nextOrderLink = document.querySelector('a[href*="/upcoming"], a[href*="/orders"]');
+              if (nextOrderLink) {
+                cleanupRedeemRewardsPage();
+                nextOrderLink.click();
+                
+                // Wait for page to load, then apply discount
+                setTimeout(() => {
+                  applyDiscountCode(discountCode);
+                }, 1500);
+              } else {
+                // Try to apply on current page if we're already on the order page
+                applyDiscountCode(discountCode);
+              }
+            }
+          }, 500);
+        });
+      });
+
+      // Also look for points display to show quick redeem buttons
+      const pointsDisplays = Array.from(document.querySelectorAll('*')).filter(el => {
+        const text = el.textContent || '';
+        return text.includes('points') && /\d+/.test(text) && !el.querySelector('button[data-et-reward-handler]');
+      });
+
+      pointsDisplays.forEach(display => {
+        const text = display.textContent || '';
+        const pointsMatch = text.match(/(\d+)\s*points?/i);
+        if (pointsMatch) {
+          const points = parseInt(pointsMatch[1]);
+          if (points >= 500) {
+            // Add quick redeem buttons if not already present
+            if (!display.querySelector('.et-quick-redeem')) {
+              const quickRedeemDiv = document.createElement('div');
+              quickRedeemDiv.className = 'et-quick-redeem';
+              quickRedeemDiv.style.cssText = 'margin-top: 12px; display: flex; gap: 8px;';
+              
+              if (points >= 1000) {
+                const redeem10Btn = document.createElement('button');
+                redeem10Btn.textContent = 'Redeem $10.00';
+                redeem10Btn.style.cssText = 'padding: 8px 16px; background: #0d3c3a; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;';
+                redeem10Btn.onclick = () => {
+                  const select = display.closest('div')?.querySelector('select');
+                  if (select) {
+                    const option10 = Array.from(select.options).find(opt => opt.text.includes('10.00') || opt.text.includes('$10'));
+                    if (option10) {
+                      select.value = option10.value;
+                      select.dispatchEvent(new Event('change', { bubbles: true }));
+                      const redeemBtn = display.closest('div')?.querySelector('button');
+                      if (redeemBtn) setTimeout(() => redeemBtn.click(), 100);
+                    }
+                  }
+                };
+                quickRedeemDiv.appendChild(redeem10Btn);
+              }
+              
+              if (points >= 500) {
+                const redeem5Btn = document.createElement('button');
+                redeem5Btn.textContent = 'Redeem $5.00';
+                redeem5Btn.style.cssText = 'padding: 8px 16px; background: #0d3c3a; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;';
+                redeem5Btn.onclick = () => {
+                  const select = display.closest('div')?.querySelector('select');
+                  if (select) {
+                    const option5 = Array.from(select.options).find(opt => opt.text.includes('5.00') || opt.text.includes('$5'));
+                    if (option5) {
+                      select.value = option5.value;
+                      select.dispatchEvent(new Event('change', { bubbles: true }));
+                      const redeemBtn = display.closest('div')?.querySelector('button');
+                      if (redeemBtn) setTimeout(() => redeemBtn.click(), 100);
+                    }
+                  }
+                };
+                quickRedeemDiv.appendChild(redeem5Btn);
+              }
+              
+              display.appendChild(quickRedeemDiv);
+            }
+          }
+        }
+      });
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  function renderRedeemRewardsPage() {
+    cleanupRedeemRewardsPage();
+    
+    let mainContent = null;
+    
+    // Use same strategy as contact us page to find main content
+    const allDivs = document.querySelectorAll('div');
+    for (const div of allDivs) {
+      const children = Array.from(div.children);
+      
+      if (children.length === 2) {
+        const isSidebar = (child) => {
+          const text = child.textContent || '';
+          return (text.includes('Next Order') || text.includes('Upcoming Orders')) &&
+                 (text.includes('Manage') || text.includes('Previous Orders') || text.includes('Update Payment'));
+        };
+        
+        const hasSidebar = children.some(isSidebar);
+        
+        if (hasSidebar) {
+          mainContent = children.find(child => !isSidebar(child));
+          break;
+        }
+      }
+    }
+    
+    if (!mainContent) {
+      for (const div of allDivs) {
+        const text = div.textContent || '';
+        if ((text.includes('Your next order') || 
+             text.includes('Deliver to') ||
+             text.includes('Charge to card ending') ||
+             text.includes('Order total')) 
+            && !text.includes('Upcoming Orders') 
+            && !text.includes('Manage')
+            && div.children.length > 0) {
+          let parent = div;
+          while (parent && parent.parentElement) {
+            const siblings = Array.from(parent.parentElement.children);
+            const hasSidebarSibling = siblings.some(sibling => {
+              if (sibling === parent) return false;
+              const siblingText = sibling.textContent || '';
+              return (siblingText.includes('Next Order') || siblingText.includes('Upcoming Orders')) &&
+                     (siblingText.includes('Manage') || siblingText.includes('Previous Orders'));
+            });
+            
+            if (hasSidebarSibling) {
+              mainContent = parent;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          if (!mainContent) {
+            mainContent = div;
+          }
+          break;
+        }
+      }
+    }
+
+    if (!mainContent) {
+      const contentSelectors = [
+        'main[role="main"] > div:first-child > div:first-child',
+        'main[role="main"] > div:first-child',
+        '[data-testid="main-content"] > div:first-child',
+        'main > div:first-child > div:first-child',
+        'main > div:first-child',
+      ];
+      
+      for (const selector of contentSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const text = (el.textContent || '').toLowerCase();
+          if (!text.includes('upcoming orders') && !text.includes('next order')) {
+            mainContent = el;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!mainContent) {
+      console.error('❌ Could not find main content area for redeem rewards');
+      return;
+    }
+
+    // Hide React content
+    hiddenReactContentForRewards = mainContent;
+    mainContent.style.display = 'none';
+    
+    // Create our container
+    redeemRewardsContainer = document.createElement('div');
+    redeemRewardsContainer.id = 'et-redeem-rewards-container';
+    redeemRewardsContainer.style.width = window.innerWidth < 1024 ? '100%' : '65.7%';
+    redeemRewardsContainer.style.minHeight = '600px';
+    redeemRewardsContainer.innerHTML = `
+      <div style="background: #0d3c3a; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; margin-bottom: 0;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #fff;">Redeem Rewards</h1>
+      </div>
+
+      <div style="background: #f7f6ef; padding: 32px 24px; border-radius: 0 0 8px 8px; min-height: 500px;">
+        <div style="margin-bottom: 24px;">
+          <h2 style="font-size: 32px; font-weight: 700; color: #222; margin: 0 0 8px 0;">Redeem Your Points</h2>
+          <p style="font-size: 16px; color: #666; margin: 0;">Choose your reward amount and we'll automatically apply it to your next order.</p>
+        </div>
+
+        <div id="et-loyaltylion-widget-container" style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+          <div style="text-align: center; padding: 40px 20px;">
+            <div style="font-size: 18px; color: #666; margin-bottom: 16px;">Loading rewards...</div>
+            <div style="font-size: 14px; color: #999;">If the rewards widget doesn't load, please refresh the page.</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 24px; padding: 16px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+          <p style="margin: 0; font-size: 14px; color: #856404;">
+            <strong>Note:</strong> After redeeming your points, you'll be automatically redirected back to your order page where the discount code will be applied.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Insert our container
+    mainContent.parentElement.insertBefore(redeemRewardsContainer, mainContent.nextSibling);
+
+    // Load LoyaltyLion widget
+    loadLoyaltyLionWidget();
+    
+    // Setup one-click redemption handlers
+    setupOneClickRedemption();
+
+    // Try to find and inject LoyaltyLion widget if it exists on the page
+    setTimeout(() => {
+      const loyaltyLionContainer = document.querySelector('[id*="loyaltylion"], [class*="loyaltylion"], [data-loyaltylion]');
+      if (loyaltyLionContainer) {
+        const widgetContainer = document.getElementById('et-loyaltylion-widget-container');
+        if (widgetContainer) {
+          widgetContainer.innerHTML = '';
+          widgetContainer.appendChild(loyaltyLionContainer.cloneNode(true));
+        }
+      }
+    }, 1000);
+
+    // Handle responsive width
+    rewardResizeHandler = () => {
+      if (redeemRewardsContainer) {
+        redeemRewardsContainer.style.width = window.innerWidth < 1024 ? '100%' : '65.7%';
+      }
+    };
+    window.addEventListener('resize', rewardResizeHandler);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Inject navigation tab
+  const redeemRewardsNavObserver = new MutationObserver(() => {
+    if (!redeemRewardsInjected) {
+      injectRedeemRewardsNav();
+    }
+  });
+
+  redeemRewardsNavObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  setTimeout(injectRedeemRewardsNav, 1000);
+  setTimeout(injectRedeemRewardsNav, 2000);
+
+  // Cleanup on navigation
+  document.addEventListener('Recharge::location::change', function() {
+    cleanupRedeemRewardsPage();
+    redeemRewardsInjected = false;
+  }, true);
+
+  document.addEventListener('click', function(e) {
+    const link = e.target.closest('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"], a[href*="/customer"], a[href*="/overview"]');
+    if (link && redeemRewardsContainer) {
+      cleanupRedeemRewardsPage();
+    }
+  }, true);
+
+  // Enhance rewards section on "View your next order" page with one-click redemption
+  function enhanceOrderPageRewards() {
+    const url = window.location.href;
+    if (!url.includes('/upcoming') && !url.includes('/orders')) return;
+
+    // Look for rewards/points section
+    const rewardsSections = Array.from(document.querySelectorAll('div, section')).filter(el => {
+      const text = el.textContent || '';
+      return (text.includes('points') || text.includes('redeem') || text.includes('reward')) && 
+             /\d+/.test(text) &&
+             !el.dataset.etRewardsEnhanced;
+    });
+
+    rewardsSections.forEach(section => {
+      section.dataset.etRewardsEnhanced = 'true';
+      
+      const text = section.textContent || '';
+      const pointsMatch = text.match(/(\d+)\s*points?/i);
+      
+      if (pointsMatch) {
+        const points = parseInt(pointsMatch[1]);
+        
+        // Find the select dropdown for reward amounts
+        const select = section.querySelector('select');
+        const redeemBtn = section.querySelector('button');
+        
+        if (select && redeemBtn && points >= 500) {
+          // Add one-click redeem buttons
+          if (!section.querySelector('.et-one-click-redeem')) {
+            const oneClickDiv = document.createElement('div');
+            oneClickDiv.className = 'et-one-click-redeem';
+            oneClickDiv.style.cssText = 'margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;';
+            
+            if (points >= 1000) {
+              const quickRedeem10 = document.createElement('button');
+              quickRedeem10.textContent = 'Redeem $10.00';
+              quickRedeem10.style.cssText = 'padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background 0.2s;';
+              quickRedeem10.onmouseenter = () => quickRedeem10.style.background = '#218838';
+              quickRedeem10.onmouseleave = () => quickRedeem10.style.background = '#28a745';
+              quickRedeem10.onclick = () => {
+                const option10 = Array.from(select.options).find(opt => 
+                  opt.text.includes('10.00') || opt.text.includes('$10') || opt.value.includes('1000')
+                );
+                if (option10) {
+                  select.value = option10.value;
+                  select.dispatchEvent(new Event('change', { bubbles: true }));
+                  setTimeout(() => {
+                    redeemBtn.click();
+                    // After redemption, try to auto-apply the code
+                    setTimeout(() => {
+                      const codeInput = document.querySelector('input[readonly], code, .code');
+                      if (codeInput) {
+                        const code = codeInput.value || codeInput.textContent || '';
+                        if (code && code.length > 5) {
+                          applyDiscountCode(code.trim());
+                        }
+                      }
+                    }, 1000);
+                  }, 200);
+                }
+              };
+              oneClickDiv.appendChild(quickRedeem10);
+            }
+            
+            if (points >= 500) {
+              const quickRedeem5 = document.createElement('button');
+              quickRedeem5.textContent = 'Redeem $5.00';
+              quickRedeem5.style.cssText = 'padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background 0.2s;';
+              quickRedeem5.onmouseenter = () => quickRedeem5.style.background = '#218838';
+              quickRedeem5.onmouseleave = () => quickRedeem5.style.background = '#28a745';
+              quickRedeem5.onclick = () => {
+                const option5 = Array.from(select.options).find(opt => 
+                  opt.text.includes('5.00') || opt.text.includes('$5') || opt.value.includes('500')
+                );
+                if (option5) {
+                  select.value = option5.value;
+                  select.dispatchEvent(new Event('change', { bubbles: true }));
+                  setTimeout(() => {
+                    redeemBtn.click();
+                    // After redemption, try to auto-apply the code
+                    setTimeout(() => {
+                      const codeInput = document.querySelector('input[readonly], code, .code');
+                      if (codeInput) {
+                        const code = codeInput.value || codeInput.textContent || '';
+                        if (code && code.length > 5) {
+                          applyDiscountCode(code.trim());
+                        }
+                      }
+                    }, 1000);
+                  }, 200);
+                }
+              };
+              oneClickDiv.appendChild(quickRedeem5);
+            }
+            
+            // Insert after the redeem button or at the end of the section
+            if (redeemBtn && redeemBtn.parentElement) {
+              redeemBtn.parentElement.insertBefore(oneClickDiv, redeemBtn.nextSibling);
+            } else {
+              section.appendChild(oneClickDiv);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Auto-apply discount codes on "View your next order" page
+  const autoApplyObserver = new MutationObserver(() => {
+    // Check if we're on the order page and have a stored discount code
+    const url = window.location.href;
+    if (url.includes('/upcoming') || url.includes('/orders')) {
+      const storedCode = sessionStorage.getItem('et_redeemed_discount_code');
+      if (storedCode) {
+        sessionStorage.removeItem('et_redeemed_discount_code');
+        setTimeout(() => {
+          if (applyDiscountCode(storedCode)) {
+            console.log('✅ Automatically applied discount code:', storedCode);
+          }
+        }, 1000);
+      }
+      
+      // Enhance rewards section with one-click buttons
+      enhanceOrderPageRewards();
+    }
+  });
+
+  autoApplyObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+  
+  // Run immediately
+  setTimeout(enhanceOrderPageRewards, 1500);
+
 })();
