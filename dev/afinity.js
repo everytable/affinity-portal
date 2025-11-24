@@ -2402,6 +2402,79 @@
       '#afinity-modal-content-root'
     );
     contentRoot.innerHTML = await renderModalContent();
+
+    let scrollBtn = modalOverlay.querySelector('.afinity-scroll-bottom-btn');
+    if (currentPage === 'meals') {
+      if (!scrollBtn) {
+        scrollBtn = document.createElement('button');
+        scrollBtn.className = 'afinity-scroll-bottom-btn';
+        scrollBtn.setAttribute('aria-label', 'Scroll to bottom');
+        scrollBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 5V19M12 19L5 12M12 19L19 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+        modalOverlay.appendChild(scrollBtn);
+        
+        scrollBtn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const content = modalOverlay.querySelector('.afinity-modal-content');
+          const mealsMain = modalOverlay.querySelector('.afinity-meals-main');
+          const mealsLayout = modalOverlay.querySelector('.afinity-meals-layout');
+          
+          const scrollElement = (el) => {
+            if (el) {
+              const maxScroll = el.scrollHeight - el.clientHeight;
+              el.scrollTo({
+                top: maxScroll,
+                behavior: 'smooth'
+              });
+              return true;
+            }
+            return false;
+          };
+          
+          let scrolled = false;
+          
+          if (modalOverlay.scrollHeight > modalOverlay.clientHeight) {
+            scrolled = scrollElement(modalOverlay);
+          }
+          
+          if (!scrolled && content && content.scrollHeight > content.clientHeight) {
+            scrolled = scrollElement(content);
+          }
+          
+          if (!scrolled && mealsMain && mealsMain.scrollHeight > mealsMain.clientHeight) {
+            scrolled = scrollElement(mealsMain);
+          }
+          
+          if (!scrolled && mealsLayout && mealsLayout.scrollHeight > mealsLayout.clientHeight) {
+            scrolled = scrollElement(mealsLayout);
+          }
+          
+          if (!scrolled) {
+            const footer = modalOverlay.querySelector('.afinity-meals-sidebar-footer');
+            if (footer) {
+              footer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else {
+              window.scrollTo({ 
+                top: document.documentElement.scrollHeight || document.body.scrollHeight, 
+                behavior: 'smooth' 
+              });
+            }
+          }
+        };
+      }
+      if (window.innerWidth <= 768) {
+        scrollBtn.style.display = 'flex';
+      } else {
+        scrollBtn.style.display = 'none';
+      }
+    } else {
+      if (scrollBtn) {
+        scrollBtn.remove();
+      }
+    }
     attachModalEvents();
     // Always re-render the method section if on main page
     if (currentPage === 'main') {
