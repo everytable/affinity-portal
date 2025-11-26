@@ -1085,9 +1085,9 @@
             currentSubscription?.include?.bundle_selections?.items || [];
           const itemsWithoutFees = currentItems.filter(item => {
             const productId = item.external_product_id || item.product_id;
-            // Filter out delivery fee (7933253517369) and packaging fee (7927816716345)
+            // Filter out delivery fee and packaging fee products
             return (
-              productId !== '7933253517369' && productId !== '7927816716345'
+              productId !== ID_CONFIG.deliveryFeeProductId && productId !== ID_CONFIG.packagingFeeProductId
             );
           });
 
@@ -1748,10 +1748,10 @@
         ) {
           originalSubscriptionMeals = payload.include.bundle_selections.items
             .filter(item => {
-              // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+              // Filter out packaging fee and delivery fee products
               const productId = item.external_product_id || item.product_id;
               return (
-                productId !== '7927816716345' && productId !== '7933253517369'
+                productId !== ID_CONFIG.packagingFeeProductId && productId !== ID_CONFIG.deliveryFeeProductId
               );
             })
             .map(item => {
@@ -2402,6 +2402,79 @@
       '#afinity-modal-content-root'
     );
     contentRoot.innerHTML = await renderModalContent();
+
+    let scrollBtn = modalOverlay.querySelector('.afinity-scroll-bottom-btn');
+    if (currentPage === 'meals') {
+      if (!scrollBtn) {
+        scrollBtn = document.createElement('button');
+        scrollBtn.className = 'afinity-scroll-bottom-btn';
+        scrollBtn.setAttribute('aria-label', 'Scroll to bottom');
+        scrollBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 5V19M12 19L5 12M12 19L19 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+        modalOverlay.appendChild(scrollBtn);
+        
+        scrollBtn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const content = modalOverlay.querySelector('.afinity-modal-content');
+          const mealsMain = modalOverlay.querySelector('.afinity-meals-main');
+          const mealsLayout = modalOverlay.querySelector('.afinity-meals-layout');
+          
+          const scrollElement = (el) => {
+            if (el) {
+              const maxScroll = el.scrollHeight - el.clientHeight;
+              el.scrollTo({
+                top: maxScroll,
+                behavior: 'smooth'
+              });
+              return true;
+            }
+            return false;
+          };
+          
+          let scrolled = false;
+          
+          if (modalOverlay.scrollHeight > modalOverlay.clientHeight) {
+            scrolled = scrollElement(modalOverlay);
+          }
+          
+          if (!scrolled && content && content.scrollHeight > content.clientHeight) {
+            scrolled = scrollElement(content);
+          }
+          
+          if (!scrolled && mealsMain && mealsMain.scrollHeight > mealsMain.clientHeight) {
+            scrolled = scrollElement(mealsMain);
+          }
+          
+          if (!scrolled && mealsLayout && mealsLayout.scrollHeight > mealsLayout.clientHeight) {
+            scrolled = scrollElement(mealsLayout);
+          }
+          
+          if (!scrolled) {
+            const footer = modalOverlay.querySelector('.afinity-meals-sidebar-footer');
+            if (footer) {
+              footer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else {
+              window.scrollTo({ 
+                top: document.documentElement.scrollHeight || document.body.scrollHeight, 
+                behavior: 'smooth' 
+              });
+            }
+          }
+        };
+      }
+      if (window.innerWidth <= 768) {
+        scrollBtn.style.display = 'flex';
+      } else {
+        scrollBtn.style.display = 'none';
+      }
+    } else {
+      if (scrollBtn) {
+        scrollBtn.remove();
+      }
+    }
     attachModalEvents();
     // Always re-render the method section if on main page
     if (currentPage === 'main') {
@@ -2478,9 +2551,9 @@
 
     currentSubscription.include.bundle_selections.items
       .filter(item => {
-        // Only include packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+        // Only include packaging fee and delivery fee products
         const productId = item.external_product_id || item.product_id;
-        return productId === '7927816716345' || productId === '7933253517369';
+        return productId === ID_CONFIG.packagingFeeProductId || productId === ID_CONFIG.deliveryFeeProductId;
       })
       .forEach(item => {
         const price = Number(item.price) || 0;
@@ -2488,9 +2561,9 @@
         const total = price * qty;
 
         const productId = item.external_product_id || item.product_id;
-        if (productId === '7933253517369') {
+        if (productId === ID_CONFIG.deliveryFeeProductId) {
           deliveryFee = total;
-        } else if (productId === '7927816716345') {
+        } else if (productId === ID_CONFIG.packagingFeeProductId) {
           packagingFee = total;
         }
       });
@@ -2513,9 +2586,9 @@
     // Add subscription items (excluding packaging and delivery fees from display, but including in total)
     currentSubscription.include.bundle_selections.items
       .filter(item => {
-        // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+        // Filter out packaging fee and delivery fee products
         const productId = item.external_product_id || item.product_id;
-        return productId !== '7927816716345' && productId !== '7933253517369';
+        return productId !== ID_CONFIG.packagingFeeProductId && productId !== ID_CONFIG.deliveryFeeProductId;
       })
       .forEach(item => {
         // Convert price to cents, multiply, then add
@@ -2528,9 +2601,9 @@
     // Add hidden fees to total (packaging and delivery fees)
     currentSubscription.include.bundle_selections.items
       .filter(item => {
-        // Only include packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+        // Only include packaging fee and delivery fee products
         const productId = item.external_product_id || item.product_id;
-        return productId === '7927816716345' || productId === '7933253517369';
+        return productId === ID_CONFIG.packagingFeeProductId || productId === ID_CONFIG.deliveryFeeProductId;
       })
       .forEach(item => {
         // Convert price to cents, multiply, then add
@@ -2563,7 +2636,7 @@
       // Check if items already contains delivery or packaging fees
       const existingFees = items.filter(item => {
         const productId = item.external_product_id || item.product_id;
-        return productId === '7933253517369' || productId === '7927816716345';
+        return productId === ID_CONFIG.deliveryFeeProductId || productId === ID_CONFIG.packagingFeeProductId;
       });
 
       // Fetch settings to get the delivery fee waiver threshold
@@ -2629,9 +2702,9 @@
       // Always add packaging fee for delivery (1 quantity max)
       if (currentFulfillmentMethod === 'Delivery') {
         const packagingFee = {
-          collection_id: '308869562425',
-          external_product_id: '7927816716345',
-          external_variant_id: '44558969372729',
+          collection_id: ID_CONFIG.collectionId,
+          external_product_id: ID_CONFIG.packagingFeeProductId,
+          external_variant_id: ID_CONFIG.packagingFeeVariantId,
           quantity: 1,
         };
         updatedItems.push(packagingFee);
@@ -2643,9 +2716,9 @@
         totalCents < subscriptionDeliveryFeeWaiverThresholdCents
       ) {
         const deliveryFee = {
-          collection_id: '308869562425',
-          external_product_id: '7933253517369',
-          external_variant_id: '44578774089785',
+          collection_id: ID_CONFIG.collectionId,
+          external_product_id: ID_CONFIG.deliveryFeeProductId,
+          external_variant_id: ID_CONFIG.deliveryFeeVariantId,
           quantity: 1,
         };
         updatedItems.push(deliveryFee);
@@ -2661,6 +2734,133 @@
 
   // Calculate total for meals page based on current selections
   // Calculate conditional fees based on current meal selections and fulfillment method
+  
+  // ============================================================================
+  // ID Configuration - Dynamically loaded from theme settings
+  // ============================================================================
+  /**
+   * Configuration object for dynamic IDs loaded from theme settings.
+   * Reads from window.rechargeGridSettings (exposed by recharge-product-grid.liquid)
+   * Falls back to window.bundleConfig, then to default hardcoded values.
+   * 
+   * @type {Readonly<{
+   *   collectionId: string;
+   *   packagingFeeProductId: string;
+   *   deliveryFeeProductId: string;
+   *   packagingFeeVariantId: string;
+   *   deliveryFeeVariantId: string;
+   *   defaultCollectionId: string;
+   * }>}
+   */
+  const ID_CONFIG = (function() {
+    'use strict';
+
+    // Default fallback values (backward compatibility)
+    const DEFAULTS = Object.freeze({
+      collectionId: '308869562425',
+      packagingFeeProductId: '7927816716345',
+      deliveryFeeProductId: '7933253517369',
+      packagingFeeVariantId: '44558969372729',
+      deliveryFeeVariantId: '44578774089785',
+      defaultCollectionId: '1'
+    });
+
+    // Mapping from theme setting keys to bundleConfig property names
+    const BUNDLE_CONFIG_MAPPING = Object.freeze({
+      'fees_collection_id': 'collectionId',
+      'packaging_fee_product_id': 'packagingFeeProductId',
+      'delivery_fee_product_id': 'deliveryFeeProductId',
+      'packaging_fee_variant_id': 'packagingFeeVariantId',
+      'delivery_fee_variant_id': 'deliveryFeeVariantId'
+    });
+
+    /**
+     * Normalizes a value to a valid string ID.
+     * Trims whitespace and validates non-empty string.
+     * 
+     * @param {*} value - The value to normalize
+     * @returns {string|null} Normalized string or null if invalid
+     */
+    const normalizeId = function(value) {
+      if (value == null) return null;
+      const normalized = String(value).trim();
+      return normalized !== '' ? normalized : null;
+    };
+
+    /**
+     * Gets a setting value from theme configuration with fallback chain.
+     * Priority: rechargeGridSettings -> bundleConfig -> default
+     * 
+     * @param {string} settingKey - The key to look up in theme settings
+     * @param {string} fallbackValue - Default value if not found
+     * @returns {string} The resolved setting value
+     */
+    const getSetting = function(settingKey, fallbackValue) {
+      if (typeof settingKey !== 'string' || settingKey === '') {
+        return String(fallbackValue || '');
+      }
+
+      // Priority 1: window.rechargeGridSettings (exposed by theme - most reliable)
+      if (typeof window !== 'undefined' && window.rechargeGridSettings) {
+        try {
+          const value = window.rechargeGridSettings[settingKey];
+          const normalized = normalizeId(value);
+          if (normalized !== null) {
+            return normalized;
+          }
+        } catch (error) {
+          // Silently fall through to next priority if access fails
+          if (console && typeof console.warn === 'function') {
+            console.warn('[ID_CONFIG] Error reading rechargeGridSettings:', error);
+          }
+        }
+      }
+
+      // Priority 2: window.bundleConfig (direct access - fallback)
+      if (typeof window !== 'undefined' && window.bundleConfig) {
+        try {
+          const bundleKey = BUNDLE_CONFIG_MAPPING[settingKey];
+          if (bundleKey && window.bundleConfig[bundleKey]) {
+            const value = window.bundleConfig[bundleKey];
+            const normalized = normalizeId(value);
+            if (normalized !== null) {
+              return normalized;
+            }
+          }
+        } catch (error) {
+          // Silently fall through to default if access fails
+          if (console && typeof console.warn === 'function') {
+            console.warn('[ID_CONFIG] Error reading bundleConfig:', error);
+          }
+        }
+      }
+
+      // Priority 3: Return fallback default value
+      return String(fallbackValue || '');
+    };
+
+    // Build configuration object with all required IDs
+    const config = {
+      collectionId: getSetting('fees_collection_id', DEFAULTS.collectionId),
+      packagingFeeProductId: getSetting('packaging_fee_product_id', DEFAULTS.packagingFeeProductId),
+      deliveryFeeProductId: getSetting('delivery_fee_product_id', DEFAULTS.deliveryFeeProductId),
+      packagingFeeVariantId: getSetting('packaging_fee_variant_id', DEFAULTS.packagingFeeVariantId),
+      deliveryFeeVariantId: getSetting('delivery_fee_variant_id', DEFAULTS.deliveryFeeVariantId),
+      defaultCollectionId: getSetting('default_collection_id', DEFAULTS.defaultCollectionId)
+    };
+
+    // Validate all required IDs are present
+    const requiredKeys = Object.keys(DEFAULTS);
+    const missingKeys = requiredKeys.filter(key => !config[key] || config[key] === '');
+    
+    if (missingKeys.length > 0 && console && typeof console.warn === 'function') {
+      console.warn('[ID_CONFIG] Missing required IDs, using defaults:', missingKeys);
+    }
+
+    // Return frozen configuration object (prevents accidental modification)
+    return Object.freeze(config);
+  })();
+
   // Global variable to cache the delivery fee threshold
   let cachedDeliveryFeeThreshold = 50; // Default threshold
 
@@ -2924,12 +3124,12 @@
               Array.isArray(currentSubscription.include.bundle_selections.items)
                 ? currentSubscription.include.bundle_selections.items
                     .filter(item => {
-                      // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+                      // Filter out packaging fee and delivery fee products
                       const productId =
                         item.external_product_id || item.product_id;
                       return (
-                        productId !== '7927816716345' &&
-                        productId !== '7933253517369'
+                        productId !== ID_CONFIG.packagingFeeProductId &&
+                        productId !== ID_CONFIG.deliveryFeeProductId
                       );
                     })
                     .map(item => {
@@ -3943,7 +4143,7 @@
       >
         <div class="afinity-r-card${isActive ? ' afinity-r-card--active' : ''}" 
           data-variant-id="${variant.id}"
-          data-collection-id="1"
+          data-collection-id="${ID_CONFIG.defaultCollectionId}"
           data-product-id="${product.id}"
           data-catalog-id="demo-catalog-id"
           data-selling-plan-groups="[]">
@@ -4777,7 +4977,7 @@
                 }
 
                 return {
-                  collection_id: '308869562425',
+                  collection_id: ID_CONFIG.collectionId,
                   external_product_id: externalProductId,
                   external_variant_id: meal.id.replace(
                     'gid://shopify/ProductVariant/',
@@ -4809,9 +5009,9 @@
             // This ensures we don't double-count fees when calculating the threshold
             const itemsWithoutFees = items.filter(item => {
               const productId = item.external_product_id || item.product_id;
-              // Filter out delivery fee (7933253517369) and packaging fee (7927816716345)
+              // Filter out delivery fee and packaging fee products
               return (
-                productId !== '7933253517369' && productId !== '7927816716345'
+                productId !== ID_CONFIG.deliveryFeeProductId && productId !== ID_CONFIG.packagingFeeProductId
               );
             });
 
@@ -4983,7 +5183,7 @@
               }
 
               return {
-                collection_id: '308869562425',
+                collection_id: ID_CONFIG.collectionId,
                 external_product_id: externalProductId,
                 external_variant_id: meal.id.replace(
                   'gid://shopify/ProductVariant/',
@@ -5779,10 +5979,10 @@
       currentSubscription.include.bundle_selections &&
       Array.isArray(currentSubscription.include.bundle_selections.items)
         ? currentSubscription.include.bundle_selections.items.filter(item => {
-            // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+            // Filter out packaging fee and delivery fee products
             const productId = item.external_product_id || item.product_id;
             return (
-              productId !== '7927816716345' && productId !== '7933253517369'
+              productId !== ID_CONFIG.packagingFeeProductId && productId !== ID_CONFIG.deliveryFeeProductId
             );
           })
         : [];
@@ -6599,7 +6799,7 @@
                   }
 
                   return {
-                    collection_id: '308869562425',
+                    collection_id: ID_CONFIG.collectionId,
                     external_product_id: externalProductId,
                     external_variant_id: meal.id.replace(
                       'gid://shopify/ProductVariant/',
@@ -6634,9 +6834,9 @@
               // This ensures we don't double-count fees when calculating the threshold
               const itemsWithoutFees = items.filter(item => {
                 const productId = item.external_product_id || item.product_id;
-                // Filter out delivery fee (7933253517369) and packaging fee (7927816716345)
+                // Filter out delivery fee and packaging fee products
                 return (
-                  productId !== '7933253517369' && productId !== '7927816716345'
+                  productId !== ID_CONFIG.deliveryFeeProductId && productId !== ID_CONFIG.packagingFeeProductId
                 );
               });
 
@@ -6818,7 +7018,7 @@
                 }
 
                 return {
-                  collection_id: '308869562425',
+                  collection_id: ID_CONFIG.collectionId,
                   external_product_id: externalProductId,
                   external_variant_id: meal.id.replace(
                     'gid://shopify/ProductVariant/',
@@ -8000,12 +8200,12 @@
               originalSubscriptionMeals =
                 payload.include.bundle_selections.items
                   .filter(item => {
-                    // Filter out packaging fee (product ID: 7927816716345) and delivery fee (product ID: 7933253517369)
+                    // Filter out packaging fee and delivery fee products
                     const productId =
                       item.external_product_id || item.product_id;
                     return (
-                      productId !== '7927816716345' &&
-                      productId !== '7933253517369'
+                      productId !== ID_CONFIG.packagingFeeProductId &&
+                      productId !== ID_CONFIG.deliveryFeeProductId
                     );
                   })
                   .map(item => {
