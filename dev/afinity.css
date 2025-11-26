@@ -2035,7 +2035,7 @@
   .afinity-meals-layout {
     flex-direction: column;
     gap: 16px;
-    padding: 1rem 1rem 1rem 1rem;
+    padding: 1rem 1rem 160px 1rem !important;
   }
   .afinity-modal-card.afinity-meals-sidebar {
     position: static;
@@ -2214,5 +2214,67 @@
   .pagination-btn.prev,
   .pagination-btn.next {
     min-width: 70px;
+  }
+}
+
+@media (max-width: 768px) {
+  .afinity-modal-card.afinity-meals-sidebar .afinity-meals-sidebar-footer,
+  .afinity-meals-sidebar-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    z-index: 9999 !important;
+    padding: 16px 24px !important;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1) !important;
+    border-top: 1px solid #eee !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .afinity-modal-card.afinity-meals-sidebar {
+    background: #ffffff !important;
+  }
+
+  .afinity-meals-layout {
+    padding-bottom: 160px !important;
+  }
+  
+  .afinity-scroll-bottom-btn {
+    position: fixed !important;
+    bottom: 180px !important;
+    right: 20px !important;
+    width: 48px !important;
+    height: 48px !important;
+    background: #005a57 !important;
+    color: white !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+    z-index: 9998 !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: transform 0.2s, opacity 0.2s !important;
+  }
+  
+  .afinity-scroll-bottom-btn:hover {
+    background: #003f3d !important;
+  }
+  
+  .afinity-scroll-bottom-btn.hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(20px) !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .afinity-scroll-bottom-btn {
+    display: none !important;
   }
 }
