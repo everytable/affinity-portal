@@ -2960,6 +2960,10 @@
       if (response.ok) {
         const settings = await response.json();
         
+        if (console && typeof console.log === 'function') {
+          console.log('[ID_CONFIG] API settings received:', settings);
+        }
+        
         // Map API settings to ID_CONFIG
         const apiMapping = {
           'collection_id': 'collectionId',
@@ -2981,6 +2985,9 @@
               ID_CONFIG[configKey] = normalized;
               ID_CONFIG._source[configKey] = 'API';
               updated = true;
+              if (console && typeof console.log === 'function') {
+                console.log(`[ID_CONFIG] Updated ${configKey} from API:`, normalized);
+              }
             }
           }
         });
@@ -2988,8 +2995,24 @@
         if (updated) {
           ID_CONFIG._initialized = true;
           if (console && typeof console.log === 'function') {
-            console.log('[ID_CONFIG] ✅ Updated from API:', ID_CONFIG);
+            console.log('[ID_CONFIG] ✅ Updated from API. Final config:', {
+              collectionId: ID_CONFIG.collectionId,
+              packagingFeeProductId: ID_CONFIG.packagingFeeProductId,
+              deliveryFeeProductId: ID_CONFIG.deliveryFeeProductId,
+              packagingFeeVariantId: ID_CONFIG.packagingFeeVariantId,
+              deliveryFeeVariantId: ID_CONFIG.deliveryFeeVariantId,
+              bundleProductId: ID_CONFIG.bundleProductId,
+              bundleVariantId: ID_CONFIG.bundleVariantId
+            });
           }
+        } else {
+          if (console && typeof console.warn === 'function') {
+            console.warn('[ID_CONFIG] No updates from API. Settings may be empty or already match.');
+          }
+        }
+      } else {
+        if (console && typeof console.error === 'function') {
+          console.error('[ID_CONFIG] API fetch failed with status:', response.status);
         }
       }
     } catch (error) {
@@ -2998,6 +3021,25 @@
       }
     }
   }
+
+  // Initialize IDs from API on page load
+  // This ensures ID_CONFIG is populated before any user interaction
+  (function initializeIdsFromAPI() {
+    if (typeof API_URL === 'undefined' || !API_URL) {
+      // API_URL not available yet, wait a bit and try again
+      if (typeof document !== 'undefined' && document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(initializeIdsFromAPI, 100);
+        });
+      } else {
+        setTimeout(initializeIdsFromAPI, 100);
+      }
+      return;
+    }
+    
+    // API_URL is available, fetch IDs
+    fetchIdsFromAPI();
+  })();
 
   // Function to fetch and cache the delivery fee threshold
   async function fetchDeliveryFeeThreshold() {
