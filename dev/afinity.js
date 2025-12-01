@@ -2747,12 +2747,11 @@
   // ============================================================================
   /**
    * Configuration object for dynamic IDs loaded from theme settings.
-   * Optimized priority: window.bundleConfig (direct camelCase) -> window.rechargeGridSettings (snake_case) -> defaults
+   * Reads from window.rechargeGridSettings (exposed by recharge-product-grid.liquid)
+   * Falls back to window.bundleConfig, then to default hardcoded values.
    * 
    * @type {Readonly<{
    *   collectionId: string;
-   *   bundleProductId: string;
-   *   bundleVariantId: string;
    *   packagingFeeProductId: string;
    *   deliveryFeeProductId: string;
    *   packagingFeeVariantId: string;
@@ -2767,8 +2766,6 @@
     // Default fallback values (backward compatibility)
     const DEFAULTS = Object.freeze({
       collectionId: '308869562425',
-      bundleProductId: '7916575653945',
-      bundleVariantId: '44507561263161',
       packagingFeeProductId: '7927816716345',
       deliveryFeeProductId: '7933253517369',
       packagingFeeVariantId: '44558969372729',
@@ -2811,23 +2808,22 @@
     };
 
     /**
-     * Gets a setting value from theme configuration with optimized fallback chain.
-     * Priority: bundleConfig (direct camelCase) -> rechargeGridSettings (snake_case) -> default
+     * Gets a setting value from theme configuration with fallback chain.
+     * Priority: rechargeGridSettings -> bundleConfig -> default
      * 
-     * @param {string} camelCaseKey - The camelCase property name (e.g., 'collectionId')
+     * @param {string} settingKey - The key to look up in theme settings
      * @param {string} fallbackValue - Default value if not found
-     * @param {string[]} snakeCaseKeys - Alternative snake_case keys to check in rechargeGridSettings
      * @returns {string} The resolved setting value
      */
-    const getSetting = function(camelCaseKey, fallbackValue, snakeCaseKeys = []) {
-      if (typeof camelCaseKey !== 'string' || camelCaseKey === '') {
+    const getSetting = function(settingKey, fallbackValue) {
+      if (typeof settingKey !== 'string' || settingKey === '') {
         return String(fallbackValue || '');
       }
 
-      // Priority 1: window.bundleConfig (direct camelCase access - most efficient, no mapping needed)
-      if (typeof window !== 'undefined' && window.bundleConfig) {
+      // Priority 1: window.rechargeGridSettings (exposed by theme - most reliable)
+      if (typeof window !== 'undefined' && window.rechargeGridSettings) {
         try {
-          const value = window.bundleConfig[camelCaseKey];
+          const value = window.rechargeGridSettings[settingKey];
           const normalized = normalizeId(value);
           if (normalized !== null) {
             return normalized;
@@ -2835,16 +2831,17 @@
         } catch (error) {
           // Silently fall through to next priority if access fails
           if (console && typeof console.warn === 'function') {
-            console.warn('[ID_CONFIG] Error reading bundleConfig:', error);
+            console.warn('[ID_CONFIG] Error reading rechargeGridSettings:', error);
           }
         }
       }
 
-      // Priority 2: window.rechargeGridSettings (snake_case keys - fallback)
-      if (typeof window !== 'undefined' && window.rechargeGridSettings && snakeCaseKeys.length > 0) {
+      // Priority 2: window.bundleConfig (direct access - fallback)
+      if (typeof window !== 'undefined' && window.bundleConfig) {
         try {
-          for (const snakeKey of snakeCaseKeys) {
-            const value = window.rechargeGridSettings[snakeKey];
+          const bundleKey = BUNDLE_CONFIG_MAPPING[settingKey];
+          if (bundleKey && window.bundleConfig[bundleKey]) {
+            const value = window.bundleConfig[bundleKey];
             const normalized = normalizeId(value);
             if (normalized !== null) {
               return normalized;
@@ -2853,7 +2850,7 @@
         } catch (error) {
           // Silently fall through to default if access fails
           if (console && typeof console.warn === 'function') {
-            console.warn('[ID_CONFIG] Error reading rechargeGridSettings:', error);
+            console.warn('[ID_CONFIG] Error reading bundleConfig:', error);
           }
         }
       }
@@ -2863,7 +2860,6 @@
     };
 
     // Build configuration object with all required IDs
-    // Direct camelCase access from bundleConfig (optimized), with snake_case fallback from rechargeGridSettings
     const config = {
       collectionId: getSetting('fees_collection_id', DEFAULTS.collectionId),
       packagingFeeProductId: getSetting('packaging_fee_product_id', DEFAULTS.packagingFeeProductId),
