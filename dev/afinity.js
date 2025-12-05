@@ -1042,7 +1042,6 @@
   // Centralized function to update subscription with request debouncing
   async function updateSubscriptionSafely(subscriptionId, updatePayload) {
     // If already updating, queue this request
-    alert("updateSubscriptionSafely")
     if (isUpdatingSubscription) {
       return new Promise((resolve, reject) => {
         updateRequestQueue.push({ updatePayload, resolve, reject });
@@ -1114,11 +1113,7 @@
           const bundleUpdatePayload = {
             items: updatedItems,
           };
-          
-          console.log(bundleUpdatePayload,'bundleUpdatePayloadpp');
-          console.log(JSON.stringify(bundleUpdatePayload),'testttttt');
-          
-          
+
           const bundleResponse = await fetch(
             `${API_URL}/subscription/${subscriptionId}/bundle_selections`,
 
@@ -2395,7 +2390,6 @@
   }
 
   async function renderModal() {
-    alert("renderModal")
     // Create overlay if not present
     if (!modalOverlay) {
       modalOverlay = document.createElement('div');
@@ -2912,14 +2906,6 @@
             source: source
           };
         });
-        alert("here", sources)
-        console.log('[ID_CONFIG] Configuration Status', sources);
-        console.log('[ID_CONFIG] Full Configuration Object', {
-          exposed: sources.exposed,
-          resolved: sources.resolved,
-          sources: sources,
-          defaults: sources.defaults
-        });
       }
     };
 
@@ -2985,26 +2971,12 @@
               ID_CONFIG[configKey] = normalized;
               ID_CONFIG._source[configKey] = 'API';
               updated = true;
-              if (console && typeof console.log === 'function') {
-                console.log(`[ID_CONFIG] Updated ${configKey} from API:`, normalized);
-              }
             }
           }
         });
 
         if (updated) {
           ID_CONFIG._initialized = true;
-          if (console && typeof console.log === 'function') {
-            console.log('[ID_CONFIG] ✅ Updated from API. Final config:', {
-              collectionId: ID_CONFIG.collectionId,
-              packagingFeeProductId: ID_CONFIG.packagingFeeProductId,
-              deliveryFeeProductId: ID_CONFIG.deliveryFeeProductId,
-              packagingFeeVariantId: ID_CONFIG.packagingFeeVariantId,
-              deliveryFeeVariantId: ID_CONFIG.deliveryFeeVariantId,
-              bundleProductId: ID_CONFIG.bundleProductId,
-              bundleVariantId: ID_CONFIG.bundleVariantId
-            });
-          }
         } else {
           if (console && typeof console.warn === 'function') {
             console.warn('[ID_CONFIG] No updates from API. Settings may be empty or already match.');
@@ -4885,7 +4857,7 @@
   }
 
   async function attachModalEvents() {
-    alert("attachModalEvents")
+    
     if (modalLoading) return;
     // Close modal
     modalOverlay.querySelector('.afinity-modal-close').onclick = () => {
@@ -5238,7 +5210,6 @@
               );
               return;
             }
-console.log(JSON.stringify({ items: finalItems }),"payload---====---")
             // Call the bundle selections endpoint
             const response = await fetch(
               `${API_URL}/subscription/${subscriptionId}/bundle_selections`,
@@ -6893,7 +6864,6 @@ console.log(JSON.stringify({ items: finalItems }),"payload---====---")
   }
 
   function rerenderSidebarMeals() {
-    alert("rerenderSidebarMeals")
     // If we're on the meals page, update the sidebar content and re-attach events
     if (currentPage === 'meals') {
       // Update the sidebar content directly
@@ -7104,8 +7074,6 @@ console.log(JSON.stringify({ items: finalItems }),"payload---====---")
                 );
                 return;
               }
-              console.log(items,"payload---====---")
-              console.log(JSON.stringify({ items }),"payload---====---")
               // Call the bundle selections endpoint
               const response = await fetch(
                 `${API_URL}/subscription/${subscriptionId}/bundle_selections`,
