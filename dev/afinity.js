@@ -1116,6 +1116,7 @@
 
           const bundleResponse = await fetch(
             `${API_URL}/subscription/${subscriptionId}/bundle_selections`,
+
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -2752,6 +2753,7 @@
    *   defaultCollectionId: string;
    * }>}
    */
+  // ID_CONFIG - Mutable object that can be updated from API
   const ID_CONFIG = (function() {
     'use strict';
 
@@ -2772,6 +2774,18 @@
       'delivery_fee_product_id': 'deliveryFeeProductId',
       'packaging_fee_variant_id': 'packagingFeeVariantId',
       'delivery_fee_variant_id': 'deliveryFeeVariantId'
+    });
+
+    // Mapping from API settings keys to ID_CONFIG keys
+    const API_SETTINGS_MAPPING = Object.freeze({
+      'collection_id': 'collectionId',
+      'fees_collection_id': 'collectionId',
+      'packaging_fee_product_id': 'packagingFeeProductId',
+      'delivery_fee_product_id': 'deliveryFeeProductId',
+      'packaging_fee_variant_id': 'packagingFeeVariantId',
+      'delivery_fee_variant_id': 'deliveryFeeVariantId',
+      'bundle_product_id': 'bundleProductId',
+      'bundle_variant_id': 'bundleVariantId'
     });
 
     /**
@@ -2846,7 +2860,53 @@
       deliveryFeeProductId: getSetting('delivery_fee_product_id', DEFAULTS.deliveryFeeProductId),
       packagingFeeVariantId: getSetting('packaging_fee_variant_id', DEFAULTS.packagingFeeVariantId),
       deliveryFeeVariantId: getSetting('delivery_fee_variant_id', DEFAULTS.deliveryFeeVariantId),
-      defaultCollectionId: getSetting('default_collection_id', DEFAULTS.defaultCollectionId)
+      defaultCollectionId: getSetting('default_collection_id', DEFAULTS.defaultCollectionId),
+      // Track source for debugging
+      _source: {},
+      _initialized: false
+    };
+
+    // Log initial configuration status
+    const logConfigStatus = function() {
+      if (console && typeof console.log === 'function') {
+        const sources = {
+          exposed: {
+            bundleConfig: typeof window !== 'undefined' ? window.bundleConfig : null,
+            rechargeGridSettings: typeof window !== 'undefined' ? window.rechargeGridSettings : null
+          },
+          resolved: {},
+          defaults: DEFAULTS
+        };
+
+        // Track which source each ID came from
+        Object.keys(DEFAULTS).forEach(key => {
+          if (key === 'defaultCollectionId') return; // Skip this one
+          
+          const settingKey = key === 'collectionId' ? 'fees_collection_id' : 
+                            key.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^./, str => str.toLowerCase());
+          
+          let source = 'DEFAULT';
+          if (typeof window !== 'undefined' && window.rechargeGridSettings && window.rechargeGridSettings[settingKey]) {
+            const normalized = normalizeId(window.rechargeGridSettings[settingKey]);
+            if (normalized !== null) {
+              source = 'rechargeGridSettings';
+            }
+          } else if (typeof window !== 'undefined' && window.bundleConfig) {
+            const bundleKey = BUNDLE_CONFIG_MAPPING[settingKey] || key;
+            if (window.bundleConfig[bundleKey]) {
+              const normalized = normalizeId(window.bundleConfig[bundleKey]);
+              if (normalized !== null) {
+                source = 'bundleConfig';
+              }
+            }
+          }
+          
+          sources.resolved[key] = {
+            value: config[key],
+            source: source
+          };
+        });
+      }
     };
 
     // Validate all required IDs are present
@@ -2857,12 +2917,101 @@
       console.warn('[ID_CONFIG] Missing required IDs, using defaults:', missingKeys);
     }
 
-    // Return frozen configuration object (prevents accidental modification)
-    return Object.freeze(config);
+    // Log initial status
+    logConfigStatus();
+
+    // Return mutable configuration object (can be updated from API)
+    return config;
   })();
 
   // Global variable to cache the delivery fee threshold
   let cachedDeliveryFeeThreshold = 50; // Default threshold
+
+  // Function to fetch IDs from API settings and update ID_CONFIG
+  async function fetchIdsFromAPI() {
+    try {
+      // Check if we already have valid IDs from theme settings
+      const hasThemeIds = typeof window !== 'undefined' && 
+                         window.rechargeGridSettings && 
+                         Object.values(window.rechargeGridSettings).some(val => val && String(val).trim() !== '');
+      
+      if (hasThemeIds) {
+        if (console && typeof console.log === 'function') {
+          console.log('[ID_CONFIG] Theme settings found, skipping API fetch');
+        }
+        return; // Don't fetch from API if theme settings are available
+      }
+
+      const response = await fetch(`${API_URL}/settings`);
+      if (response.ok) {
+        const settings = await response.json();
+        
+        if (console && typeof console.log === 'function') {
+          console.log('[ID_CONFIG] API settings received:', settings);
+        }
+        
+        // Map API settings to ID_CONFIG
+        const apiMapping = {
+          'collection_id': 'collectionId',
+          'fees_collection_id': 'collectionId',
+          'packaging_fee_product_id': 'packagingFeeProductId',
+          'delivery_fee_product_id': 'deliveryFeeProductId',
+          'packaging_fee_variant_id': 'packagingFeeVariantId',
+          'delivery_fee_variant_id': 'deliveryFeeVariantId',
+          'bundle_product_id': 'bundleProductId',
+          'bundle_variant_id': 'bundleVariantId'
+        };
+
+        let updated = false;
+        settings.forEach(setting => {
+          const configKey = apiMapping[setting.key];
+          if (configKey && setting.value && String(setting.value).trim() !== '') {
+            const normalized = String(setting.value).trim();
+            if (ID_CONFIG[configKey] !== normalized) {
+              ID_CONFIG[configKey] = normalized;
+              ID_CONFIG._source[configKey] = 'API';
+              updated = true;
+            }
+          }
+        });
+
+        if (updated) {
+          ID_CONFIG._initialized = true;
+        } else {
+          if (console && typeof console.warn === 'function') {
+            console.warn('[ID_CONFIG] No updates from API. Settings may be empty or already match.');
+          }
+        }
+      } else {
+        if (console && typeof console.error === 'function') {
+          console.error('[ID_CONFIG] API fetch failed with status:', response.status);
+        }
+      }
+    } catch (error) {
+      if (console && typeof console.error === 'function') {
+        console.error('[ID_CONFIG] Error fetching IDs from API:', error);
+      }
+    }
+  }
+
+  // Initialize IDs from API on page load
+  // This ensures ID_CONFIG is populated before any user interaction
+  (function initializeIdsFromAPI() {
+    if (typeof API_URL === 'undefined' || !API_URL) {
+      // API_URL not available yet, wait a bit and try again
+      if (typeof document !== 'undefined' && document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(initializeIdsFromAPI, 100);
+        });
+      } else {
+        setTimeout(initializeIdsFromAPI, 100);
+      }
+      return;
+    }
+    
+    // API_URL is available, fetch IDs
+    fetchIdsFromAPI();
+  })();
 
   // Function to fetch and cache the delivery fee threshold
   async function fetchDeliveryFeeThreshold() {
@@ -4708,6 +4857,7 @@
   }
 
   async function attachModalEvents() {
+    
     if (modalLoading) return;
     // Close modal
     modalOverlay.querySelector('.afinity-modal-close').onclick = () => {
@@ -5005,6 +5155,21 @@
               return;
             }
 
+            // Validate collection_id is not empty
+            if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
+              console.error('[ID_CONFIG] Invalid collection_id:', ID_CONFIG.collectionId);
+              console.error('[ID_CONFIG] Current config:', ID_CONFIG);
+              // Try fetching from API one more time
+              await fetchIdsFromAPI();
+              if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
+                showToast(
+                  'Configuration error: Collection ID is missing. Please check settings.',
+                  'error'
+                );
+                return;
+              }
+            }
+
             // Filter out any existing delivery or packaging fees from the items array
             // This ensures we don't double-count fees when calculating the threshold
             const itemsWithoutFees = items.filter(item => {
@@ -5015,12 +5180,36 @@
               );
             });
 
+            // Ensure all items use the correct collection_id from ID_CONFIG
+            itemsWithoutFees.forEach(item => {
+              if (!item.collection_id || item.collection_id.trim() === '') {
+                item.collection_id = ID_CONFIG.collectionId;
+              }
+            });
+
             // Apply conditional fee logic with items excluding existing fees
             const finalItems = await handleConditionalFees(
               itemsWithoutFees,
               subscriptionId
             );
 
+            // Final validation before API call
+            const finalInvalidItems = finalItems.filter(
+              item =>
+                !item.collection_id ||
+                item.collection_id.trim() === '' ||
+                !item.external_product_id ||
+                !item.external_variant_id
+            );
+            if (finalInvalidItems.length > 0) {
+              console.error('[ID_CONFIG] Invalid items before API call:', finalInvalidItems);
+              console.error('[ID_CONFIG] ID_CONFIG state:', ID_CONFIG);
+              showToast(
+                'Configuration error: Missing required IDs. Please check settings and try again.',
+                'error'
+              );
+              return;
+            }
             // Call the bundle selections endpoint
             const response = await fetch(
               `${API_URL}/subscription/${subscriptionId}/bundle_selections`,
@@ -6830,6 +7019,21 @@
                 return;
               }
 
+              // Validate collection_id is not empty
+              if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
+                console.error('[ID_CONFIG] Invalid collection_id:', ID_CONFIG.collectionId);
+                console.error('[ID_CONFIG] Current config:', ID_CONFIG);
+                // Try fetching from API one more time
+                await fetchIdsFromAPI();
+                if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
+                  showToast(
+                    'Configuration error: Collection ID is missing. Please check settings.',
+                    'error'
+                  );
+                  return;
+                }
+              }
+
               // Filter out any existing delivery or packaging fees from the items array
               // This ensures we don't double-count fees when calculating the threshold
               const itemsWithoutFees = items.filter(item => {
@@ -6840,12 +7044,36 @@
                 );
               });
 
+              // Ensure all items use the correct collection_id from ID_CONFIG
+              itemsWithoutFees.forEach(item => {
+                if (!item.collection_id || item.collection_id.trim() === '') {
+                  item.collection_id = ID_CONFIG.collectionId;
+                }
+              });
+
               // Apply conditional fee logic with items excluding existing fees
               items = await handleConditionalFees(
                 itemsWithoutFees,
                 subscriptionId
               );
 
+              // Final validation before API call
+              const finalInvalidItems = items.filter(
+                item =>
+                  !item.collection_id ||
+                  item.collection_id.trim() === '' ||
+                  !item.external_product_id ||
+                  !item.external_variant_id
+              );
+              if (finalInvalidItems.length > 0) {
+                console.error('[ID_CONFIG] Invalid items before API call:', finalInvalidItems);
+                console.error('[ID_CONFIG] ID_CONFIG state:', ID_CONFIG);
+                showToast(
+                  'Configuration error: Missing required IDs. Please check settings and try again.',
+                  'error'
+                );
+                return;
+              }
               // Call the bundle selections endpoint
               const response = await fetch(
                 `${API_URL}/subscription/${subscriptionId}/bundle_selections`,
@@ -6895,6 +7123,7 @@
                 );
               }
             } catch (error) {
+
               console.error('Error updating subscription meals:', error);
               showToast('Error updating subscription meals', 'error');
             } finally {
@@ -8017,8 +8246,12 @@
   // Listen for the event on document
   document.addEventListener(
     'Recharge::click::manageSubscription',
-    function (event) {
+    async function (event) {
       event.preventDefault();
+      
+      // Fetch IDs from API if not available from theme settings
+      await fetchIdsFromAPI();
+      
       // When modal is closed, the style is set to none, so we need to set it to block
       if (modalOverlay) {
         modalOverlay.style.display = 'block';
