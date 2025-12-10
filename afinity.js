@@ -2458,9 +2458,9 @@
             if (footer) {
               footer.scrollIntoView({ behavior: 'smooth', block: 'end' });
             } else {
-              window.scrollTo({
-                top: document.documentElement.scrollHeight || document.body.scrollHeight,
-                behavior: 'smooth'
+              window.scrollTo({ 
+                top: document.documentElement.scrollHeight || document.body.scrollHeight, 
+                behavior: 'smooth' 
               });
             }
           }
@@ -3592,7 +3592,7 @@
         : 'Add one time meal to next Subscription Charge';
     const pageDescription =
       mealsPageMode === 'update'
-        ? 'Update your subscription meals. Add, remove, or change quantities of your regular meals.'
+        ? 'Add, remove, or change quantities.'
         : '';
 
     return `
