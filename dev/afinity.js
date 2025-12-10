@@ -3592,7 +3592,7 @@
         : 'Add one time meal to next Subscription Charge';
     const pageDescription =
       mealsPageMode === 'update'
-        ? 'Update your subscription meals. Add, remove, or change quantities of your regular meals.'
+        ? 'Add, remove, or change quantities.'
         : '';
 
     return `
