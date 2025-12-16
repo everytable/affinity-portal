@@ -5846,8 +5846,27 @@
         redeemButton.dataset.etSubscriptionKey = subscriptionKey;
         redeemButton.dataset.etSubscriptionAddress = addressText;
         redeemButton.textContent = 'Redeem Rewards';
-        // Use CSS class instead of inline styles for better reliability
-        redeemButton.className = 'et-redeem-subscription-btn';
+        redeemButton.style.cssText = `
+          margin-left: auto;
+          padding: 8px 16px;
+          background: #0d3c3a;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          font-weight: 600;
+          font-size: 14px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background 0.2s;
+        `;
+        
+        // Add hover effect
+        redeemButton.addEventListener('mouseenter', () => {
+          redeemButton.style.background = '#0a2f2d';
+        });
+        redeemButton.addEventListener('mouseleave', () => {
+          redeemButton.style.background = '#0d3c3a';
+        });
         
         // Extract addressId when button is created (using global function)
         let addressId = extractAddressIdFromCard(cardContainer);
@@ -5911,19 +5930,14 @@
         });
         
         // Try to insert button next to address
-        // Simple approach: Always add CSS class to parent to ensure flex layout
-        // The existing MutationObserver will re-run this function if React removes elements
-        if (targetParent && targetParent !== document.body) {
-          // Add CSS class for flex layout (defined in afinity.css with !important)
-          // Only add if not already present to avoid unnecessary DOM manipulation
-          if (!targetParent.classList.contains('et-redeem-button-container')) {
-            targetParent.classList.add('et-redeem-button-container');
-          }
+        // Strategy 1: If address element's parent is flex, append button
+        const parentStyle = window.getComputedStyle(targetParent);
+        if (parentStyle.display === 'flex') {
           targetParent.appendChild(redeemButton);
         } else {
-          // Fallback: Wrap address and button in a flex container
+          // Strategy 2: Wrap address and button in a flex container
           const flexWrapper = document.createElement('div');
-          flexWrapper.className = 'et-redeem-flex-wrapper';
+          flexWrapper.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
           
           // Move address element into wrapper
           const addressClone = addressElement.cloneNode(true);
