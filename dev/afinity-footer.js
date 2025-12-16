@@ -5930,24 +5930,34 @@
         });
         
         // Try to insert button next to address
-        // Strategy 1: If address element's parent is flex, append button
+        // Strategy 1: Ensure parent has display: flex and append button
         const parentStyle = window.getComputedStyle(targetParent);
         if (parentStyle.display === 'flex') {
+          // Ensure display: flex is explicitly set (not just inherited)
+          targetParent.style.display = 'flex';
           targetParent.appendChild(redeemButton);
         } else {
-          // Strategy 2: Wrap address and button in a flex container
-          const flexWrapper = document.createElement('div');
-          flexWrapper.style.cssText = 'display: flex;';
-          
-          // Move address element into wrapper
-          const addressClone = addressElement.cloneNode(true);
-          flexWrapper.appendChild(addressClone);
-          flexWrapper.appendChild(redeemButton);
-          
-          // Replace address element with wrapper
-          if (addressElement.parentElement) {
-            addressElement.parentElement.insertBefore(flexWrapper, addressElement);
-            addressElement.remove();
+          // Strategy 2: Set parent to flex or wrap in flex container
+          // First, try to set the parent to flex if it's a suitable container
+          if (targetParent === addressElement.parentElement || 
+              (targetParent !== addressElement && targetParent.contains(addressElement))) {
+            targetParent.style.display = 'flex';
+            targetParent.appendChild(redeemButton);
+          } else {
+            // Fallback: Wrap address and button in a flex container
+            const flexWrapper = document.createElement('div');
+            flexWrapper.style.cssText = 'display: flex;';
+            
+            // Move address element into wrapper
+            const addressClone = addressElement.cloneNode(true);
+            flexWrapper.appendChild(addressClone);
+            flexWrapper.appendChild(redeemButton);
+            
+            // Replace address element with wrapper
+            if (addressElement.parentElement) {
+              addressElement.parentElement.insertBefore(flexWrapper, addressElement);
+              addressElement.remove();
+            }
           }
         }
       });
