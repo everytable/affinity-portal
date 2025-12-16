@@ -3,146 +3,8 @@
   // INITIALIZATION GUARD - Wait for DOM and Recharge to be ready
   // ============================================
   
-  // IMMEDIATELY hide page content to prevent UI disruption
-  // This must happen before anything else - even before DOM is ready
-  (function hidePageContentImmediately() {
-    // Inject CSS to hide body content immediately
-    const hideStyle = document.createElement('style');
-    hideStyle.id = 'et-hide-content-style';
-    hideStyle.textContent = `
-      html body > *:not(#et-init-loader):not(script):not(style):not(#et-hide-content-style) {
-        opacity: 0 !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-      }
-      html, body {
-        overflow: hidden !important;
-        height: 100% !important;
-      }
-      #et-init-loader {
-        opacity: 1 !important;
-        visibility: visible !important;
-      }
-    `;
-    
-    // Try multiple methods to inject the style immediately
-    function injectHideStyle() {
-      if (document.head) {
-        if (!document.getElementById('et-hide-content-style')) {
-          document.head.appendChild(hideStyle);
-        }
-        return true;
-      }
-      return false;
-    }
-    
-    // Try immediately
-    if (!injectHideStyle()) {
-      // If head doesn't exist, try documentElement
-      if (document.documentElement) {
-        document.documentElement.appendChild(hideStyle);
-      }
-      
-      // Also set up observer for when head becomes available
-      const headObserver = new MutationObserver(() => {
-        if (injectHideStyle()) {
-          headObserver.disconnect();
-        }
-      });
-      
-      if (document.documentElement) {
-        headObserver.observe(document.documentElement, { childList: true, subtree: true });
-      }
-      
-      // Fallback: try periodically
-      let attempts = 0;
-      const maxAttempts = 20;
-      const tryInterval = setInterval(() => {
-        attempts++;
-        if (injectHideStyle() || attempts >= maxAttempts) {
-          clearInterval(tryInterval);
-          headObserver.disconnect();
-        }
-      }, 50);
-    }
-  })();
-  
   let scriptInitialized = false;
   let initializationLoader = null;
-  
-  // Track pending operations to know when it's safe to remove loader
-  let pendingOperations = new Set();
-  let loaderRemovalScheduled = false;
-  
-  // Function to track an operation
-  function trackOperation(operationId) {
-    pendingOperations.add(operationId);
-    console.log(`[ET] Operation started: ${operationId} (${pendingOperations.size} pending)`);
-  }
-  
-  // Function to mark an operation as complete
-  function completeOperation(operationId) {
-    pendingOperations.delete(operationId);
-    console.log(`[ET] Operation completed: ${operationId} (${pendingOperations.size} pending)`);
-    
-    // Check if we should remove loader
-    checkAndRemoveLoader();
-  }
-  
-  // Function to check if all operations are complete and remove loader
-  function checkAndRemoveLoader() {
-    // Don't remove if there are still pending operations
-    if (pendingOperations.size > 0) {
-      return;
-    }
-    
-    // Don't remove if already scheduled
-    if (loaderRemovalScheduled) {
-      return;
-    }
-    
-    // Schedule removal after a delay to ensure stability
-    loaderRemovalScheduled = true;
-    
-    // Wait a bit to ensure no new operations start
-    // Then check periodically until stable
-    let stabilityCheckCount = 0;
-    const maxStabilityChecks = 3;
-    const stabilityCheckInterval = 500;
-    
-    function performStabilityCheck() {
-      stabilityCheckCount++;
-      
-      // If operations started again, reset
-      if (pendingOperations.size > 0) {
-        loaderRemovalScheduled = false;
-        return;
-      }
-      
-      // If we've done enough stability checks, remove loader
-      if (stabilityCheckCount >= maxStabilityChecks) {
-        // Wait for next frame to ensure rendering is complete
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            // Final check
-            if (pendingOperations.size === 0) {
-              removeInitializationLoader();
-              console.log('[ET] All operations complete, loader removed');
-            } else {
-              loaderRemovalScheduled = false;
-              checkAndRemoveLoader();
-            }
-          }, 300);
-        });
-      } else {
-        // Check again after interval
-        setTimeout(performStabilityCheck, stabilityCheckInterval);
-      }
-    }
-    
-    // Start stability checks after initial delay
-    setTimeout(performStabilityCheck, stabilityCheckInterval);
-  }
   
   // Function to show initialization loader
   function showInitializationLoader() {
@@ -151,20 +13,19 @@
     initializationLoader = document.createElement('div');
     initializationLoader.id = 'et-init-loader';
     initializationLoader.style.cssText = `
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      background: rgba(13, 60, 58, 0.98) !important;
-      z-index: 999999 !important;
-      display: flex !important;
-      flex-direction: column !important;
-      align-items: center !important;
-      justify-content: center !important;
-      color: white !important;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-      pointer-events: auto !important;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(13, 60, 58, 0.95);
+      z-index: 99998;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
     
     // Add spinner animation if not already added
@@ -218,37 +79,17 @@
     }
   }
   
-  // Function to remove initialization loader and show content
+  // Function to remove initialization loader
   function removeInitializationLoader() {
-    // First, remove the hide style to show content
-    const hideStyle = document.getElementById('et-hide-content-style');
-    if (hideStyle) {
-      hideStyle.remove();
-    }
-    
-    // Then fade out and remove the loader
     if (initializationLoader && initializationLoader.parentElement) {
       initializationLoader.style.opacity = '0';
-      initializationLoader.style.transition = 'opacity 0.5s ease';
+      initializationLoader.style.transition = 'opacity 0.3s ease';
       setTimeout(() => {
         if (initializationLoader && initializationLoader.parentElement) {
           initializationLoader.remove();
         }
         initializationLoader = null;
-        
-        // Restore body overflow
-        if (document.body) {
-          document.body.style.overflow = '';
-        }
-      }, 500);
-    } else {
-      // If loader was already removed, just remove hide style
-      if (hideStyle) {
-        hideStyle.remove();
-      }
-      if (document.body) {
-        document.body.style.overflow = '';
-      }
+      }, 300);
     }
   }
   
@@ -282,64 +123,10 @@
     return false;
   }
   
-  // Show loader immediately when script loads (before any checks)
-  // This ensures UI is hidden until script is ready
-  (function showLoaderImmediately() {
-    // Try to show loader immediately, multiple fallbacks
-    function tryShowLoader() {
-      // If body exists, show loader immediately
-      if (document.body) {
-        showInitializationLoader();
-        return true;
-      }
-      
-      // If document is still loading, wait for DOMContentLoaded
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', showInitializationLoader, { once: true });
-        return false;
-      }
-      
-      // If document is interactive or complete but body doesn't exist yet
-      if (document.readyState === 'interactive' || document.readyState === 'complete') {
-        // Try to create body if it doesn't exist (shouldn't happen, but just in case)
-        if (!document.body && document.documentElement) {
-          const body = document.createElement('body');
-          document.documentElement.appendChild(body);
-        }
-        if (document.body) {
-          showInitializationLoader();
-          return true;
-        }
-      }
-      
-      return false;
-    }
-    
-    // Try immediately
-    if (!tryShowLoader()) {
-      // If that didn't work, try with a very short delay
-      setTimeout(() => {
-        if (!tryShowLoader()) {
-          // Last resort: keep trying every 10ms until body exists
-          const retryInterval = setInterval(() => {
-            if (tryShowLoader()) {
-              clearInterval(retryInterval);
-            }
-          }, 10);
-          
-          // Stop retrying after 2 seconds (something is very wrong)
-          setTimeout(() => clearInterval(retryInterval), 2000);
-        }
-      }, 10);
-    }
-  })();
-  
   // Function to wait for DOM and Recharge to be ready
   function waitForReady(callback, maxWaitTime = 10000) {
     const startTime = Date.now();
-    
-    // Ensure loader is shown (in case it wasn't shown immediately)
-    showInitializationLoader();
+    let loaderShown = false;
     
     const checkReady = () => {
       const elapsed = Date.now() - startTime;
@@ -351,18 +138,32 @@
       // Check if Recharge is ready
       const rechargeReady = isRechargeReady();
       
+      // Show loader if not ready yet and we've waited a bit
+      if (!loaderShown && (!domReady || !bodyReady || !rechargeReady) && elapsed > 500) {
+        showInitializationLoader();
+        loaderShown = true;
+      }
+      
       // If everything is ready
       if (domReady && bodyReady && rechargeReady) {
-        // Don't remove loader here - keep it visible during initialization
-        // It will be removed at the end of initializeScript()
-        callback();
+        if (loaderShown) {
+          // Wait a bit more to ensure UI is fully rendered
+          setTimeout(() => {
+            removeInitializationLoader();
+            callback();
+          }, 300);
+        } else {
+          callback();
+        }
         return;
       }
       
       // Timeout after maxWaitTime
       if (elapsed > maxWaitTime) {
         console.warn('[ET] Timeout waiting for page to be ready, proceeding anyway...');
-        // Don't remove loader here - keep it visible during initialization
+        if (loaderShown) {
+          removeInitializationLoader();
+        }
         callback();
         return;
       }
@@ -400,15 +201,11 @@
   
   // Helper function to safely run code after delay with readiness check
   function safeDelayedRun(callback, delay, description = '') {
-    const operationId = `delayed-${description || 'operation'}-${Date.now()}-${Math.random()}`;
-    trackOperation(operationId);
-    
     setTimeout(() => {
       // Double-check DOM is ready
       if (document.readyState === 'loading' || !document.body) {
         console.log(`[ET] Delaying ${description || 'operation'} - DOM not ready`);
         safeDelayedRun(callback, delay, description);
-        completeOperation(operationId);
         return;
       }
       
@@ -417,19 +214,75 @@
       if (!hasRechargeElements && delay < 3000) {
         console.log(`[ET] Delaying ${description || 'operation'} - Recharge elements not found`);
         safeDelayedRun(callback, delay + 500, description);
-        completeOperation(operationId);
         return;
       }
       
       try {
         callback();
-        // Mark as complete after callback executes
-        setTimeout(() => completeOperation(operationId), 100);
       } catch (e) {
         console.error(`[ET] Error in ${description || 'delayed operation'}:`, e);
-        completeOperation(operationId);
       }
     }, delay);
+  }
+  
+  // Helper function to wait for subscription cards to be present in DOM
+  function waitForSubscriptionCards(callback, maxWaitTime = 10000, checkInterval = 200) {
+    const startTime = Date.now();
+    
+    const checkForCards = () => {
+      const elapsed = Date.now() - startTime;
+      
+      // Check if DOM is ready
+      if (document.readyState === 'loading' || !document.body) {
+        if (elapsed < maxWaitTime) {
+          setTimeout(checkForCards, checkInterval);
+        } else {
+          console.warn('[ET] Timeout waiting for DOM to be ready');
+          callback();
+        }
+        return;
+      }
+      
+      // Look for subscription cards - check for "Deliver to" text with subscription context
+      const allElements = Array.from(document.querySelectorAll('*'));
+      let foundSubscriptionCards = false;
+      
+      for (const el of allElements) {
+        const text = (el.textContent || '').trim();
+        if (text.includes('Deliver to') && text.length < 500) {
+          // Verify it's actually a subscription card by checking parent context
+          let parent = el.parentElement;
+          let depth = 0;
+          while (parent && depth < 5) {
+            const parentText = (parent.textContent || '').trim();
+            if (parentText.includes('Subscription') || 
+                parentText.includes('Every week') || 
+                parentText.includes('Bundle contents') ||
+                parentText.includes('Charge to')) {
+              foundSubscriptionCards = true;
+              break;
+            }
+            parent = parent.parentElement;
+            depth++;
+          }
+          if (foundSubscriptionCards) break;
+        }
+      }
+      
+      if (foundSubscriptionCards) {
+        console.log('[ET] Subscription cards found, initializing redeem buttons');
+        callback();
+      } else if (elapsed < maxWaitTime) {
+        // Continue checking
+        setTimeout(checkForCards, checkInterval);
+      } else {
+        console.warn('[ET] Timeout waiting for subscription cards, proceeding anyway');
+        callback();
+      }
+    };
+    
+    // Start checking after a small initial delay to let DOM settle
+    setTimeout(checkForCards, 500);
   }
   
   // Main initialization function - wraps all script code
@@ -530,52 +383,24 @@
     }
   }
   
-  // Fetch interceptor to log ReCharge address data and track operations
+  // Fetch interceptor to log ReCharge address data
   const originalFetch = window.fetch;
   window.fetch = async function () {
-    const url = arguments[0]?.url || arguments[0] || '';
-    const operationId = `fetch-${Date.now()}-${Math.random()}`;
-    let isTracked = false;
-    
-    // Only track API calls (not static assets)
-    if (typeof url === 'string' && (url.includes('/api/') || url.includes('recharge') || url.includes('loyaltylion'))) {
-      trackOperation(operationId);
-      isTracked = true;
-    }
-    
-    try {
-      const response = await originalFetch.apply(this, arguments);
-      
-      // Track completion and log data using the same cloned response
-      if (isTracked) {
-        const clonedResponse = response.clone();
-        clonedResponse.json().then(data => {
-          // Mark operation as complete
-          completeOperation(operationId);
-          
-          // Check if the response contains ReCharge customer address data
-          if (data?.data?.customer?.addresses?.length) {
-            const address = data.data.customer.addresses[0];
-            console.log("🔍 ReCharge Address Data Found:");
-            console.log("➡️ Address ID:", address.id);
-            console.log("➡️ Address 1:", address.address1);
-            console.log("➡️ City:", address.city);
-            console.log("➡️ Zip:", address.zip);
-            console.log("➡️ Full object:", address);
-          }
-        }).catch(() => {
-          // Even if JSON parsing fails, mark as complete
-          completeOperation(operationId);
-        });
+    const response = await originalFetch.apply(this, arguments);
+    const clonedResponse = response.clone();
+    clonedResponse.json().then(data => {
+      // Check if the response contains ReCharge customer address data
+      if (data?.data?.customer?.addresses?.length) {
+        const address = data.data.customer.addresses[0];
+        console.log("🔍 ReCharge Address Data Found:");
+        console.log("➡️ Address ID:", address.id);
+        console.log("➡️ Address 1:", address.address1);
+        console.log("➡️ City:", address.city);
+        console.log("➡️ Zip:", address.zip);
+        console.log("➡️ Full object:", address);
       }
-      
-      return response;
-    } catch (error) {
-      if (isTracked) {
-        completeOperation(operationId);
-      }
-      throw error;
-    }
+    }).catch(() => {});
+    return response;
   };
 
   const selectors = [
@@ -6686,15 +6511,45 @@
     }
     
     // Initialize redeem buttons on subscriptions
-    // Cleanup happens inside addRedeemButtonsToSubscriptions after buttons are created
-    safeDelayedRun(addRedeemButtonsToSubscriptions, 2000, 'redeem buttons initialization');
-    safeDelayedRun(addRedeemButtonsToSubscriptions, 3500, 'redeem buttons initialization');
-    safeDelayedRun(addRedeemButtonsToSubscriptions, 5000, 'redeem buttons initialization');
-    safeDelayedRun(addRedeemButtonsToSubscriptions, 7000, 'redeem buttons initialization');
-    
-    const redeemButtonObserver = new MutationObserver(() => {
-      // Create buttons first, cleanup happens inside the function
+    // Wait for subscription cards to actually exist before adding buttons
+    waitForSubscriptionCards(() => {
+      console.log('[ET] Initializing redeem buttons after subscription cards detected');
       addRedeemButtonsToSubscriptions();
+    }, 15000, 300);
+    
+    // Debounced MutationObserver to handle dynamic content changes
+    let redeemButtonObserverTimeout = null;
+    const redeemButtonObserver = new MutationObserver(() => {
+      // Debounce to avoid excessive calls
+      if (redeemButtonObserverTimeout) {
+        clearTimeout(redeemButtonObserverTimeout);
+      }
+      redeemButtonObserverTimeout = setTimeout(() => {
+        // Only run if subscription cards exist
+        const allElements = Array.from(document.querySelectorAll('*'));
+        const hasSubscriptionCards = allElements.some(el => {
+          const text = (el.textContent || '').trim();
+          if (text.includes('Deliver to') && text.length < 500) {
+            let parent = el.parentElement;
+            let depth = 0;
+            while (parent && depth < 5) {
+              const parentText = (parent.textContent || '').trim();
+              if (parentText.includes('Subscription') || 
+                  parentText.includes('Every week') || 
+                  parentText.includes('Bundle contents')) {
+                return true;
+              }
+              parent = parent.parentElement;
+              depth++;
+            }
+          }
+          return false;
+        });
+        
+        if (hasSubscriptionCards) {
+          addRedeemButtonsToSubscriptions();
+        }
+      }, 500); // Debounce delay
     });
     redeemButtonObserver.observe(document.body, {
       childList: true,
@@ -6784,23 +6639,6 @@
     });
     
     console.log('[ET] Script initialization completed');
-    
-    // Track initialization as a main operation
-    const initOperationId = 'main-initialization';
-    trackOperation(initOperationId);
-    
-    // Wait for the maximum delayed operation time (7000ms) plus buffer
-    // This ensures all safeDelayedRun operations have time to complete
-    // The longest delayed operation is 7000ms, so we wait a bit longer
-    const maxDelayedOperationTime = 8000; // Slightly more than max 7000ms delay
-    
-    setTimeout(() => {
-      completeOperation(initOperationId);
-      
-      // Start checking for loader removal
-      // The checkAndRemoveLoader function will handle the rest with stability checks
-      checkAndRemoveLoader();
-    }, maxDelayedOperationTime);
   } // End of initializeScript function
   
   // Start initialization - wait for DOM and Recharge to be ready
