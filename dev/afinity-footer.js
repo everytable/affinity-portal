@@ -5846,27 +5846,8 @@
         redeemButton.dataset.etSubscriptionKey = subscriptionKey;
         redeemButton.dataset.etSubscriptionAddress = addressText;
         redeemButton.textContent = 'Redeem Rewards';
-        redeemButton.style.cssText = `
-          margin-left: auto;
-          padding: 8px 16px;
-          background: #0d3c3a;
-          color: #fff;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          font-size: 14px;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: background 0.2s;
-        `;
-        
-        // Add hover effect
-        redeemButton.addEventListener('mouseenter', () => {
-          redeemButton.style.background = '#0a2f2d';
-        });
-        redeemButton.addEventListener('mouseleave', () => {
-          redeemButton.style.background = '#0d3c3a';
-        });
+        // Use CSS class instead of inline styles for better reliability
+        redeemButton.className = 'et-redeem-subscription-btn';
         
         // Extract addressId when button is created (using global function)
         let addressId = extractAddressIdFromCard(cardContainer);
@@ -5932,21 +5913,30 @@
         // Try to insert button next to address
         // Strategy 1: Ensure parent has display: flex and append button
         const parentStyle = window.getComputedStyle(targetParent);
+        
+        // Function to ensure parent has flex display using CSS class
+        const ensureFlexDisplay = (element) => {
+          if (element) {
+            // Add CSS class for flex layout (defined in afinity.css)
+            element.classList.add('et-redeem-button-container');
+          }
+        };
+        
         if (parentStyle.display === 'flex') {
-          // Ensure display: flex is explicitly set (not just inherited)
-          targetParent.style.display = 'flex';
+          // Ensure display: flex is explicitly set with !important
+          ensureFlexDisplay(targetParent);
           targetParent.appendChild(redeemButton);
         } else {
           // Strategy 2: Set parent to flex or wrap in flex container
           // First, try to set the parent to flex if it's a suitable container
           if (targetParent === addressElement.parentElement || 
               (targetParent !== addressElement && targetParent.contains(addressElement))) {
-            targetParent.style.display = 'flex';
+            ensureFlexDisplay(targetParent);
             targetParent.appendChild(redeemButton);
           } else {
             // Fallback: Wrap address and button in a flex container
             const flexWrapper = document.createElement('div');
-            flexWrapper.style.cssText = 'display: flex;';
+            flexWrapper.className = 'et-redeem-flex-wrapper';
             
             // Move address element into wrapper
             const addressClone = addressElement.cloneNode(true);
@@ -5960,6 +5950,32 @@
             }
           }
         }
+        
+          // Watch the parent element to re-apply flex class if React/Recharge removes it
+          if (targetParent && targetParent !== document.body) {
+            const parentObserver = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && 
+                    (mutation.attributeName === 'style' || mutation.attributeName === 'class')) {
+                  // Check if display was changed away from flex or class was removed
+                  const currentStyle = window.getComputedStyle(targetParent);
+                  const hasClass = targetParent.classList.contains('et-redeem-button-container');
+                  if ((currentStyle.display !== 'flex' || !hasClass) && 
+                      redeemButton.parentElement === targetParent) {
+                    ensureFlexDisplay(targetParent);
+                  }
+                }
+              });
+            });
+            
+            parentObserver.observe(targetParent, {
+              attributes: true,
+              attributeFilter: ['style', 'class']
+            });
+            
+            // Store observer reference on the button for cleanup if needed
+            redeemButton._etParentObserver = parentObserver;
+          }
       });
       
       // After creating buttons, clean up any unwanted ones
