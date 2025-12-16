@@ -3500,6 +3500,199 @@
       return null;
     }
     
+    // Function to show error message in UI - robust version
+    function showDiscountError(message, type = 'error') {
+      // Ensure DOM is ready - use multiple checks
+      if (typeof document === 'undefined') {
+        console.warn('[ET] Document not available, using alert fallback');
+        alert(message);
+        return;
+      }
+      
+      // Wait for DOM to be ready if needed
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          showDiscountError(message, type);
+        });
+        return;
+      }
+      
+      if (!document.body) {
+        // Wait a bit for body to be available
+        setTimeout(() => {
+          if (document.body) {
+            showDiscountError(message, type);
+          } else {
+            console.warn('[ET] Body not available, using alert fallback');
+            alert(message);
+          }
+        }, 100);
+        return;
+      }
+      
+      // Remove any existing error messages immediately
+      const existingError = document.getElementById('et-discount-error-message');
+      if (existingError) {
+        try {
+          existingError.remove();
+        } catch (e) {
+          // Ignore removal errors, continue anyway
+        }
+      }
+      
+      // Clean message - handle object errors
+      let displayMessage = message;
+      if (typeof message === 'object') {
+        if (message.error) {
+          displayMessage = typeof message.error === 'string' ? message.error : (message.error.message || 'An error occurred');
+        } else if (message.message) {
+          displayMessage = message.message;
+        } else {
+          displayMessage = JSON.stringify(message);
+        }
+      }
+      
+      // Create error message element
+      const errorDiv = document.createElement('div');
+      errorDiv.id = 'et-discount-error-message';
+      errorDiv.setAttribute('data-et-error', 'true');
+      
+      // Use inline styles for maximum compatibility
+      errorDiv.style.cssText = `
+        position: fixed !important;
+        top: 20px !important;
+        right: 20px !important;
+        background: ${type === 'error' ? '#d32f2f' : '#f57c00'} !important;
+        color: white !important;
+        padding: 16px 24px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        z-index: 9999999 !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        max-width: 400px !important;
+        min-width: 300px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        opacity: 0 !important;
+        transform: translateX(100%) !important;
+        transition: opacity 0.3s ease, transform 0.3s ease !important;
+      `;
+      
+      // Add animation styles if not already added
+      if (!document.getElementById('et-error-animation-style')) {
+        const style = document.createElement('style');
+        style.id = 'et-error-animation-style';
+        style.textContent = `
+          @keyframes etSlideInRight {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          @keyframes etSlideOutRight {
+            from {
+              transform: translateX(0);
+              opacity: 1;
+            }
+            to {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      // Add icon
+      const icon = document.createElement('span');
+      icon.textContent = type === 'error' ? '⚠️' : 'ℹ️';
+      icon.style.cssText = 'font-size: 20px !important; flex-shrink: 0 !important; line-height: 1 !important;';
+      
+      // Add message text
+      const messageText = document.createElement('div');
+      messageText.textContent = displayMessage;
+      messageText.style.cssText = 'flex: 1 !important; line-height: 1.4 !important; word-wrap: break-word !important;';
+      
+      // Add close button
+      const closeBtn = document.createElement('button');
+      closeBtn.innerHTML = '×';
+      closeBtn.setAttribute('type', 'button');
+      closeBtn.setAttribute('aria-label', 'Close');
+      closeBtn.style.cssText = `
+        background: none !important;
+        border: none !important;
+        color: white !important;
+        font-size: 24px !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        width: 24px !important;
+        height: 24px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+        opacity: 0.8 !important;
+        transition: opacity 0.2s !important;
+        flex-shrink: 0 !important;
+      `;
+      
+      const closeError = () => {
+        errorDiv.style.opacity = '0';
+        errorDiv.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+          if (errorDiv.parentElement) {
+            try {
+              errorDiv.remove();
+            } catch (e) {
+              // Ignore removal errors
+            }
+          }
+        }, 300);
+      };
+      
+      closeBtn.addEventListener('click', closeError);
+      closeBtn.addEventListener('mouseenter', () => {
+        closeBtn.style.opacity = '1';
+      });
+      closeBtn.addEventListener('mouseleave', () => {
+        closeBtn.style.opacity = '0.8';
+      });
+      
+      errorDiv.appendChild(icon);
+      errorDiv.appendChild(messageText);
+      errorDiv.appendChild(closeBtn);
+      
+      // Append to body
+      try {
+        document.body.appendChild(errorDiv);
+        
+        // Trigger animation after a tiny delay
+        setTimeout(() => {
+          errorDiv.style.opacity = '1';
+          errorDiv.style.transform = 'translateX(0)';
+        }, 10);
+      } catch (e) {
+        // Fallback to alert if DOM manipulation fails
+        console.error('[ET] Failed to show error in UI:', e);
+        alert(displayMessage);
+        return;
+      }
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        if (errorDiv.parentElement) {
+          closeError();
+        }
+      }, 5000);
+    }
+    
     async function applyDiscountCode(code, context = null) {
       console.log('[ET] ===== applyDiscountCode called =====');
       console.log('[ET] Raw code parameter:', code);
@@ -3961,13 +4154,38 @@
               console.error('[ET] Error response:', errorText);
               
               // Try to parse error if it's JSON
+              let errorMessage = 'Failed to apply discount code. Please try again.';
               try {
                 const errorData = JSON.parse(errorText);
-                alert(errorData?.error)
                 console.error('[ET] Error details:', errorData);
+                
+                // Extract user-friendly error message
+                if (errorData.error) {
+                  if (typeof errorData.error === 'string') {
+                    errorMessage = errorData.error;
+                  } else if (errorData.error.message) {
+                    errorMessage = errorData.error.message;
+                  } else if (errorData.error.error) {
+                    errorMessage = errorData.error.error;
+                  }
+                } else if (errorData.message) {
+                  errorMessage = errorData.message;
+                }
+                
+                // Check for "already applied" error
+                const errorStr = JSON.stringify(errorData).toLowerCase();
+                if (errorStr.includes('already applied') || errorStr.includes('already have') || errorStr.includes('discount already')) {
+                  errorMessage = 'You already applied a discount code.';
+                }
               } catch (e) {
-                // Not JSON, that's okay
+                // Not JSON, check if error text contains "already applied"
+                if (errorText.toLowerCase().includes('already applied') || errorText.toLowerCase().includes('already have')) {
+                  errorMessage = 'You already applied a discount code.';
+                }
               }
+              
+              // Show error message in UI
+              showDiscountError(errorMessage, 'error');
               
               // Even if API call fails, don't fall through to UI flow - return false
               isApplyingDiscount = false;
@@ -3975,6 +4193,7 @@
             }
           } catch (error) {
             console.error('[ET] ✗ Direct API call error:', error);
+            showDiscountError('Failed to apply discount code. Please try again.', 'error');
             isApplyingDiscount = false;
             return false;
           }
@@ -4034,9 +4253,39 @@
                     isApplyingDiscount = false;
                     lastAppliedCode = cleanCode;
                     return true;
+                  } else {
+                    const errorText = await response.text();
+                    console.error('[ET] Retry API call failed:', response.status, errorText);
+                    
+                    // Parse and show error message
+                    let errorMessage = 'Failed to apply discount code. Please try again.';
+                    try {
+                      const errorData = JSON.parse(errorText);
+                      if (errorData.error) {
+                        if (typeof errorData.error === 'string') {
+                          errorMessage = errorData.error;
+                        } else if (errorData.error.message) {
+                          errorMessage = errorData.error.message;
+                        }
+                      } else if (errorData.message) {
+                        errorMessage = errorData.message;
+                      }
+                      
+                      const errorStr = JSON.stringify(errorData).toLowerCase();
+                      if (errorStr.includes('already applied') || errorStr.includes('already have')) {
+                        errorMessage = 'You already applied a discount code.';
+                      }
+                    } catch (e) {
+                      if (errorText.toLowerCase().includes('already applied') || errorText.toLowerCase().includes('already have')) {
+                        errorMessage = 'You already applied a discount code.';
+                      }
+                    }
+                    
+                    showDiscountError(errorMessage, 'error');
                   }
                 } catch (error) {
                   console.error('[ET] Retry API call also failed:', error);
+                  showDiscountError('Failed to apply discount code. Please try again.', 'error');
                 }
               }
             }
@@ -4290,9 +4539,36 @@
               } else {
                 const errorText = await response.text();
                 console.error('[ET] API call with extracted addressId failed:', response.status, errorText);
+                
+                // Parse and show error message
+                let errorMessage = 'Failed to apply discount code. Please try again.';
+                try {
+                  const errorData = JSON.parse(errorText);
+                  if (errorData.error) {
+                    if (typeof errorData.error === 'string') {
+                      errorMessage = errorData.error;
+                    } else if (errorData.error.message) {
+                      errorMessage = errorData.error.message;
+                    }
+                  } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                  }
+                  
+                  const errorStr = JSON.stringify(errorData).toLowerCase();
+                  if (errorStr.includes('already applied') || errorStr.includes('already have')) {
+                    errorMessage = 'You already applied a discount code.';
+                  }
+                } catch (e) {
+                  if (errorText.toLowerCase().includes('already applied') || errorText.toLowerCase().includes('already have')) {
+                    errorMessage = 'You already applied a discount code.';
+                  }
+                }
+                
+                showDiscountError(errorMessage, 'error');
               }
             } catch (error) {
               console.error('[ET] API call with extracted addressId error:', error);
+              showDiscountError('Failed to apply discount code. Please try again.', 'error');
             }
           }
         }
@@ -4465,10 +4741,37 @@
               } else {
                 const errorText = await response.text();
                 console.error('[ET] ✗ API call failed:', response.status, errorText);
+                
+                // Parse and show error message
+                let errorMessage = 'Failed to apply discount code. Please try again.';
+                try {
+                  const errorData = JSON.parse(errorText);
+                  if (errorData.error) {
+                    if (typeof errorData.error === 'string') {
+                      errorMessage = errorData.error;
+                    } else if (errorData.error.message) {
+                      errorMessage = errorData.error.message;
+                    }
+                  } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                  }
+                  
+                  const errorStr = JSON.stringify(errorData).toLowerCase();
+                  if (errorStr.includes('already applied') || errorStr.includes('already have')) {
+                    errorMessage = 'You already applied a discount code.';
+                  }
+                } catch (e) {
+                  if (errorText.toLowerCase().includes('already applied') || errorText.toLowerCase().includes('already have')) {
+                    errorMessage = 'You already applied a discount code.';
+                  }
+                }
+                
+                showDiscountError(errorMessage, 'error');
                 return false;
               }
             } catch (error) {
               console.error('[ET] ✗ API call error:', error);
+              showDiscountError('Failed to apply discount code. Please try again.', 'error');
               return false;
             }
           };
