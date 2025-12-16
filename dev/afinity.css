@@ -2354,3 +2354,41 @@
   opacity: 0;
   transition: opacity 0.3s ease;
 }
+
+/* Redeem Rewards Button Styles */
+.et-redeem-subscription-btn {
+  margin-left: auto !important;
+  padding: 8px 16px !important;
+  background: #0d3c3a !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: background 0.2s !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.et-redeem-subscription-btn:hover {
+  background: #0a2f2d !important;
+}
+
+/* Parent container for redeem button - ensures flex layout */
+.et-redeem-button-container {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+/* Flex wrapper for address and button */
+.et-redeem-flex-wrapper {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
