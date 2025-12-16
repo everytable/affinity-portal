@@ -2371,10 +2371,16 @@
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
 }
 
 .et-redeem-subscription-btn:hover {
   background: #0a2f2d !important;
+}
+
+.et-redeem-subscription-btn:active {
+  background: #082422 !important;
 }
 
 /* Parent container for redeem button - ensures flex layout */
@@ -2383,6 +2389,8 @@
   flex-direction: row !important;
   align-items: center !important;
   gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* Flex wrapper for address and button */
@@ -2391,4 +2399,20 @@
   flex-direction: row !important;
   align-items: center !important;
   gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  .et-redeem-subscription-btn {
+    font-size: 13px !important;
+    padding: 6px 12px !important;
+  }
+  
+  .et-redeem-button-container,
+  .et-redeem-flex-wrapper {
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
 }
