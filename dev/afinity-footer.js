@@ -3,6 +3,70 @@
   // INITIALIZATION GUARD - Wait for DOM and Recharge to be ready
   // ============================================
   
+  // IMMEDIATELY hide page content to prevent UI disruption
+  // This must happen before anything else - even before DOM is ready
+  (function hidePageContentImmediately() {
+    // Inject CSS to hide body content immediately
+    const hideStyle = document.createElement('style');
+    hideStyle.id = 'et-hide-content-style';
+    hideStyle.textContent = `
+      html body > *:not(#et-init-loader):not(script):not(style):not(#et-hide-content-style) {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      html, body {
+        overflow: hidden !important;
+        height: 100% !important;
+      }
+      #et-init-loader {
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+    `;
+    
+    // Try multiple methods to inject the style immediately
+    function injectHideStyle() {
+      if (document.head) {
+        if (!document.getElementById('et-hide-content-style')) {
+          document.head.appendChild(hideStyle);
+        }
+        return true;
+      }
+      return false;
+    }
+    
+    // Try immediately
+    if (!injectHideStyle()) {
+      // If head doesn't exist, try documentElement
+      if (document.documentElement) {
+        document.documentElement.appendChild(hideStyle);
+      }
+      
+      // Also set up observer for when head becomes available
+      const headObserver = new MutationObserver(() => {
+        if (injectHideStyle()) {
+          headObserver.disconnect();
+        }
+      });
+      
+      if (document.documentElement) {
+        headObserver.observe(document.documentElement, { childList: true, subtree: true });
+      }
+      
+      // Fallback: try periodically
+      let attempts = 0;
+      const maxAttempts = 20;
+      const tryInterval = setInterval(() => {
+        attempts++;
+        if (injectHideStyle() || attempts >= maxAttempts) {
+          clearInterval(tryInterval);
+          headObserver.disconnect();
+        }
+      }, 50);
+    }
+  })();
+  
   let scriptInitialized = false;
   let initializationLoader = null;
   
@@ -87,19 +151,20 @@
     initializationLoader = document.createElement('div');
     initializationLoader.id = 'et-init-loader';
     initializationLoader.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(13, 60, 58, 0.95);
-      z-index: 99998;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background: rgba(13, 60, 58, 0.98) !important;
+      z-index: 999999 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      color: white !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      pointer-events: auto !important;
     `;
     
     // Add spinner animation if not already added
@@ -153,17 +218,37 @@
     }
   }
   
-  // Function to remove initialization loader
+  // Function to remove initialization loader and show content
   function removeInitializationLoader() {
+    // First, remove the hide style to show content
+    const hideStyle = document.getElementById('et-hide-content-style');
+    if (hideStyle) {
+      hideStyle.remove();
+    }
+    
+    // Then fade out and remove the loader
     if (initializationLoader && initializationLoader.parentElement) {
       initializationLoader.style.opacity = '0';
-      initializationLoader.style.transition = 'opacity 0.3s ease';
+      initializationLoader.style.transition = 'opacity 0.5s ease';
       setTimeout(() => {
         if (initializationLoader && initializationLoader.parentElement) {
           initializationLoader.remove();
         }
         initializationLoader = null;
-      }, 300);
+        
+        // Restore body overflow
+        if (document.body) {
+          document.body.style.overflow = '';
+        }
+      }, 500);
+    } else {
+      // If loader was already removed, just remove hide style
+      if (hideStyle) {
+        hideStyle.remove();
+      }
+      if (document.body) {
+        document.body.style.overflow = '';
+      }
     }
   }
   
@@ -200,18 +285,53 @@
   // Show loader immediately when script loads (before any checks)
   // This ensures UI is hidden until script is ready
   (function showLoaderImmediately() {
-    // Use requestAnimationFrame to ensure DOM is accessible
+    // Try to show loader immediately, multiple fallbacks
     function tryShowLoader() {
+      // If body exists, show loader immediately
       if (document.body) {
         showInitializationLoader();
-      } else if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', showInitializationLoader);
-      } else {
-        // Fallback: try again after a short delay
-        setTimeout(tryShowLoader, 50);
+        return true;
       }
+      
+      // If document is still loading, wait for DOMContentLoaded
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', showInitializationLoader, { once: true });
+        return false;
+      }
+      
+      // If document is interactive or complete but body doesn't exist yet
+      if (document.readyState === 'interactive' || document.readyState === 'complete') {
+        // Try to create body if it doesn't exist (shouldn't happen, but just in case)
+        if (!document.body && document.documentElement) {
+          const body = document.createElement('body');
+          document.documentElement.appendChild(body);
+        }
+        if (document.body) {
+          showInitializationLoader();
+          return true;
+        }
+      }
+      
+      return false;
     }
-    tryShowLoader();
+    
+    // Try immediately
+    if (!tryShowLoader()) {
+      // If that didn't work, try with a very short delay
+      setTimeout(() => {
+        if (!tryShowLoader()) {
+          // Last resort: keep trying every 10ms until body exists
+          const retryInterval = setInterval(() => {
+            if (tryShowLoader()) {
+              clearInterval(retryInterval);
+            }
+          }, 10);
+          
+          // Stop retrying after 2 seconds (something is very wrong)
+          setTimeout(() => clearInterval(retryInterval), 2000);
+        }
+      }, 10);
+    }
   })();
   
   // Function to wait for DOM and Recharge to be ready
