@@ -5937,7 +5937,7 @@
         } else {
           // Strategy 2: Wrap address and button in a flex container
           const flexWrapper = document.createElement('div');
-          flexWrapper.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+          flexWrapper.style.cssText = 'display: flex;';
           
           // Move address element into wrapper
           const addressClone = addressElement.cloneNode(true);
