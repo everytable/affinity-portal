@@ -1,6 +1,239 @@
 (function () {
-  // Check if we need to show loader on page load (after reload)
-  if (sessionStorage.getItem('et-show-reload-loader') === 'true') {
+  // ============================================
+  // INITIALIZATION GUARD - Wait for DOM and Recharge to be ready
+  // ============================================
+  
+  let scriptInitialized = false;
+  let initializationLoader = null;
+  
+  // Function to show initialization loader
+  function showInitializationLoader() {
+    if (initializationLoader) return; // Already showing
+    
+    initializationLoader = document.createElement('div');
+    initializationLoader.id = 'et-init-loader';
+    initializationLoader.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(13, 60, 58, 0.95);
+      z-index: 99998;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    // Add spinner animation if not already added
+    if (!document.getElementById('et-spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'et-spinner-style';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    `;
+    
+    const messageEl = document.createElement('div');
+    messageEl.style.cssText = `
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+    `;
+    messageEl.textContent = 'Loading...';
+    
+    initializationLoader.appendChild(spinner);
+    initializationLoader.appendChild(messageEl);
+    
+    // Only append if body exists
+    if (document.body) {
+      document.body.appendChild(initializationLoader);
+    } else {
+      // Wait for body
+      const bodyObserver = new MutationObserver(() => {
+        if (document.body && initializationLoader && !initializationLoader.parentElement) {
+          document.body.appendChild(initializationLoader);
+          bodyObserver.disconnect();
+        }
+      });
+      bodyObserver.observe(document.documentElement, { childList: true });
+    }
+  }
+  
+  // Function to remove initialization loader
+  function removeInitializationLoader() {
+    if (initializationLoader && initializationLoader.parentElement) {
+      initializationLoader.style.opacity = '0';
+      initializationLoader.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => {
+        if (initializationLoader && initializationLoader.parentElement) {
+          initializationLoader.remove();
+        }
+        initializationLoader = null;
+      }, 300);
+    }
+  }
+  
+  // Function to check if Recharge is ready
+  function isRechargeReady() {
+    // Check if DOM is ready
+    if (document.readyState === 'loading' || !document.body) {
+      return false;
+    }
+    
+    // Check if Recharge object exists
+    const recharge = window.recharge || window.ReCharge || window.Recharge;
+    
+    // Check if Recharge UI elements are present (most reliable indicator)
+    const rechargeElements = document.querySelectorAll('[data-testid*="recharge"], [class*="recharge"], [id*="recharge"]');
+    const hasRechargeUI = rechargeElements.length > 0;
+    
+    // Check if subscription cards are present (indicates main content is loaded)
+    const hasSubscriptionContent = document.querySelectorAll('*').length > 100 && 
+                                   (document.body.textContent || '').includes('Deliver to') &&
+                                   (document.body.textContent || '').includes('Subscription');
+    
+    // Check if Recharge has initialized (look for common methods/properties)
+    const hasRechargeSDK = recharge && (recharge.session || recharge.auth || recharge.subscription || recharge.address);
+    
+    // Need at least UI elements OR SDK + subscription content
+    if (hasRechargeUI || (hasRechargeSDK && hasSubscriptionContent)) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // Function to wait for DOM and Recharge to be ready
+  function waitForReady(callback, maxWaitTime = 10000) {
+    const startTime = Date.now();
+    let loaderShown = false;
+    
+    const checkReady = () => {
+      const elapsed = Date.now() - startTime;
+      
+      // Check if DOM is ready
+      const domReady = document.readyState === 'complete' || document.readyState === 'interactive';
+      const bodyReady = !!document.body;
+      
+      // Check if Recharge is ready
+      const rechargeReady = isRechargeReady();
+      
+      // Show loader if not ready yet and we've waited a bit
+      if (!loaderShown && (!domReady || !bodyReady || !rechargeReady) && elapsed > 500) {
+        showInitializationLoader();
+        loaderShown = true;
+      }
+      
+      // If everything is ready
+      if (domReady && bodyReady && rechargeReady) {
+        if (loaderShown) {
+          // Wait a bit more to ensure UI is fully rendered
+          setTimeout(() => {
+            removeInitializationLoader();
+            callback();
+          }, 300);
+        } else {
+          callback();
+        }
+        return;
+      }
+      
+      // Timeout after maxWaitTime
+      if (elapsed > maxWaitTime) {
+        console.warn('[ET] Timeout waiting for page to be ready, proceeding anyway...');
+        if (loaderShown) {
+          removeInitializationLoader();
+        }
+        callback();
+        return;
+      }
+      
+      // Check again
+      setTimeout(checkReady, 100);
+    };
+    
+    // Start checking
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', checkReady);
+    } else {
+      checkReady();
+    }
+  }
+  
+  // Helper function to wait for Recharge UI elements to be present
+  function waitForRechargeElements(selector, callback, maxWait = 5000, interval = 200) {
+    const startTime = Date.now();
+    const check = () => {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        callback();
+        return;
+      }
+      if (Date.now() - startTime < maxWait) {
+        setTimeout(check, interval);
+      } else {
+        console.warn('[ET] Timeout waiting for elements:', selector);
+        callback(); // Call anyway after timeout
+      }
+    };
+    check();
+  }
+  
+  // Helper function to safely run code after delay with readiness check
+  function safeDelayedRun(callback, delay, description = '') {
+    setTimeout(() => {
+      // Double-check DOM is ready
+      if (document.readyState === 'loading' || !document.body) {
+        console.log(`[ET] Delaying ${description || 'operation'} - DOM not ready`);
+        safeDelayedRun(callback, delay, description);
+        return;
+      }
+      
+      // Check if Recharge elements exist
+      const hasRechargeElements = document.querySelectorAll('[data-testid*="recharge"], [class*="recharge"]').length > 0;
+      if (!hasRechargeElements && delay < 3000) {
+        console.log(`[ET] Delaying ${description || 'operation'} - Recharge elements not found`);
+        safeDelayedRun(callback, delay + 500, description);
+        return;
+      }
+      
+      try {
+        callback();
+      } catch (e) {
+        console.error(`[ET] Error in ${description || 'delayed operation'}:`, e);
+      }
+    }, delay);
+  }
+  
+  // Main initialization function - wraps all script code
+  function initializeScript() {
+    if (scriptInitialized) return;
+    scriptInitialized = true;
+    
+    console.log('[ET] Script initialization started');
+    
+    // Check if we need to show loader on page load (after reload)
+    if (sessionStorage.getItem('et-show-reload-loader') === 'true') {
     const message = sessionStorage.getItem('et-reload-message') || 'Updating Order Summary...';
     const subMessage = sessionStorage.getItem('et-reload-submessage') || 'Please wait while we apply your discount';
     
@@ -562,11 +795,11 @@
   });
 
   // Run after text replacement has had time to complete
-  // Multiple attempts to catch dynamic content
-  setTimeout(reorderNavigation, 800);
-  setTimeout(reorderNavigation, 1800);
-  setTimeout(reorderNavigation, 3000);
-  setTimeout(reorderNavigation, 5000);
+  // Multiple attempts to catch dynamic content - use safe delayed run
+  safeDelayedRun(reorderNavigation, 1500, 'navigation reordering');
+  safeDelayedRun(reorderNavigation, 2500, 'navigation reordering');
+  safeDelayedRun(reorderNavigation, 4000, 'navigation reordering');
+  safeDelayedRun(reorderNavigation, 6000, 'navigation reordering');
 
   // ============================================
   // Hide Logout Button
@@ -1080,19 +1313,19 @@
   });
 
   // Multiple attempts to catch dynamic content - run after reordering
-  setTimeout(injectContactUsNav, 1200);
-  setTimeout(injectContactUsNav, 2500);
-  setTimeout(injectContactUsNav, 4000);
-  setTimeout(injectContactUsNav, 6000);
+  safeDelayedRun(injectContactUsNav, 2000, 'contact us injection');
+  safeDelayedRun(injectContactUsNav, 3500, 'contact us injection');
+  safeDelayedRun(injectContactUsNav, 5000, 'contact us injection');
+  safeDelayedRun(injectContactUsNav, 7000, 'contact us injection');
   
     document.addEventListener('Recharge::location::change', function() {
       cleanupContactUsPage();
       contactUsInjected = false;
       navReordered = false;
-      setTimeout(injectContactUsNav, 500);
+      safeDelayedRun(injectContactUsNav, 1000, 'contact us injection (location change)');
       // Run reordering after text replacement has completed
-      setTimeout(reorderNavigation, 700);
-      setTimeout(hideLogoutButton, 800);
+      safeDelayedRun(reorderNavigation, 1200, 'navigation reordering (location change)');
+      safeDelayedRun(hideLogoutButton, 1500, 'hide logout button (location change)');
     }, true);
 
     document.addEventListener('click', function(e) {
@@ -6219,18 +6452,10 @@
     
     // Initialize redeem buttons on subscriptions
     // Cleanup happens inside addRedeemButtonsToSubscriptions after buttons are created
-    setTimeout(() => {
-      addRedeemButtonsToSubscriptions();
-    }, 500);
-    setTimeout(() => {
-      addRedeemButtonsToSubscriptions();
-    }, 1000);
-    setTimeout(() => {
-      addRedeemButtonsToSubscriptions();
-    }, 2000);
-    setTimeout(() => {
-      addRedeemButtonsToSubscriptions();
-    }, 3000);
+    safeDelayedRun(addRedeemButtonsToSubscriptions, 2000, 'redeem buttons initialization');
+    safeDelayedRun(addRedeemButtonsToSubscriptions, 3500, 'redeem buttons initialization');
+    safeDelayedRun(addRedeemButtonsToSubscriptions, 5000, 'redeem buttons initialization');
+    safeDelayedRun(addRedeemButtonsToSubscriptions, 7000, 'redeem buttons initialization');
     
     const redeemButtonObserver = new MutationObserver(() => {
       // Create buttons first, cleanup happens inside the function
@@ -6322,4 +6547,11 @@
       childList: true,
       subtree: true
     });
+    
+    console.log('[ET] Script initialization completed');
+  } // End of initializeScript function
+  
+  // Start initialization - wait for DOM and Recharge to be ready
+  waitForReady(initializeScript, 15000); // Max 15 seconds wait time
+  
 })();
