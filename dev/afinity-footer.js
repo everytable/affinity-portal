@@ -123,10 +123,29 @@
     return false;
   }
   
+  // Show loader immediately when script loads (before any checks)
+  // This ensures UI is hidden until script is ready
+  (function showLoaderImmediately() {
+    // Use requestAnimationFrame to ensure DOM is accessible
+    function tryShowLoader() {
+      if (document.body) {
+        showInitializationLoader();
+      } else if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', showInitializationLoader);
+      } else {
+        // Fallback: try again after a short delay
+        setTimeout(tryShowLoader, 50);
+      }
+    }
+    tryShowLoader();
+  })();
+  
   // Function to wait for DOM and Recharge to be ready
   function waitForReady(callback, maxWaitTime = 10000) {
     const startTime = Date.now();
-    let loaderShown = false;
+    
+    // Ensure loader is shown (in case it wasn't shown immediately)
+    showInitializationLoader();
     
     const checkReady = () => {
       const elapsed = Date.now() - startTime;
@@ -138,32 +157,18 @@
       // Check if Recharge is ready
       const rechargeReady = isRechargeReady();
       
-      // Show loader if not ready yet and we've waited a bit
-      if (!loaderShown && (!domReady || !bodyReady || !rechargeReady) && elapsed > 500) {
-        showInitializationLoader();
-        loaderShown = true;
-      }
-      
       // If everything is ready
       if (domReady && bodyReady && rechargeReady) {
-        if (loaderShown) {
-          // Wait a bit more to ensure UI is fully rendered
-          setTimeout(() => {
-            removeInitializationLoader();
-            callback();
-          }, 300);
-        } else {
-          callback();
-        }
+        // Don't remove loader here - keep it visible during initialization
+        // It will be removed at the end of initializeScript()
+        callback();
         return;
       }
       
       // Timeout after maxWaitTime
       if (elapsed > maxWaitTime) {
         console.warn('[ET] Timeout waiting for page to be ready, proceeding anyway...');
-        if (loaderShown) {
-          removeInitializationLoader();
-        }
+        // Don't remove loader here - keep it visible during initialization
         callback();
         return;
       }
@@ -6549,6 +6554,32 @@
     });
     
     console.log('[ET] Script initialization completed');
+    
+    // Remove loader after all DOM manipulations are complete
+    // Add a delay to ensure everything is fully rendered and stable
+    // Check multiple times to ensure page is stable before removing loader
+    let stabilityCheckCount = 0;
+    const maxStabilityChecks = 3;
+    
+    function checkStabilityAndRemoveLoader() {
+      stabilityCheckCount++;
+      
+      // Wait for next frame to ensure rendering is complete
+      requestAnimationFrame(() => {
+        // Additional delay to ensure all async operations are complete
+        setTimeout(() => {
+          if (stabilityCheckCount >= maxStabilityChecks) {
+            removeInitializationLoader();
+          } else {
+            // Check again after a short delay
+            setTimeout(checkStabilityAndRemoveLoader, 300);
+          }
+        }, 500);
+      });
+    }
+    
+    // Start stability check after initial delay
+    setTimeout(checkStabilityAndRemoveLoader, 500);
   } // End of initializeScript function
   
   // Start initialization - wait for DOM and Recharge to be ready
