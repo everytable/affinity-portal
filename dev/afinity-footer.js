@@ -12,53 +12,13 @@
     
     initializationLoader = document.createElement('div');
     initializationLoader.id = 'et-init-loader';
-    initializationLoader.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(13, 60, 58, 0.95);
-      z-index: 99998;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    `;
-    
-    // Add spinner animation if not already added
-    if (!document.getElementById('et-spinner-style')) {
-      const style = document.createElement('style');
-      style.id = 'et-spinner-style';
-      style.textContent = `
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
+    initializationLoader.className = 'et-init-loader';
     
     const spinner = document.createElement('div');
-    spinner.style.cssText = `
-      width: 50px;
-      height: 50px;
-      border: 4px solid rgba(255, 255, 255, 0.3);
-      border-top: 4px solid white;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-    `;
+    spinner.className = 'et-spinner';
     
     const messageEl = document.createElement('div');
-    messageEl.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      text-align: center;
-    `;
+    messageEl.className = 'et-loader-message';
     messageEl.textContent = 'Loading...';
     
     initializationLoader.appendChild(spinner);
@@ -82,8 +42,7 @@
   // Function to remove initialization loader
   function removeInitializationLoader() {
     if (initializationLoader && initializationLoader.parentElement) {
-      initializationLoader.style.opacity = '0';
-      initializationLoader.style.transition = 'opacity 0.3s ease';
+      initializationLoader.classList.add('et-loader-fade-out');
       setTimeout(() => {
         if (initializationLoader && initializationLoader.parentElement) {
           initializationLoader.remove();
@@ -300,62 +259,17 @@
     // Create loader overlay immediately
     const loaderOverlay = document.createElement('div');
     loaderOverlay.id = 'et-reload-loader';
-    loaderOverlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(13, 60, 58, 0.95);
-      z-index: 99999;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    `;
-    
-    // Add spinner animation if not already added
-    if (!document.getElementById('et-spinner-style')) {
-      const style = document.createElement('style');
-      style.id = 'et-spinner-style';
-      style.textContent = `
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
+    loaderOverlay.className = 'et-reload-loader';
     
     const spinner = document.createElement('div');
-    spinner.style.cssText = `
-      width: 50px;
-      height: 50px;
-      border: 4px solid rgba(255, 255, 255, 0.3);
-      border-top: 4px solid white;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-    `;
+    spinner.className = 'et-spinner';
     
     const messageEl = document.createElement('div');
-    messageEl.style.cssText = `
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      text-align: center;
-    `;
+    messageEl.className = 'et-loader-message';
     messageEl.textContent = message;
     
     const subMessageEl = document.createElement('div');
-    subMessageEl.style.cssText = `
-      font-size: 14px;
-      opacity: 0.9;
-      text-align: center;
-      margin-top: 8px;
-    `;
+    subMessageEl.className = 'et-loader-submessage';
     subMessageEl.textContent = subMessage;
     
     loaderOverlay.appendChild(spinner);
@@ -3986,6 +3900,42 @@
       }, 5000);
     }
     
+    // Helper function to show loader immediately
+    function showLoaderImmediately() {
+      // Check if loader already exists
+      if (document.getElementById('et-reload-loader')) {
+        return;
+      }
+      
+      // Create a full-screen loader overlay
+      const loaderOverlay = document.createElement('div');
+      loaderOverlay.id = 'et-reload-loader';
+      loaderOverlay.className = 'et-reload-loader';
+      
+      // Create spinner
+      const spinner = document.createElement('div');
+      spinner.className = 'et-spinner';
+      
+      // Create message
+      const message = document.createElement('div');
+      message.className = 'et-loader-message';
+      message.textContent = 'Updating Order Summary...';
+      
+      const subMessage = document.createElement('div');
+      subMessage.className = 'et-loader-submessage';
+      subMessage.textContent = 'Please wait while we apply your discount';
+      
+      loaderOverlay.appendChild(spinner);
+      loaderOverlay.appendChild(message);
+      loaderOverlay.appendChild(subMessage);
+      document.body.appendChild(loaderOverlay);
+      
+      // Set flag in sessionStorage to show loader on page reload
+      sessionStorage.setItem('et-show-reload-loader', 'true');
+      sessionStorage.setItem('et-reload-message', 'Updating Order Summary...');
+      sessionStorage.setItem('et-reload-submessage', 'Please wait while we apply your discount');
+    }
+    
     async function applyDiscountCode(code, context = null) {
       console.log('[ET] ===== applyDiscountCode called =====');
       console.log('[ET] Raw code parameter:', code);
@@ -4187,6 +4137,9 @@
             if (response.ok || response.status === 200) {
               console.log('[ET] ✓✓✓✓✓ Discount applied successfully via DIRECT API call!');
               
+              // Show loader IMMEDIATELY after successful API call
+              showLoaderImmediately();
+              
               // Parse response if available
               let responseData = null;
               try {
@@ -4283,75 +4236,10 @@
                       // Strategy 3: Last resort - soft page reload (preserves scroll position, faster than full reload)
                       console.log('[ET] Strategy 3: Performing soft page reload to ensure discount is visible...');
                       
-                      // Create a full-screen loader overlay
-                      const loaderOverlay = document.createElement('div');
-                      loaderOverlay.id = 'et-reload-loader';
-                      loaderOverlay.style.cssText = `
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background: rgba(13, 60, 58, 0.95);
-                        z-index: 99999;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        color: white;
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                      `;
-                      
-                      // Create spinner
-                      const spinner = document.createElement('div');
-                      spinner.style.cssText = `
-                        width: 50px;
-                        height: 50px;
-                        border: 4px solid rgba(255, 255, 255, 0.3);
-                        border-top: 4px solid white;
-                        border-radius: 50%;
-                        animation: spin 1s linear infinite;
-                        margin-bottom: 20px;
-                      `;
-                      
-                      // Add spinner animation
-                      const style = document.createElement('style');
-                      style.textContent = `
-                        @keyframes spin {
-                          0% { transform: rotate(0deg); }
-                          100% { transform: rotate(360deg); }
-                        }
-                      `;
-                      document.head.appendChild(style);
-                      
-                      // Create message
-                      const message = document.createElement('div');
-                      message.style.cssText = `
-                        font-size: 18px;
-                        font-weight: 600;
-                        margin-bottom: 8px;
-                        text-align: center;
-                      `;
-                      message.textContent = 'Updating Order Summary...';
-                      
-                      const subMessage = document.createElement('div');
-                      subMessage.style.cssText = `
-                        font-size: 14px;
-                        opacity: 0.9;
-                        text-align: center;
-                        margin-top: 8px;
-                      `;
-                      subMessage.textContent = 'Please wait while we apply your discount';
-                      
-                      loaderOverlay.appendChild(spinner);
-                      loaderOverlay.appendChild(message);
-                      loaderOverlay.appendChild(subMessage);
-                      document.body.appendChild(loaderOverlay);
-                      
-                      // Set flag in sessionStorage to show loader on page reload
-                      sessionStorage.setItem('et-show-reload-loader', 'true');
-                      sessionStorage.setItem('et-reload-message', 'Updating Order Summary...');
-                      sessionStorage.setItem('et-reload-submessage', 'Please wait while we apply your discount');
+                      // Loader is already shown, just ensure it's still visible
+                      if (!document.getElementById('et-reload-loader')) {
+                        showLoaderImmediately();
+                      }
                       
                       // Small delay to ensure loader is visible, then reload
                       setTimeout(() => {
@@ -4372,63 +4260,10 @@
                   setTimeout(() => {
                     console.log('[ET] Fallback: Performing soft page reload...');
                     
-                    // Create loader overlay for fallback
-                    const loaderOverlay = document.createElement('div');
-                    loaderOverlay.id = 'et-reload-loader';
-                    loaderOverlay.style.cssText = `
-                      position: fixed;
-                      top: 0;
-                      left: 0;
-                      width: 100%;
-                      height: 100%;
-                      background: rgba(13, 60, 58, 0.95);
-                      z-index: 99999;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: center;
-                      color: white;
-                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    `;
-                    
-                    const spinner = document.createElement('div');
-                    spinner.style.cssText = `
-                      width: 50px;
-                      height: 50px;
-                      border: 4px solid rgba(255, 255, 255, 0.3);
-                      border-top: 4px solid white;
-                      border-radius: 50%;
-                      animation: spin 1s linear infinite;
-                      margin-bottom: 20px;
-                    `;
-                    
-                    const message = document.createElement('div');
-                    message.style.cssText = `
-                      font-size: 18px;
-                      font-weight: 600;
-                      margin-bottom: 8px;
-                      text-align: center;
-                    `;
-                    message.textContent = 'Updating Order Summary...';
-                    
-                    const subMessage = document.createElement('div');
-                    subMessage.style.cssText = `
-                      font-size: 14px;
-                      opacity: 0.9;
-                      text-align: center;
-                      margin-top: 8px;
-                    `;
-                    subMessage.textContent = 'Please wait while we apply your discount';
-                    
-                    loaderOverlay.appendChild(spinner);
-                    loaderOverlay.appendChild(message);
-                    loaderOverlay.appendChild(subMessage);
-                    document.body.appendChild(loaderOverlay);
-                    
-                    // Set flag in sessionStorage to show loader on page reload
-                    sessionStorage.setItem('et-show-reload-loader', 'true');
-                    sessionStorage.setItem('et-reload-message', 'Updating Order Summary...');
-                    sessionStorage.setItem('et-reload-submessage', 'Please wait while we apply your discount');
+                    // Loader is already shown, just ensure it's still visible
+                    if (!document.getElementById('et-reload-loader')) {
+                      showLoaderImmediately();
+                    }
                     
                     setTimeout(() => {
                       window.location.reload();

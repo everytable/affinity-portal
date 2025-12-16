@@ -2277,3 +2277,80 @@
     display: none !important;
   }
 }
+
+/* ============================================
+   Loader Styles (for initialization and reload)
+   ============================================ */
+
+/* Spinner animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Initialization loader overlay */
+.et-init-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(13, 60, 58, 0.95);
+  z-index: 99998;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Reload loader overlay */
+.et-reload-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(13, 60, 58, 0.95);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Spinner element */
+.et-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+/* Loader message */
+.et-loader-message {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+/* Loader submessage */
+.et-loader-submessage {
+  font-size: 14px;
+  opacity: 0.9;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Fade out transition for loader removal */
+.et-loader-fade-out {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
