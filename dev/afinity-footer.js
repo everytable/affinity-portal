@@ -5911,71 +5911,31 @@
         });
         
         // Try to insert button next to address
-        // Strategy 1: Ensure parent has display: flex and append button
-        const parentStyle = window.getComputedStyle(targetParent);
-        
-        // Function to ensure parent has flex display using CSS class
-        const ensureFlexDisplay = (element) => {
-          if (element) {
-            // Add CSS class for flex layout (defined in afinity.css)
-            element.classList.add('et-redeem-button-container');
+        // Simple approach: Always add CSS class to parent to ensure flex layout
+        // The existing MutationObserver will re-run this function if React removes elements
+        if (targetParent && targetParent !== document.body) {
+          // Add CSS class for flex layout (defined in afinity.css with !important)
+          // Only add if not already present to avoid unnecessary DOM manipulation
+          if (!targetParent.classList.contains('et-redeem-button-container')) {
+            targetParent.classList.add('et-redeem-button-container');
           }
-        };
-        
-        if (parentStyle.display === 'flex') {
-          // Ensure display: flex is explicitly set with !important
-          ensureFlexDisplay(targetParent);
           targetParent.appendChild(redeemButton);
         } else {
-          // Strategy 2: Set parent to flex or wrap in flex container
-          // First, try to set the parent to flex if it's a suitable container
-          if (targetParent === addressElement.parentElement || 
-              (targetParent !== addressElement && targetParent.contains(addressElement))) {
-            ensureFlexDisplay(targetParent);
-            targetParent.appendChild(redeemButton);
-          } else {
-            // Fallback: Wrap address and button in a flex container
-            const flexWrapper = document.createElement('div');
-            flexWrapper.className = 'et-redeem-flex-wrapper';
-            
-            // Move address element into wrapper
-            const addressClone = addressElement.cloneNode(true);
-            flexWrapper.appendChild(addressClone);
-            flexWrapper.appendChild(redeemButton);
-            
-            // Replace address element with wrapper
-            if (addressElement.parentElement) {
-              addressElement.parentElement.insertBefore(flexWrapper, addressElement);
-              addressElement.remove();
-            }
+          // Fallback: Wrap address and button in a flex container
+          const flexWrapper = document.createElement('div');
+          flexWrapper.className = 'et-redeem-flex-wrapper';
+          
+          // Move address element into wrapper
+          const addressClone = addressElement.cloneNode(true);
+          flexWrapper.appendChild(addressClone);
+          flexWrapper.appendChild(redeemButton);
+          
+          // Replace address element with wrapper
+          if (addressElement.parentElement) {
+            addressElement.parentElement.insertBefore(flexWrapper, addressElement);
+            addressElement.remove();
           }
         }
-        
-          // Watch the parent element to re-apply flex class if React/Recharge removes it
-          if (targetParent && targetParent !== document.body) {
-            const parentObserver = new MutationObserver((mutations) => {
-              mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && 
-                    (mutation.attributeName === 'style' || mutation.attributeName === 'class')) {
-                  // Check if display was changed away from flex or class was removed
-                  const currentStyle = window.getComputedStyle(targetParent);
-                  const hasClass = targetParent.classList.contains('et-redeem-button-container');
-                  if ((currentStyle.display !== 'flex' || !hasClass) && 
-                      redeemButton.parentElement === targetParent) {
-                    ensureFlexDisplay(targetParent);
-                  }
-                }
-              });
-            });
-            
-            parentObserver.observe(targetParent, {
-              attributes: true,
-              attributeFilter: ['style', 'class']
-            });
-            
-            // Store observer reference on the button for cleanup if needed
-            redeemButton._etParentObserver = parentObserver;
-          }
       });
       
       // After creating buttons, clean up any unwanted ones
