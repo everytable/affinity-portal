@@ -1,4 +1,115 @@
 (function () {
+  // Check if we need to show loader on page load (after reload)
+  if (sessionStorage.getItem('et-show-reload-loader') === 'true') {
+    const message = sessionStorage.getItem('et-reload-message') || 'Updating Order Summary...';
+    const subMessage = sessionStorage.getItem('et-reload-submessage') || 'Please wait while we apply your discount';
+    
+    // Create loader overlay immediately
+    const loaderOverlay = document.createElement('div');
+    loaderOverlay.id = 'et-reload-loader';
+    loaderOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(13, 60, 58, 0.95);
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    // Add spinner animation if not already added
+    if (!document.getElementById('et-spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'et-spinner-style';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    `;
+    
+    const messageEl = document.createElement('div');
+    messageEl.style.cssText = `
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+    `;
+    messageEl.textContent = message;
+    
+    const subMessageEl = document.createElement('div');
+    subMessageEl.style.cssText = `
+      font-size: 14px;
+      opacity: 0.9;
+      text-align: center;
+      margin-top: 8px;
+    `;
+    subMessageEl.textContent = subMessage;
+    
+    loaderOverlay.appendChild(spinner);
+    loaderOverlay.appendChild(messageEl);
+    loaderOverlay.appendChild(subMessageEl);
+    document.body.appendChild(loaderOverlay);
+    
+    // Remove loader once page is fully loaded
+    const removeLoader = () => {
+      setTimeout(() => {
+        if (loaderOverlay.parentElement) {
+          loaderOverlay.remove();
+        }
+        // Clear the flag
+        sessionStorage.removeItem('et-show-reload-loader');
+        sessionStorage.removeItem('et-reload-message');
+        sessionStorage.removeItem('et-reload-submessage');
+      }, 500); // Small delay to ensure content is rendered
+    };
+    
+    if (document.readyState === 'complete') {
+      removeLoader();
+    } else {
+      window.addEventListener('load', removeLoader);
+    }
+  }
+  
+  // Fetch interceptor to log ReCharge address data
+  const originalFetch = window.fetch;
+  window.fetch = async function () {
+    const response = await originalFetch.apply(this, arguments);
+    const clonedResponse = response.clone();
+    clonedResponse.json().then(data => {
+      // Check if the response contains ReCharge customer address data
+      if (data?.data?.customer?.addresses?.length) {
+        const address = data.data.customer.addresses[0];
+        console.log("🔍 ReCharge Address Data Found:");
+        console.log("➡️ Address ID:", address.id);
+        console.log("➡️ Address 1:", address.address1);
+        console.log("➡️ City:", address.city);
+        console.log("➡️ Zip:", address.zip);
+        console.log("➡️ Full object:", address);
+      }
+    }).catch(() => {});
+    return response;
+  };
+
   const selectors = [
     '.recharge-heading.recharge-heading-h1',
     '.recharge-heading.recharge-heading-h2',
@@ -270,175 +381,178 @@
   let navReordered = false;
 
   function reorderNavigation() {
-    const existingLinks = document.querySelectorAll('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"]');
-    if (existingLinks.length === 0) return;
-
-    // Find navigation container
-    // Prioritize list elements (ul/ol) for list-based sidebars, matching contact-us injection logic
-    const firstLink = existingLinks[0];
-    let navContainer = null;
-    
-    // Check if parent or grandparent is a list element (for <nav><ul><li><a> structure)
-    if (firstLink.parentElement?.parentElement?.tagName === 'UL' || 
-        firstLink.parentElement?.parentElement?.tagName === 'OL') {
-      navContainer = firstLink.parentElement.parentElement;
-    } else if (firstLink.parentElement?.tagName === 'UL' || 
-               firstLink.parentElement?.tagName === 'OL') {
-      navContainer = firstLink.parentElement;
-    } else {
-      // Fall back to parent chain or nav element
-      navContainer = firstLink.parentElement?.parentElement || 
-                     firstLink.parentElement ||
-                     firstLink.closest('nav');
-    }
-    
-    if (!navContainer) return;
-
-    // Get all navigation links (excluding Contact us)
-    const allNavLinks = Array.from(navContainer.querySelectorAll('a')).filter(link => {
-      if (link.id === 'et-contact-us-nav-link') return false;
-      const href = link.getAttribute('href') || '';
-      const text = link.textContent?.trim().toLowerCase();
-      return href.includes('/upcoming') || 
-             href.includes('/previous') || 
-             href.includes('/subscriptions') ||
-             text.includes('upcoming') ||
-             text.includes('next order') ||
-             text.includes('manage') ||
-             text.includes('previous');
-    });
-
-    if (allNavLinks.length < 2) return;
-
-    // Identify target links
-    let manageLink = null;
-    let previousOrderLink = null;
-
-    allNavLinks.forEach(link => {
-      const text = link.textContent?.trim().toLowerCase();
-      const href = link.getAttribute('href') || '';
-      
-      if (!manageLink && (href.includes('/subscriptions') || text === 'manage' || (text.includes('manage') && !text.includes('previous')))) {
-        manageLink = link;
-      }
-      
-      if (!previousOrderLink && (href.includes('/previous') || text.includes('previous order') || (text.includes('previous') && !text.includes('manage')))) {
-        previousOrderLink = link;
-      }
-    });
-
-    if (!manageLink || !previousOrderLink) return;
-
-    // Find the container that holds navigation items as direct children
-    const findContainer = () => {
-      // Get all unique immediate parents of navigation links
-      const immediateParents = new Set(allNavLinks.map(link => link.parentElement).filter(Boolean));
-      
-      // If all links share the same immediate parent
-      if (immediateParents.size === 1) {
-        const commonParent = Array.from(immediateParents)[0];
-        // Count how many of this parent's children contain nav links
-        const navLinkContainers = Array.from(commonParent.children).filter(child => 
-          allNavLinks.some(link => child === link || child.contains(link))
-        );
-        // If multiple children contain nav links, this is our container
-        if (navLinkContainers.length >= 2) {
-          return commonParent;
-        }
-      }
-      
-      // Fallback: use navContainer (links are direct children or more complex structure)
-      return navContainer;
-    };
-
-    const container = findContainer();
-
-    // Get the wrapper element that is a direct child of the container
-    // This handles wrappers with single or multiple children (e.g., <div><icon/><a></a></div>)
-    const getWrapperElement = (link) => {
-      // If link is already a direct child of container, return it
-      if (link.parentElement === container) {
-        return link;
-      }
-      
-      // Walk up the DOM tree until we find an element whose parent is the container
-      let current = link;
-      while (current) {
-        const parent = current.parentElement;
-        if (!parent) break;
-        
-        // Found the wrapper that's a direct child of container
-        if (parent === container) {
-          return current;
-        }
-        
-        // Safety check: don't go beyond navContainer
-        if (parent === navContainer && container !== navContainer) {
-          return link;
-        }
-        
-        current = parent;
-      }
-      
-      // Fallback: return link itself
-      return link;
-    };
-
-    const manageWrapper = getWrapperElement(manageLink);
-    const previousWrapper = getWrapperElement(previousOrderLink);
-
-    // Get all children of the container
-    const children = Array.from(container.children);
-    const manageIdx = children.indexOf(manageWrapper);
-    const previousIdx = children.indexOf(previousWrapper);
-
-    if (manageIdx === -1 || previousIdx === -1) return;
-
-    // Check if already in correct positions (3rd and 4th, indices 2 and 3)
-    if (manageIdx === 2 && previousIdx === 3) {
-      navReordered = true;
+    // Use data-testid attributes to find Recharge navigation links (more reliable)
+    const existingLinks = document.querySelectorAll(
+      'a[data-testid*="recharge-internal"]'
+    );
+    if (existingLinks.length === 0) {
+      console.log('[ET] Reorder: No Recharge navigation links found');
       return;
     }
 
-    // Remove from current positions (remove higher index first to avoid index shift)
-    const childrenArray = [...children];
-    if (manageIdx > previousIdx) {
-      childrenArray.splice(manageIdx, 1);
-      childrenArray.splice(previousIdx, 1);
-    } else {
-      childrenArray.splice(previousIdx, 1);
-      childrenArray.splice(manageIdx, 1);
+    console.log('[ET] Reorder: Found', existingLinks.length, 'Recharge navigation links');
+
+    // Find the container - it's the parent of the wrapper divs (div._18gma4r0)
+    // Structure: container > div._18gma4r0 > a
+    const firstLink = existingLinks[0];
+    const wrapper = firstLink.parentElement; // This should be div._18gma4r0
+    const navContainer = wrapper?.parentElement; // This should be the main container
+    
+    if (!navContainer) {
+      console.log('[ET] Reorder: Could not find navigation container');
+      return;
+    }
+    
+    console.log('[ET] Reorder: Found container', navContainer.tagName, navContainer.className);
+
+    // Find the three target links by data-testid
+    // IMPORTANT: "Next order" uses recharge-internal-next-order and should NOT be reordered
+    // "Upcoming Orders" uses recharge-internal-upcoming-orders
+    const upcomingLink = Array.from(existingLinks).find(link => {
+      const testId = link.getAttribute('data-testid') || '';
+      return testId.includes('recharge-internal-upcoming-orders') || 
+             testId.includes('recharge-internal-upcoming');
+      // NOT include recharge-internal-next-order (that's "Next order" which should stay first)
+    });
+    
+    const manageLink = Array.from(existingLinks).find(link => {
+      const testId = link.getAttribute('data-testid') || '';
+      return testId.includes('recharge-internal-manage') ||
+             testId.includes('recharge-internal-subscriptions');
+    });
+    
+    const previousOrderLink = Array.from(existingLinks).find(link => {
+      const testId = link.getAttribute('data-testid') || '';
+      return testId.includes('recharge-internal-previous-orders') ||
+             testId.includes('recharge-internal-previous') ||
+             testId.includes('recharge-internal-orders');
+    });
+
+    if (!upcomingLink || !manageLink || !previousOrderLink) {
+      console.log('[ET] Reorder: Missing links', { 
+        upcoming: !!upcomingLink, 
+        manage: !!manageLink, 
+        previous: !!previousOrderLink 
+      });
+      return;
     }
 
-    // Insert at positions 3 and 4 (index 2 and 3)
-    const targetIndex = Math.min(2, childrenArray.length);
-    childrenArray.splice(targetIndex, 0, manageWrapper, previousWrapper);
+    console.log('[ET] Reorder: Found all three links');
 
-    // Apply reordering to DOM
-    childrenArray.forEach((child, index) => {
-      if (index === 0) {
-        if (child !== container.firstChild) {
-          container.insertBefore(child, container.firstChild);
-        }
-      } else {
-        const prevChild = childrenArray[index - 1];
-        if (prevChild.nextSibling !== child) {
-          container.insertBefore(child, prevChild.nextSibling);
-        }
+    // Get the wrapper divs (div._18gma4r0) - these are direct children of navContainer
+    const upcomingWrapper = upcomingLink.parentElement;
+    const manageWrapper = manageLink.parentElement;
+    const previousWrapper = previousOrderLink.parentElement;
+
+    if (!upcomingWrapper || !manageWrapper || !previousWrapper) {
+      console.log('[ET] Reorder: Could not find wrapper divs');
+      return;
+    }
+    
+    // Verify wrappers are direct children of container
+    if (upcomingWrapper.parentElement !== navContainer ||
+        manageWrapper.parentElement !== navContainer ||
+        previousWrapper.parentElement !== navContainer) {
+      console.log('[ET] Reorder: Wrappers are not direct children of container');
+      return;
+    }
+
+    // Get all children of the container (these are the wrapper divs)
+    const children = Array.from(navContainer.children);
+    const upcomingIdx = children.indexOf(upcomingWrapper);
+    const manageIdx = children.indexOf(manageWrapper);
+    const previousIdx = children.indexOf(previousWrapper);
+
+    console.log('[ET] Reorder: Current indices', { upcomingIdx, manageIdx, previousIdx });
+
+    if (upcomingIdx === -1 || manageIdx === -1 || previousIdx === -1) {
+      console.log('[ET] Reorder: Could not find wrapper indices');
+      return;
+    }
+
+    // Desired order: Upcoming Orders → Manage → Previous Orders
+    // Check if already in correct order (Manage right after Upcoming, Previous right after Manage)
+    if (manageIdx === upcomingIdx + 1 && previousIdx === manageIdx + 1) {
+      navReordered = true;
+      console.log('[ET] Reorder: ✅ Already in correct order');
+      return;
+    }
+    
+    // Also check if Upcoming comes before both Manage and Previous (even if not consecutive)
+    // This handles cases where other items might be in between
+    if (upcomingIdx < manageIdx && upcomingIdx < previousIdx && manageIdx < previousIdx) {
+      // Upcoming is first, Manage is before Previous - this might be acceptable
+      // But we want them consecutive, so still reorder
+      console.log('[ET] Reorder: Items in right relative order but not consecutive, reordering...');
+    }
+
+    console.log('[ET] Reorder: Reordering needed. Current order:', {
+      upcoming: upcomingIdx,
+      manage: manageIdx,
+      previous: previousIdx
+    });
+
+    // Remove Manage and Previous from current positions (remove higher index first to avoid index shift)
+    const indicesToRemove = [manageIdx, previousIdx].sort((a, b) => b - a);
+    indicesToRemove.forEach(idx => {
+      const wrapper = children[idx];
+      if (wrapper && wrapper.parentElement === navContainer) {
+        console.log('[ET] Reorder: Removing wrapper at index', idx);
+        navContainer.removeChild(wrapper);
       }
     });
 
+    // Find where Upcoming is now (after removals)
+    const currentChildren = Array.from(navContainer.children);
+    const newUpcomingIdx = currentChildren.indexOf(upcomingWrapper);
+    console.log('[ET] Reorder: Upcoming is now at index', newUpcomingIdx);
+    // Insert Manage right after Upcoming
+    if (upcomingWrapper.nextSibling) {
+      navContainer.insertBefore(manageWrapper, upcomingWrapper.nextSibling);
+      console.log('[ET] Reorder: Inserted Manage after Upcoming');
+    } else {
+      navContainer.appendChild(manageWrapper);
+      console.log('[ET] Reorder: Appended Manage to end');
+    }
+    // Insert Previous right after Manage
+    if (manageWrapper.nextSibling) {
+      navContainer.insertBefore(previousWrapper, manageWrapper.nextSibling);
+      console.log('[ET] Reorder: Inserted Previous after Manage');
+    } else {
+      navContainer.appendChild(previousWrapper);
+      console.log('[ET] Reorder: Appended Previous to end');
+    }
+    // Verify final order
+    const finalChildren = Array.from(navContainer.children);
+    const finalUpcomingIdx = finalChildren.indexOf(upcomingWrapper);
+    const finalManageIdx = finalChildren.indexOf(manageWrapper);
+    const finalPreviousIdx = finalChildren.indexOf(previousWrapper);
+    console.log('[ET] Reorder: Final order indices', {
+      upcoming: finalUpcomingIdx,
+      manage: finalManageIdx,
+      previous: finalPreviousIdx
+    });
     navReordered = true;
+    console.log('[ET] Reorder: ✅ Successfully reordered - Upcoming → Manage → Previous');
   }
 
-  const navReorderObserver = new MutationObserver(() => {
-    if (!navReordered) {
+  const navReorderObserver = new MutationObserver((mutations) => {
+    // Check if any Recharge nav links were added/changed
+    const hasNavChanges = mutations.some(mutation => {
+      return Array.from(mutation.addedNodes).some(node => {
+        if (node.nodeType !== 1) return false;
+        return node.querySelector?.('a[data-testid*="recharge-internal"]') ||
+               node.matches?.('a[data-testid*="recharge-internal"]');
+      });
+    });
+    
+    if (hasNavChanges && !navReordered) {
       // Small delay to ensure text replacement has completed first
       setTimeout(() => {
         if (!navReordered) {
           reorderNavigation();
         }
-      }, 100);
+      }, 200);
     }
   });
 
@@ -448,7 +562,11 @@
   });
 
   // Run after text replacement has had time to complete
-  setTimeout(reorderNavigation, 600);
+  // Multiple attempts to catch dynamic content
+  setTimeout(reorderNavigation, 800);
+  setTimeout(reorderNavigation, 1800);
+  setTimeout(reorderNavigation, 3000);
+  setTimeout(reorderNavigation, 5000);
 
   // ============================================
   // Hide Logout Button
@@ -531,68 +649,187 @@
   function injectContactUsNav() {
     if (contactUsInjected) return;
 
-    // Find the navigation sidebar (look for common patterns)
-    const navSelectors = [
-      'nav[data-testid="customer-portal-sidebar"]',
-      '[data-testid="navigation"]',
-      'nav[role="navigation"]',
-      '.recharge-sidebar',
-      // Look for the container that has links like "View upcoming orders"
-      'a[href*="/upcoming"], a[href*="/orders"]'
-    ];
-
-    let navContainer = null;
-    
-    const existingLinks = document.querySelectorAll('a[href*="/upcoming"], a[href*="/previous"], a[href*="/subscriptions"]');
-    if (existingLinks.length > 0) {
-      navContainer = existingLinks[0].parentElement?.parentElement || existingLinks[0].parentElement;
-    }
-
-    if (!navContainer) {
-      for (const selector of navSelectors) {
-        navContainer = document.querySelector(selector);
-        if (navContainer) break;
-      } 
-    }
-
-    if (!navContainer) {
+    // Use the EXACT same approach as reorderNavigation to find the sidebar
+    // This ensures we're targeting the same container that reordering uses
+    const allRechargeLinks = document.querySelectorAll(
+      'a[data-testid*="recharge-internal"]'
+    );
+    if (allRechargeLinks.length === 0) {
+      console.log('[ET] Contact Us: No Recharge navigation links found');
       return;
     }
 
+    console.log('[ET] Contact Us: Found', allRechargeLinks.length, 'total Recharge navigation links on page');
+
+    // Find the sidebar container (not header):
+    // - Container is parent of wrappers (div._18gma4r0)
+    // - Must contain key Recharge links (manage/upcoming/previous/update payment)
+    // - Must not be inside a header
+    // - Must have at least 3 recharge-internal links
+    let navContainer = null;
+    let sidebarLink = null;
+
+    const isSidebarContainer = (container) => {
+      if (!container) return false;
+      // Exclude header
+      if (container.closest('header')) return false;
+
+      const rechargeLinks = container.querySelectorAll(':scope > div._18gma4r0 > a[data-testid*="recharge-internal"]');
+      if (rechargeLinks.length < 3) return false;
+
+      // Must have key links
+      const hasManage = container.querySelector('a[data-testid*="recharge-internal-manage"], a[data-testid*="recharge-internal-subscriptions"]');
+      const hasUpcoming = container.querySelector('a[data-testid*="recharge-internal-upcoming-orders"], a[data-testid*="recharge-internal-upcoming"]');
+      const hasPrevious = container.querySelector('a[data-testid*="recharge-internal-previous-orders"], a[data-testid*="recharge-internal-previous"], a[data-testid*="recharge-internal-orders"]');
+
+      return !!(hasManage && hasUpcoming && hasPrevious);
+    };
+
+    // Try all links to find a valid sidebar container
+    for (const link of allRechargeLinks) {
+      const wrapper = link.parentElement;
+      const container = wrapper?.parentElement;
+      if (isSidebarContainer(container)) {
+        navContainer = container;
+        sidebarLink = link;
+        console.log('[ET] Contact Us: Found sidebar container via', link.getAttribute('data-testid'));
+        break;
+      }
+    }
+
+    // Fallback: pick the first container that satisfies the checks
+    if (!navContainer) {
+      const candidateContainers = new Set();
+      allRechargeLinks.forEach(link => {
+        const wrapper = link.parentElement;
+        const container = wrapper?.parentElement;
+        if (container) candidateContainers.add(container);
+      });
+      for (const c of candidateContainers) {
+        if (isSidebarContainer(c)) {
+          navContainer = c;
+          sidebarLink = null;
+          console.log('[ET] Contact Us: Found sidebar container via fallback');
+          break;
+        }
+      }
+    }
+
+    if (!navContainer) {
+      console.log('[ET] Contact Us: Could not find navigation container');
+      return;
+    }
+
+    const rechargeLinksInContainer = navContainer.querySelectorAll(':scope > div._18gma4r0 > a[data-testid*="recharge-internal"]');
+    console.log('[ET] Contact Us: Using container', navContainer.tagName, navContainer.className, 'with', rechargeLinksInContainer.length, 'links');
+
+    // Check if already exists
     if (document.querySelector('#et-contact-us-nav-link')) {
       contactUsInjected = true;
       return;
     }
 
-    const referenceLink = navContainer.querySelector('a[href*="/upcoming"], a[href*="/subscriptions"]');
+    // Find a reference link to clone - ONLY from links in the verified sidebar container
+    // Use rechargeLinksInContainer which we already verified is in the sidebar
+    const sidebarLinks = Array.from(rechargeLinksInContainer);
     
-    if (referenceLink) {
-      const contactLink = referenceLink.cloneNode(true);
-      contactLink.id = 'et-contact-us-nav-link';
-      contactLink.href = '#contact-us';
-      
-      const textSpan = contactLink.querySelector('span') || contactLink;
-      textSpan.textContent = 'Contact us';
-      
-      if (textSpan.style) {
-        textSpan.style.color = '#222';
-      }
-      contactLink.style.color = '#222';
-            
-      contactLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        renderContactUsPage();
-      });
-
-      const logoutLink = navContainer.querySelector('a[href*="logout"], button[type="submit"]');
-      if (logoutLink && logoutLink.parentElement) {
-        logoutLink.parentElement.parentElement.insertBefore(contactLink.parentElement || contactLink, logoutLink.parentElement);
-      } else {
-        navContainer.appendChild(contactLink);
-      }
-
-      contactUsInjected = true;
+    // Prefer using the sidebarLink we found, or find a good reference from sidebar links
+    let referenceLink = sidebarLink && navContainer.contains(sidebarLink) ? sidebarLink : null;
+    
+    if (!referenceLink) {
+      referenceLink = sidebarLinks.find(link => 
+        link.getAttribute('data-testid')?.includes('recharge-internal-upcoming') ||
+        link.getAttribute('data-testid')?.includes('recharge-internal-previous') ||
+        link.getAttribute('data-testid')?.includes('recharge-internal-manage')
+      ) || sidebarLinks[0];
     }
+    
+    if (!referenceLink) {
+      console.log('[ET] Contact Us: Could not find reference link to clone');
+      return;
+    }
+
+    console.log('[ET] Contact Us: Cloning reference link', referenceLink.getAttribute('data-testid'));
+
+    // Clone the wrapper div structure: div._18gma4r0 > a
+    const referenceWrapper = referenceLink.parentElement;
+    if (!referenceWrapper) {
+      console.log('[ET] Contact Us: Could not find wrapper div');
+      return;
+    }
+
+    // Clone the wrapper div (div._18gma4r0)
+    const contactWrapper = referenceWrapper.cloneNode(false);
+    const contactLink = referenceLink.cloneNode(true);
+    
+    // Update the link
+    contactLink.id = 'et-contact-us-nav-link';
+    contactLink.href = '#contact-us';
+    contactLink.removeAttribute('data-testid');
+    contactLink.removeAttribute('data-active');
+    contactLink.removeAttribute('aria-current');
+    contactLink.setAttribute('aria-label', 'Contact us');
+    
+    // Update text content - find the span with recharge-heading class
+    const textSpan = contactLink.querySelector('span.recharge-heading, span[role="heading"]') || 
+                     contactLink.querySelector('span') || 
+                     contactLink;
+    if (textSpan) {
+      textSpan.textContent = 'Contact us';
+    }
+    
+    contactLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      renderContactUsPage();
+    });
+
+    // Append the link to wrapper
+    contactWrapper.appendChild(contactLink);
+
+    // Insert before logout link if it exists, otherwise append to end (after Update Payment)
+    const logoutLink = navContainer.querySelector('a[data-testid*="logout"], a[data-testid*="recharge-internal-logout"]');
+    if (logoutLink && logoutLink.parentElement) {
+      const logoutWrapper = logoutLink.parentElement;
+      if (logoutWrapper.parentElement === navContainer) {
+        navContainer.insertBefore(contactWrapper, logoutWrapper);
+        console.log('[ET] Contact Us: Inserted before logout link');
+      } else {
+        // Find Update Payment link and insert after it
+        const updatePaymentLink = navContainer.querySelector('a[data-testid*="recharge-internal-customer"], a[data-testid*="recharge-internal-update"]');
+        if (updatePaymentLink && updatePaymentLink.parentElement) {
+          const updatePaymentWrapper = updatePaymentLink.parentElement;
+          if (updatePaymentWrapper.parentElement === navContainer && updatePaymentWrapper.nextSibling) {
+            navContainer.insertBefore(contactWrapper, updatePaymentWrapper.nextSibling);
+            console.log('[ET] Contact Us: Inserted after Update Payment');
+          } else {
+            navContainer.appendChild(contactWrapper);
+            console.log('[ET] Contact Us: Appended to end');
+          }
+        } else {
+          navContainer.appendChild(contactWrapper);
+          console.log('[ET] Contact Us: Appended to end (no Update Payment found)');
+        }
+      }
+    } else {
+      // No logout link, insert after Update Payment or append to end
+      const updatePaymentLink = navContainer.querySelector('a[data-testid*="recharge-internal-customer"], a[data-testid*="recharge-internal-update"]');
+      if (updatePaymentLink && updatePaymentLink.parentElement) {
+        const updatePaymentWrapper = updatePaymentLink.parentElement;
+        if (updatePaymentWrapper.parentElement === navContainer && updatePaymentWrapper.nextSibling) {
+          navContainer.insertBefore(contactWrapper, updatePaymentWrapper.nextSibling);
+          console.log('[ET] Contact Us: Inserted after Update Payment');
+        } else {
+          navContainer.appendChild(contactWrapper);
+          console.log('[ET] Contact Us: Appended to end');
+        }
+      } else {
+        navContainer.appendChild(contactWrapper);
+        console.log('[ET] Contact Us: Appended to end of container');
+      }
+    }
+
+    contactUsInjected = true;
+    console.log('[ET] Contact Us: ✅ Successfully injected into sidebar');
   }
 
   function cleanupContactUsPage() {
@@ -817,9 +1054,23 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  const contactNavObserver = new MutationObserver(() => {
-    if (!contactUsInjected) {
-      injectContactUsNav();
+  const contactNavObserver = new MutationObserver((mutations) => {
+    // Check if any Recharge nav links were added/changed
+    const hasNavChanges = mutations.some(mutation => {
+      return Array.from(mutation.addedNodes).some(node => {
+        if (node.nodeType !== 1) return false;
+        return node.querySelector?.('a[data-testid*="recharge-internal"]') ||
+               node.matches?.('a[data-testid*="recharge-internal"]');
+      });
+    });
+    
+    if (hasNavChanges && !contactUsInjected) {
+      // Delay to ensure reordering has completed first
+      setTimeout(() => {
+        if (!contactUsInjected) {
+          injectContactUsNav();
+        }
+      }, 400);
     }
   });
 
@@ -828,8 +1079,11 @@
     subtree: true,
   });
 
-  setTimeout(injectContactUsNav, 1000);
-  setTimeout(injectContactUsNav, 2000);
+  // Multiple attempts to catch dynamic content - run after reordering
+  setTimeout(injectContactUsNav, 1200);
+  setTimeout(injectContactUsNav, 2500);
+  setTimeout(injectContactUsNav, 4000);
+  setTimeout(injectContactUsNav, 6000);
   
     document.addEventListener('Recharge::location::change', function() {
       cleanupContactUsPage();
@@ -847,9 +1101,8 @@
         cleanupContactUsPage();
       }
     }, true);
-
-  // loyalty rewards integration
-      let redeemRewardsInjected = false;
+    // redeem loyalty
+    let redeemRewardsInjected = false;
     let redeemRewardsContainer = null;
     let hiddenReactContentForRewards = null;
     let rewardResizeHandler = null;
@@ -2109,6 +2362,237 @@
       
       console.log('[ET] ===== Extracting addressId from subscription card =====');
       
+      // Strategy -1: Extract from card's React Fiber/State (Recharge stores data here)
+      try {
+        // Walk through all elements in the card to find React instances
+        const allElements = card.querySelectorAll('*');
+        for (const el of allElements) {
+          // Check for React fiber
+          const reactKey = Object.keys(el).find(key => key.startsWith('__reactFiber') || key.startsWith('__reactInternalInstance'));
+          if (reactKey) {
+            try {
+              let fiber = el[reactKey];
+              let depth = 0;
+              while (fiber && depth < 15) {
+                // Check memoizedProps
+                if (fiber.memoizedProps) {
+                  const props = fiber.memoizedProps;
+                  // Look for addressId in props
+                  for (const key in props) {
+                    const keyLower = key.toLowerCase();
+                    if ((keyLower.includes('address') && keyLower.includes('id')) || keyLower === 'addressid' || keyLower === 'address_id') {
+                      const value = props[key];
+                      if (value && (typeof value === 'string' || typeof value === 'number')) {
+                        const addrId = String(value);
+                        if (/^\d+$/.test(addrId)) {
+                          console.log('[ET] ✓✓✓✓✓ Found addressId from React Fiber props (Strategy -1):', addrId);
+                          return addrId;
+                        }
+                      }
+                    }
+                    // Also check if prop is an object with addressId
+                    if (props[key] && typeof props[key] === 'object') {
+                      const obj = props[key];
+                      if (obj.addressId || obj.address_id || obj.addressId) {
+                        const addrId = String(obj.addressId || obj.address_id || obj.addressId);
+                        if (/^\d+$/.test(addrId)) {
+                          console.log('[ET] ✓✓✓✓✓ Found addressId from React Fiber object prop (Strategy -1):', addrId);
+                          return addrId;
+                        }
+                      }
+                    }
+                  }
+                }
+                
+                // Check memoizedState
+                if (fiber.memoizedState) {
+                  let state = fiber.memoizedState;
+                  while (state) {
+                    if (state.memoizedState && typeof state.memoizedState === 'object') {
+                      const stateObj = state.memoizedState;
+                      if (stateObj.addressId || stateObj.address_id) {
+                        const addrId = String(stateObj.addressId || stateObj.address_id);
+                        if (/^\d+$/.test(addrId)) {
+                          console.log('[ET] ✓✓✓✓✓ Found addressId from React Fiber state (Strategy -1):', addrId);
+                          return addrId;
+                        }
+                      }
+                    }
+                    state = state.next;
+                  }
+                }
+                
+                fiber = fiber.return || fiber._owner || fiber.child;
+                depth++;
+              }
+            } catch (e) {
+              // React access might fail
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[ET] Strategy -1 error:', e);
+      }
+      
+      // Strategy -0.5: Look for data attributes on the card itself (Recharge might add these)
+      try {
+        // Check all data attributes on the card
+        for (const attr of card.attributes) {
+          const attrName = attr.name.toLowerCase();
+          if (attrName.includes('address') && attrName.includes('id')) {
+            const match = attr.value.match(/(\d+)/);
+            if (match && match[1] && /^\d+$/.test(match[1])) {
+              console.log('[ET] ✓✓✓✓✓ Found addressId from card data attribute (Strategy -0.5):', match[1]);
+              return match[1];
+            }
+          }
+        }
+        
+        // Check for subscription data that might contain addressId
+        const cardData = card.getAttribute('data-subscription') || card.getAttribute('data-subscription-data');
+        if (cardData) {
+          try {
+            const subData = JSON.parse(cardData);
+            if (subData.addressId || subData.address_id) {
+              const addrId = String(subData.addressId || subData.address_id);
+              if (/^\d+$/.test(addrId)) {
+                console.log('[ET] ✓✓✓✓✓ Found addressId from card subscription data (Strategy -0.5):', addrId);
+                return addrId;
+              }
+            }
+          } catch (e) {
+            // Not JSON, try regex
+            const match = cardData.match(/address[_-]?id[=:](\d+)/i);
+            if (match && match[1]) {
+              console.log('[ET] ✓✓✓✓✓ Found addressId from card subscription data string (Strategy -0.5):', match[1]);
+              return match[1];
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[ET] Strategy -0.5 error:', e);
+      }
+      
+      // Strategy 0: Look for edit address button with data-testid (NEW - most reliable for Recharge)
+      const editAddressButton = card.querySelector('[data-testid*="edit-address"], [data-testid*="edit-address-button"], [role="button"][data-testid*="address"], span[data-testid*="edit-address"]');
+      if (editAddressButton) {
+        console.log('[ET] Strategy 0: Found edit address button');
+        console.log('[ET] Button element:', editAddressButton.tagName, editAddressButton.className);
+        console.log('[ET] Button data-testid:', editAddressButton.getAttribute('data-testid'));
+        
+        // Check all data attributes on the button
+        for (const attr of editAddressButton.attributes) {
+          const attrName = attr.name.toLowerCase();
+          const attrValue = attr.value;
+          
+          // Check for address ID in any data attribute
+          if (attrName.includes('address') && attrName.includes('id')) {
+            const match = attrValue.match(/(\d+)/);
+            if (match && match[1]) {
+              console.log('[ET] ✓✓✓✓✓ Found addressId from edit button attribute', attr.name, '(Strategy 0):', match[1]);
+              return match[1];
+            }
+          }
+          
+          // Check if attribute value contains address ID pattern
+          const addrIdMatch = attrValue.match(/address[_-]?id[=:](\d+)/i) || 
+                             attrValue.match(/addresses\/(\d+)/) ||
+                             attrValue.match(/addresses[\/=](\d+)/);
+          if (addrIdMatch && addrIdMatch[1]) {
+            console.log('[ET] ✓✓✓✓✓ Found addressId from edit button attribute', attr.name, '(Strategy 0):', addrIdMatch[1]);
+            return addrIdMatch[1];
+          }
+        }
+        
+        // Check data attributes first
+        const dataAddrId = editAddressButton.getAttribute('data-address-id') || 
+                          editAddressButton.getAttribute('data-addressId') ||
+                          editAddressButton.getAttribute('data-address_id') ||
+                          editAddressButton.getAttribute('data-addressid');
+        if (dataAddrId && /^\d+$/.test(dataAddrId)) {
+          console.log('[ET] ✓✓✓✓✓ Found addressId from edit button data attribute (Strategy 0):', dataAddrId);
+          return dataAddrId;
+        }
+        
+        // Check if button has onclick or event handler that contains addressId
+        const onclick = editAddressButton.getAttribute('onclick') || '';
+        const onclickMatch = onclick.match(/address[_-]?id[=:](\d+)/i) || 
+                            onclick.match(/addresses\/(\d+)/) ||
+                            onclick.match(/addresses[\/=](\d+)/);
+        if (onclickMatch && onclickMatch[1]) {
+          console.log('[ET] ✓✓✓✓✓ Found addressId from edit button onclick (Strategy 0):', onclickMatch[1]);
+          return onclickMatch[1];
+        }
+        
+        // Check React props (if available) - React stores props in __reactInternalInstance or __reactFiber
+        try {
+          const reactKey = Object.keys(editAddressButton).find(key => key.startsWith('__react'));
+          if (reactKey) {
+            const reactInstance = editAddressButton[reactKey];
+            if (reactInstance) {
+              // Try to find addressId in React props
+              let fiber = reactInstance;
+              for (let i = 0; i < 10 && fiber; i++) {
+                if (fiber.memoizedProps) {
+                  const props = fiber.memoizedProps;
+                  for (const key in props) {
+                    if (key.toLowerCase().includes('address') && key.toLowerCase().includes('id')) {
+                      const value = props[key];
+                      if (typeof value === 'string' && /^\d+$/.test(value)) {
+                        console.log('[ET] ✓✓✓✓✓ Found addressId from React props (Strategy 0):', value);
+                        return value;
+                      }
+                    }
+                  }
+                }
+                fiber = fiber.return || fiber._owner;
+              }
+            }
+          }
+        } catch (e) {
+          // React props access might fail, that's okay
+        }
+        
+        // Check parent elements for addressId (walk up DOM tree)
+        let parent = editAddressButton.parentElement;
+        let depth = 0;
+        while (parent && depth < 8) {
+          // Check all data attributes on parent
+          for (const attr of parent.attributes) {
+            const attrName = attr.name.toLowerCase();
+            if (attrName.includes('address') && attrName.includes('id')) {
+              const match = attr.value.match(/(\d+)/);
+              if (match && match[1] && /^\d+$/.test(match[1])) {
+                console.log('[ET] ✓✓✓✓✓ Found addressId from edit button parent', depth, 'levels up (Strategy 0):', match[1]);
+                return match[1];
+              }
+            }
+          }
+          
+          const parentDataAddrId = parent.getAttribute('data-address-id') || 
+                                   parent.getAttribute('data-addressId') ||
+                                   parent.getAttribute('data-address_id') ||
+                                   parent.getAttribute('data-addressid');
+          if (parentDataAddrId && /^\d+$/.test(parentDataAddrId)) {
+            console.log('[ET] ✓✓✓✓✓ Found addressId from edit button parent (Strategy 0):', parentDataAddrId);
+            return parentDataAddrId;
+          }
+          
+          // Check parent's HTML for address ID patterns
+          const parentHTML = parent.outerHTML || '';
+          const htmlMatch = parentHTML.match(/address[_-]?id[=:](\d+)/i) || 
+                           parentHTML.match(/addresses\/(\d+)/) ||
+                           parentHTML.match(/addresses[\/=](\d+)/);
+          if (htmlMatch && htmlMatch[1]) {
+            console.log('[ET] ✓✓✓✓✓ Found addressId from parent HTML (Strategy 0):', htmlMatch[1]);
+            return htmlMatch[1];
+          }
+          
+          parent = parent.parentElement;
+          depth++;
+        }
+      }
+      
       // Strategy 1: Look for links with addresses/ID pattern (most reliable)
       const allLinks = card.querySelectorAll('a[href*="addresses/"], a[href*="/addresses/"], a[href*="addresses"]');
       console.log('[ET] Strategy 1: Found', allLinks.length, 'links with addresses pattern');
@@ -2127,7 +2611,7 @@
       }
       
       // Strategy 2: Look for buttons that trigger Recharge events
-      const rechargeButtons = card.querySelectorAll('button[onclick*="manageSubscription"], button[data-subscription-id], button[data-address-id], button[onclick*="address"]');
+      const rechargeButtons = card.querySelectorAll('button[onclick*="manageSubscription"], button[data-subscription-id], button[data-address-id], button[onclick*="address"], [role="button"][data-testid*="address"]');
       console.log('[ET] Strategy 2: Found', rechargeButtons.length, 'Recharge buttons');
       for (const btn of rechargeButtons) {
         const onclick = btn.getAttribute('onclick') || '';
@@ -2177,6 +2661,54 @@
           console.log('[ET] ✓✓✓✓✓ Found addressId from data attribute (Strategy 4):', addressId);
           return addressId;
         }
+      }
+      
+      // Strategy 4.5: Look for script tags with JSON data containing address information
+      try {
+        const scripts = document.querySelectorAll('script[type="application/json"], script[type="application/ld+json"]');
+        const cardText = (card.textContent || '').trim();
+        const addressMatch = cardText.match(/Deliver to\s+(.+?)(?:Edit|Redeem|Subscription|Bundle|Charge|$)/i);
+        const targetAddress = addressMatch ? addressMatch[1].trim() : null;
+        
+        if (targetAddress && scripts.length > 0) {
+          const targetParts = targetAddress.split(/\s+/).filter(p => p.length > 0);
+          const streetNumber = targetParts[0];
+          
+          for (const script of scripts) {
+            try {
+              const data = JSON.parse(script.textContent || '{}');
+              
+              // Check if this script contains address data
+              if (data.addresses && Array.isArray(data.addresses)) {
+                for (const addr of data.addresses) {
+                  const addr1 = (addr.address1 || '').trim().toLowerCase();
+                  if (streetNumber && addr1 && addr1.includes(streetNumber.toLowerCase())) {
+                    if (addr.id) {
+                      console.log('[ET] ✓✓✓✓✓ Found addressId from script JSON (Strategy 4.5):', addr.id);
+                      return String(addr.id);
+                    }
+                  }
+                }
+              }
+              
+              // Check subscriptions array
+              if (data.subscriptions && Array.isArray(data.subscriptions)) {
+                for (const sub of data.subscriptions) {
+                  if (sub.address_id) {
+                    // Try to match by checking if this subscription's address matches
+                    const addrId = String(sub.address_id);
+                    console.log('[ET] Found subscription with addressId in script:', addrId);
+                    // We'll return this if we can't find a better match
+                  }
+                }
+              }
+            } catch (e) {
+              // Not valid JSON or doesn't contain address data
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[ET] Strategy 4.5 error:', e);
       }
       
       // Strategy 5: Look in the card's HTML (search for any numeric ID that looks like an address ID)
@@ -2524,41 +3056,229 @@
                 }
               }
               
+              // PRIORITY 1.6: Match by address text FIRST (before card position) - more reliable
+              if (addressText && addresses && addresses.length > 0) {
+                console.log('[ET] PRIORITY 1.6: Matching by address text...');
+                const addressMatch = addressText.match(/Deliver to\s+(.+?)(?:Edit|Redeem|Subscription|$)/i);
+                const targetAddress = addressMatch ? addressMatch[1].trim() : addressText.replace(/Deliver to\s*/i, '').replace(/Edit.*$/i, '').replace(/Redeem.*$/i, '').trim();
+                
+                if (targetAddress) {
+                  console.log('[ET] Target address from card:', targetAddress);
+                  
+                  // Extract street number and name
+                  const targetParts = targetAddress.split(/\s+/).filter(p => p.length > 0);
+                  const streetNumber = targetParts[0]; // e.g., "1800"
+                  const streetName = targetParts.slice(1, 3).join(' ').toLowerCase(); // e.g., "north vermont"
+                  
+                  // Try to match each subscription's address
+                  // Since addresses might be masked, we'll also match by subscription properties
+                  let bestMatch = null;
+                  let bestScore = 0;
+                  
+                  // Extract subscription properties from card for matching
+                  const cardText = subscriptionCard ? (subscriptionCard.textContent || '').trim() : '';
+                  const priceMatch = cardText.match(/\$(\d+\.?\d*)/);
+                  const cardPrice = priceMatch ? parseFloat(priceMatch[1]).toFixed(2) : null;
+                  const quantityMatch = cardText.match(/(\d+)\s*×/);
+                  const cardQuantity = quantityMatch ? parseInt(quantityMatch[1]) : null;
+                  
+                  for (const sub of subscriptions) {
+                    const addressId = sub.address_id;
+                    if (!addressId) continue;
+                    
+                    const address = addressMap[addressId];
+                    let addressScore = 0;
+                    let propertyScore = 0;
+                    
+                    // Try to match by address (if not masked)
+                    if (address) {
+                      const addr1 = (address.address1 || '').trim().toLowerCase();
+                      
+                      // Match by street number (works even if masked like "1*******")
+                      if (streetNumber && addr1) {
+                        // Check if masked address starts with same number
+                        const maskedMatch = addr1.match(/^(\d+)/);
+                        if (maskedMatch && maskedMatch[1] === streetNumber) {
+                          addressScore += 8; // Higher score for masked match
+                        } else if (addr1.includes(streetNumber.toLowerCase())) {
+                          addressScore += 5;
+                        }
+                      }
+                      
+                      // Match by street name (more specific, but might not work if masked)
+                      if (streetName && addr1 && addr1.includes(streetName)) {
+                        addressScore += 10;
+                      }
+                      
+                      // Full address match (most reliable, but won't work if masked)
+                      if (targetAddress && addr1 && addr1.includes(targetAddress.toLowerCase().substring(0, 15))) {
+                        addressScore += 15;
+                      }
+                      
+                      // Also check address2, city, zip for additional matching
+                      const addr2 = (address.address2 || '').trim().toLowerCase();
+                      const city = (address.city || '').trim().toLowerCase();
+                      if (addr2 && targetAddress.toLowerCase().includes(addr2)) {
+                        addressScore += 3;
+                      }
+                      if (city && targetAddress.toLowerCase().includes(city)) {
+                        addressScore += 2;
+                      }
+                    }
+                    
+                    // Match by subscription properties (price, quantity) - more reliable when addresses are masked
+                    if (cardPrice && sub.price) {
+                      const subPrice = parseFloat(sub.price).toFixed(2);
+                      if (subPrice === cardPrice) {
+                        propertyScore += 10;
+                      }
+                    }
+                    
+                    if (cardQuantity && sub.quantity) {
+                      if (sub.quantity === cardQuantity) {
+                        propertyScore += 5;
+                      }
+                    }
+                    
+                    // Combined score (address + properties)
+                    const totalScore = addressScore + propertyScore;
+                    
+                    if (totalScore > bestScore) {
+                      bestScore = totalScore;
+                      bestMatch = { addressId, subscription: sub, addressScore, propertyScore };
+                    }
+                  }
+                  
+                  if (bestMatch && bestScore >= 5) {
+                    console.log('[ET] ✓✓✓✓✓ Matched subscription by address+properties (total score', bestScore, ', address:', bestMatch.addressScore, ', properties:', bestMatch.propertyScore, '):', bestMatch.subscription.id, '-> address_id:', bestMatch.addressId);
+                    return bestMatch.addressId;
+                  } else if (bestMatch) {
+                    console.log('[ET] Address+property match score too low:', bestScore, 'for address_id:', bestMatch.addressId);
+                  } else {
+                    console.log('[ET] No address match found for:', targetAddress);
+                  }
+                }
+              }
+              
               // PRIORITY 2: Try to match by card position/index
               // Subscriptions might be displayed in the same order as returned by SDK
               if (subscriptionCard) {
-                // Find all subscription cards on the page
-                const allCards = Array.from(document.querySelectorAll('*')).filter(el => {
-                  const text = (el.textContent || '').trim();
-                  return text.includes('Deliver to') && text.length < 500;
-                });
+                // First, find the actual top-level subscription card container
+                // Walk up from subscriptionCard to find the container that has "Deliver to" as a direct child
+                let cardContainer = subscriptionCard;
+                let depth = 0;
+                while (cardContainer && depth < 10) {
+                  const text = (cardContainer.textContent || '').trim();
+                  const hasDeliverTo = text.includes('Deliver to');
+                  const hasSubscriptionContent = text.includes('Subscription') || 
+                                                text.includes('Bundle contents') ||
+                                                text.includes('Charge to');
+                  const textLength = text.length;
+                  
+                  // Check if this is a top-level card container
+                  // It should have "Deliver to" AND subscription content AND be a reasonable size
+                  if (hasDeliverTo && hasSubscriptionContent && textLength > 100 && textLength < 3000) {
+                    // Check if this container has "Deliver to" as a direct or near-direct child (not deeply nested)
+                    const deliverToElements = cardContainer.querySelectorAll('span[role="heading"], h1, h2, h3, div');
+                    const hasDirectDeliverTo = Array.from(deliverToElements).some(el => {
+                      const elText = (el.textContent || '').trim();
+                      return elText.includes('Deliver to') && elText.length < 100;
+                    });
+                    
+                    if (hasDirectDeliverTo) {
+                      // This looks like a top-level card container
+                      break;
+                    }
+                  }
+                  cardContainer = cardContainer.parentElement;
+                  depth++;
+                }
                 
-                // Find the index of our card
-                let cardIndex = -1;
-                for (let i = 0; i < allCards.length; i++) {
-                  if (allCards[i].contains(subscriptionCard) || subscriptionCard.contains(allCards[i])) {
-                    cardIndex = i;
-                    break;
+                if (!cardContainer) {
+                  cardContainer = subscriptionCard;
+                }
+                
+                // Now find all similar top-level subscription card containers on the page
+                // Use a more specific approach: find containers that have the same structure
+                const allCards = [];
+                const allDivs = Array.from(document.querySelectorAll('div'));
+                
+                for (const div of allDivs) {
+                  const text = (div.textContent || '').trim();
+                  const hasDeliverTo = text.includes('Deliver to');
+                  const hasSubscriptionContent = text.includes('Subscription') || 
+                                                text.includes('Bundle contents') ||
+                                                text.includes('Charge to');
+                  const textLength = text.length;
+                  
+                  // Must be a reasonable size and have both required elements
+                  if (hasDeliverTo && hasSubscriptionContent && textLength > 200 && textLength < 3000) {
+                    // Check if this div has "Deliver to" as a direct/near-direct child
+                    const deliverToElements = div.querySelectorAll('span[role="heading"], h1, h2, h3');
+                    const hasDirectDeliverTo = Array.from(deliverToElements).some(el => {
+                      const elText = (el.textContent || '').trim();
+                      return elText.includes('Deliver to') && elText.length < 100;
+                    });
+                    
+                    // Also check if it has the same class structure as our card
+                    const hasSimilarClasses = cardContainer.className && div.className && 
+                                           cardContainer.className.split(' ').some(cls => 
+                                             div.className.includes(cls) && cls.length > 5
+                                           );
+                    
+                    if (hasDirectDeliverTo || hasSimilarClasses) {
+                      // Make sure this isn't a nested div (check if it's a sibling or top-level)
+                      const isNested = Array.from(allCards).some(existingCard => 
+                        existingCard.contains(div) || div.contains(existingCard)
+                      );
+                      
+                      if (!isNested) {
+                        allCards.push(div);
+                      }
+                    }
                   }
                 }
                 
-                // Also try to find by walking up the DOM tree
+                // Remove duplicates and nested cards
+                const uniqueCards = [];
+                for (const card of allCards) {
+                  const isDuplicate = uniqueCards.some(existing => 
+                    existing === card || existing.contains(card) || card.contains(existing)
+                  );
+                  if (!isDuplicate) {
+                    uniqueCards.push(card);
+                  }
+                }
+                
+                console.log('[ET] Found', uniqueCards.length, 'unique subscription card containers on page');
+                
+                // Find the index of our card container
+                let cardIndex = uniqueCards.findIndex(c => c === cardContainer || c.contains(cardContainer));
+                
+                // If not found, try to match by structure
                 if (cardIndex === -1) {
-                  let current = subscriptionCard;
-                  let depth = 0;
-                  while (current && depth < 10) {
-                    const cardText = (current.textContent || '').trim();
-                    if (cardText.includes('Deliver to') && cardText.length < 500) {
-                      for (let i = 0; i < allCards.length; i++) {
-                        if (allCards[i] === current || allCards[i].contains(current)) {
-                          cardIndex = i;
-                          break;
-                        }
+                  // Extract address text from our card
+                  const ourAddressText = (cardContainer.textContent || '').match(/Deliver to\s+(.+?)(?:Edit|Redeem|Subscription|$)/i);
+                  const ourAddress = ourAddressText ? ourAddressText[1].trim() : '';
+                  
+                  if (ourAddress) {
+                    // Try to find card with matching address
+                    for (let i = 0; i < uniqueCards.length; i++) {
+                      const cardText = (uniqueCards[i].textContent || '').trim();
+                      const cardAddressMatch = cardText.match(/Deliver to\s+(.+?)(?:Edit|Redeem|Subscription|$)/i);
+                      const cardAddress = cardAddressMatch ? cardAddressMatch[1].trim() : '';
+                      
+                      // Match by address (fuzzy match)
+                      if (cardAddress && (
+                        cardAddress.toLowerCase() === ourAddress.toLowerCase() ||
+                        cardAddress.toLowerCase().includes(ourAddress.toLowerCase().substring(0, 10)) ||
+                        ourAddress.toLowerCase().includes(cardAddress.toLowerCase().substring(0, 10))
+                      )) {
+                        cardIndex = i;
+                        console.log('[ET] Matched card by address text:', ourAddress, '->', cardAddress);
+                        break;
                       }
-                      if (cardIndex !== -1) break;
                     }
-                    current = current.parentElement;
-                    depth++;
                   }
                 }
                 
@@ -2569,7 +3289,7 @@
                     return matchedSub.address_id;
                   }
                 } else {
-                  console.log('[ET] Could not determine card position, cardIndex:', cardIndex, 'subscriptions:', subscriptions.length);
+                  console.log('[ET] Could not determine card position, cardIndex:', cardIndex, 'subscriptions:', subscriptions.length, 'unique cards found:', uniqueCards.length);
                 }
               }
               
@@ -2622,32 +3342,41 @@
                   if (cardDate && sub.next_charge_scheduled_at) {
                     const subDate = sub.next_charge_scheduled_at.split('T')[0]; // Get YYYY-MM-DD part
                     if (subDate === cardDate) {
-                      matchScore += 10; // Highest weight for date match
+                      matchScore += 20; // Highest weight for date match
                       console.log('[ET] Date match:', subDate, 'for subscription', sub.id);
                     }
                   }
                   
-                  // Match price
+                  // Match price (high weight)
                   if (cardPrice && sub.price) {
                     const subPrice = parseFloat(sub.price).toFixed(2);
                     if (subPrice === cardPrice) {
-                      matchScore += 5;
+                      matchScore += 10;
                       console.log('[ET] Price match:', subPrice, 'for subscription', sub.id);
                     }
                   }
                   
-                  // Match quantity
+                  // Match quantity (medium weight)
                   if (cardQuantity && sub.quantity) {
                     if (sub.quantity === cardQuantity) {
-                      matchScore += 3;
+                      matchScore += 5;
                       console.log('[ET] Quantity match:', sub.quantity, 'for subscription', sub.id);
                     }
                   }
                   
-                  // Match frequency
+                  // Match frequency (low weight)
                   if (hasWeekly && sub.order_interval_unit === 'week') {
                     matchScore += 1;
                     console.log('[ET] Frequency match: week for subscription', sub.id);
+                  }
+                  
+                  // Bonus: Price + Quantity together (very reliable combination)
+                  if (cardPrice && cardQuantity && sub.price && sub.quantity) {
+                    const subPrice = parseFloat(sub.price).toFixed(2);
+                    if (subPrice === cardPrice && sub.quantity === cardQuantity) {
+                      matchScore += 15; // Big bonus for both matching
+                      console.log('[ET] Price+Quantity combo match for subscription', sub.id);
+                    }
                   }
                   
                   if (matchScore > bestScore) {
@@ -2656,11 +3385,14 @@
                   }
                 }
                 
-                // If we have a good match (date match is most reliable)
-                if (bestMatch && bestScore >= 5 && bestMatch.address_id) {
+                // If we have a good match (date match is most reliable, or price+quantity combo)
+                if (bestMatch && bestScore >= 15 && bestMatch.address_id) {
                   console.log('[ET] ✓✓✓ Matched subscription by properties (score', bestScore, '):', bestMatch.id, '-> address_id:', bestMatch.address_id);
                   return bestMatch.address_id;
-                } else if (bestMatch && bestScore >= 3 && bestMatch.address_id) {
+                } else if (bestMatch && bestScore >= 10 && bestMatch.address_id) {
+                  console.log('[ET] ✓✓ Matched subscription by properties (score', bestScore, '):', bestMatch.id, '-> address_id:', bestMatch.address_id);
+                  return bestMatch.address_id;
+                } else if (bestMatch && bestScore >= 5 && bestMatch.address_id) {
                   console.log('[ET] ✓ Matched subscription by properties (score', bestScore, '):', bestMatch.id, '-> address_id:', bestMatch.address_id);
                   return bestMatch.address_id;
                 }
@@ -2671,15 +3403,19 @@
               // PRIORITY 4: If we have address text, try to match subscription by address (last resort)
               if (addressText) {
                 // Extract the street address from "Deliver to 1800 North Vermont AvenueEdit"
-                const addressMatch = addressText.match(/Deliver to\s+(.+?)(?:Edit|$)/i);
-                const targetAddress = addressMatch ? addressMatch[1].trim() : addressText.replace(/Deliver to\s*/i, '').replace(/Edit.*$/i, '').trim();
+                const addressMatch = addressText.match(/Deliver to\s+(.+?)(?:Edit|Redeem|$)/i);
+                const targetAddress = addressMatch ? addressMatch[1].trim() : addressText.replace(/Deliver to\s*/i, '').replace(/Edit.*$/i, '').replace(/Redeem.*$/i, '').trim();
                 console.log('[ET] Looking for subscription matching address:', targetAddress);
                 
-                // Extract street number for matching
+                // Extract street number and street name for matching
                 const targetParts = targetAddress.split(/\s+/).filter(p => p.length > 0);
                 const streetNumber = targetParts[0]; // e.g., "1800"
+                const streetName = targetParts.slice(1, 3).join(' ').toLowerCase(); // e.g., "north vermont"
                 
                 // Try to match subscription by matching its address_id's address details
+                let bestAddressMatch = null;
+                let bestAddressScore = 0;
+                
                 for (const sub of subscriptions) {
                   const addressId = sub.address_id;
                   if (!addressId) continue;
@@ -2687,15 +3423,39 @@
                   const address = addressMap[addressId];
                   if (!address) continue;
                   
-                  const addr1 = (address.address1 || '').trim();
+                  const addr1 = (address.address1 || '').trim().toLowerCase();
+                  let addressScore = 0;
                   
                   // Match by street number (works even if address is masked like "1*******")
-                  if (streetNumber && addr1 && addr1.includes(streetNumber)) {
-                    console.log('[ET] ✓ Matched subscription by street number:', streetNumber, 'in', addr1, '-> address_id:', addressId);
-                    return addressId;
+                  if (streetNumber && addr1 && addr1.includes(streetNumber.toLowerCase())) {
+                    addressScore += 5;
+                    console.log('[ET] Street number match:', streetNumber, 'in', addr1, 'for subscription', sub.id);
+                  }
+                  
+                  // Match by street name (more specific)
+                  if (streetName && addr1 && addr1.includes(streetName)) {
+                    addressScore += 10;
+                    console.log('[ET] Street name match:', streetName, 'in', addr1, 'for subscription', sub.id);
+                  }
+                  
+                  // Full address match (most reliable)
+                  if (targetAddress && addr1 && addr1.includes(targetAddress.toLowerCase().substring(0, 15))) {
+                    addressScore += 15;
+                    console.log('[ET] Full address match for subscription', sub.id);
+                  }
+                  
+                  if (addressScore > bestAddressScore) {
+                    bestAddressScore = addressScore;
+                    bestAddressMatch = addressId;
                   }
                 }
-                console.warn('[ET] ⚠️ Could not match subscription by address text');
+                
+                if (bestAddressMatch && bestAddressScore >= 5) {
+                  console.log('[ET] ✓ Matched subscription by address (score', bestAddressScore, '):', bestAddressMatch);
+                  return bestAddressMatch;
+                }
+                
+                console.warn('[ET] ⚠️ Could not match subscription by address text, best score:', bestAddressScore);
               }
               
               // LAST RESORT: Use first active subscription
@@ -3203,6 +3963,7 @@
               // Try to parse error if it's JSON
               try {
                 const errorData = JSON.parse(errorText);
+                alert(errorData?.error)
                 console.error('[ET] Error details:', errorData);
               } catch (e) {
                 // Not JSON, that's okay
