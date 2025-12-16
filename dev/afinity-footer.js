@@ -6,6 +6,80 @@
   let scriptInitialized = false;
   let initializationLoader = null;
   
+  // Track pending operations to know when it's safe to remove loader
+  let pendingOperations = new Set();
+  let loaderRemovalScheduled = false;
+  
+  // Function to track an operation
+  function trackOperation(operationId) {
+    pendingOperations.add(operationId);
+    console.log(`[ET] Operation started: ${operationId} (${pendingOperations.size} pending)`);
+  }
+  
+  // Function to mark an operation as complete
+  function completeOperation(operationId) {
+    pendingOperations.delete(operationId);
+    console.log(`[ET] Operation completed: ${operationId} (${pendingOperations.size} pending)`);
+    
+    // Check if we should remove loader
+    checkAndRemoveLoader();
+  }
+  
+  // Function to check if all operations are complete and remove loader
+  function checkAndRemoveLoader() {
+    // Don't remove if there are still pending operations
+    if (pendingOperations.size > 0) {
+      return;
+    }
+    
+    // Don't remove if already scheduled
+    if (loaderRemovalScheduled) {
+      return;
+    }
+    
+    // Schedule removal after a delay to ensure stability
+    loaderRemovalScheduled = true;
+    
+    // Wait a bit to ensure no new operations start
+    // Then check periodically until stable
+    let stabilityCheckCount = 0;
+    const maxStabilityChecks = 3;
+    const stabilityCheckInterval = 500;
+    
+    function performStabilityCheck() {
+      stabilityCheckCount++;
+      
+      // If operations started again, reset
+      if (pendingOperations.size > 0) {
+        loaderRemovalScheduled = false;
+        return;
+      }
+      
+      // If we've done enough stability checks, remove loader
+      if (stabilityCheckCount >= maxStabilityChecks) {
+        // Wait for next frame to ensure rendering is complete
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            // Final check
+            if (pendingOperations.size === 0) {
+              removeInitializationLoader();
+              console.log('[ET] All operations complete, loader removed');
+            } else {
+              loaderRemovalScheduled = false;
+              checkAndRemoveLoader();
+            }
+          }, 300);
+        });
+      } else {
+        // Check again after interval
+        setTimeout(performStabilityCheck, stabilityCheckInterval);
+      }
+    }
+    
+    // Start stability checks after initial delay
+    setTimeout(performStabilityCheck, stabilityCheckInterval);
+  }
+  
   // Function to show initialization loader
   function showInitializationLoader() {
     if (initializationLoader) return; // Already showing
@@ -206,11 +280,15 @@
   
   // Helper function to safely run code after delay with readiness check
   function safeDelayedRun(callback, delay, description = '') {
+    const operationId = `delayed-${description || 'operation'}-${Date.now()}-${Math.random()}`;
+    trackOperation(operationId);
+    
     setTimeout(() => {
       // Double-check DOM is ready
       if (document.readyState === 'loading' || !document.body) {
         console.log(`[ET] Delaying ${description || 'operation'} - DOM not ready`);
         safeDelayedRun(callback, delay, description);
+        completeOperation(operationId);
         return;
       }
       
@@ -219,13 +297,17 @@
       if (!hasRechargeElements && delay < 3000) {
         console.log(`[ET] Delaying ${description || 'operation'} - Recharge elements not found`);
         safeDelayedRun(callback, delay + 500, description);
+        completeOperation(operationId);
         return;
       }
       
       try {
         callback();
+        // Mark as complete after callback executes
+        setTimeout(() => completeOperation(operationId), 100);
       } catch (e) {
         console.error(`[ET] Error in ${description || 'delayed operation'}:`, e);
+        completeOperation(operationId);
       }
     }, delay);
   }
@@ -328,24 +410,52 @@
     }
   }
   
-  // Fetch interceptor to log ReCharge address data
+  // Fetch interceptor to log ReCharge address data and track operations
   const originalFetch = window.fetch;
   window.fetch = async function () {
-    const response = await originalFetch.apply(this, arguments);
-    const clonedResponse = response.clone();
-    clonedResponse.json().then(data => {
-      // Check if the response contains ReCharge customer address data
-      if (data?.data?.customer?.addresses?.length) {
-        const address = data.data.customer.addresses[0];
-        console.log("🔍 ReCharge Address Data Found:");
-        console.log("➡️ Address ID:", address.id);
-        console.log("➡️ Address 1:", address.address1);
-        console.log("➡️ City:", address.city);
-        console.log("➡️ Zip:", address.zip);
-        console.log("➡️ Full object:", address);
+    const url = arguments[0]?.url || arguments[0] || '';
+    const operationId = `fetch-${Date.now()}-${Math.random()}`;
+    let isTracked = false;
+    
+    // Only track API calls (not static assets)
+    if (typeof url === 'string' && (url.includes('/api/') || url.includes('recharge') || url.includes('loyaltylion'))) {
+      trackOperation(operationId);
+      isTracked = true;
+    }
+    
+    try {
+      const response = await originalFetch.apply(this, arguments);
+      
+      // Track completion and log data using the same cloned response
+      if (isTracked) {
+        const clonedResponse = response.clone();
+        clonedResponse.json().then(data => {
+          // Mark operation as complete
+          completeOperation(operationId);
+          
+          // Check if the response contains ReCharge customer address data
+          if (data?.data?.customer?.addresses?.length) {
+            const address = data.data.customer.addresses[0];
+            console.log("🔍 ReCharge Address Data Found:");
+            console.log("➡️ Address ID:", address.id);
+            console.log("➡️ Address 1:", address.address1);
+            console.log("➡️ City:", address.city);
+            console.log("➡️ Zip:", address.zip);
+            console.log("➡️ Full object:", address);
+          }
+        }).catch(() => {
+          // Even if JSON parsing fails, mark as complete
+          completeOperation(operationId);
+        });
       }
-    }).catch(() => {});
-    return response;
+      
+      return response;
+    } catch (error) {
+      if (isTracked) {
+        completeOperation(operationId);
+      }
+      throw error;
+    }
   };
 
   const selectors = [
@@ -6555,31 +6665,22 @@
     
     console.log('[ET] Script initialization completed');
     
-    // Remove loader after all DOM manipulations are complete
-    // Add a delay to ensure everything is fully rendered and stable
-    // Check multiple times to ensure page is stable before removing loader
-    let stabilityCheckCount = 0;
-    const maxStabilityChecks = 3;
+    // Track initialization as a main operation
+    const initOperationId = 'main-initialization';
+    trackOperation(initOperationId);
     
-    function checkStabilityAndRemoveLoader() {
-      stabilityCheckCount++;
+    // Wait for the maximum delayed operation time (7000ms) plus buffer
+    // This ensures all safeDelayedRun operations have time to complete
+    // The longest delayed operation is 7000ms, so we wait a bit longer
+    const maxDelayedOperationTime = 8000; // Slightly more than max 7000ms delay
+    
+    setTimeout(() => {
+      completeOperation(initOperationId);
       
-      // Wait for next frame to ensure rendering is complete
-      requestAnimationFrame(() => {
-        // Additional delay to ensure all async operations are complete
-        setTimeout(() => {
-          if (stabilityCheckCount >= maxStabilityChecks) {
-            removeInitializationLoader();
-          } else {
-            // Check again after a short delay
-            setTimeout(checkStabilityAndRemoveLoader, 300);
-          }
-        }, 500);
-      });
-    }
-    
-    // Start stability check after initial delay
-    setTimeout(checkStabilityAndRemoveLoader, 500);
+      // Start checking for loader removal
+      // The checkAndRemoveLoader function will handle the rest with stability checks
+      checkAndRemoveLoader();
+    }, maxDelayedOperationTime);
   } // End of initializeScript function
   
   // Start initialization - wait for DOM and Recharge to be ready
