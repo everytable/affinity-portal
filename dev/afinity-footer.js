@@ -5762,7 +5762,8 @@
           }
         }
         
-        const cardKey = cardContainer ? cardContainer.textContent.substring(0, 100) : 'unknown';
+        // Use a more reliable key: card container element itself
+        const cardKey = cardContainer ? cardContainer : 'unknown';
         if (!buttonsByCard.has(cardKey)) {
           buttonsByCard.set(cardKey, []);
         }
@@ -5783,6 +5784,7 @@
       // Find all subscription cards by looking for "Deliver to" text
       const allElements = Array.from(document.querySelectorAll('*'));
       const subscriptionCards = [];
+      const processedCards = new Set(); // Track processed card containers to prevent duplicates
       
       allElements.forEach(el => {
         const text = (el.textContent || '').trim();
@@ -5808,18 +5810,27 @@
             depth++;
           }
           
+          // Skip if we already processed this card container
+          if (processedCards.has(cardContainer)) {
+            return;
+          }
+          
           // Check if we already added a button to this card
-          // Use a more specific check to avoid duplicates
+          if (cardContainer.querySelector(`[id^="et-redeem-subscription-btn"]`)) {
+            processedCards.add(cardContainer);
+            return;
+          }
+          
+          // Mark this card as processed
+          processedCards.add(cardContainer);
+          
           const addressText = (el.textContent || '').trim();
           const buttonId = `et-redeem-subscription-btn-${addressText.replace(/\s+/g, '-').substring(0, 50)}`;
-          if (!cardContainer.querySelector(`[id^="et-redeem-subscription-btn"]`) && 
-              !el.closest('[id^="et-redeem-subscription-btn"]')) {
-            subscriptionCards.push({
-              addressElement: el,
-              cardContainer: cardContainer,
-              buttonId: buttonId
-            });
-          }
+          subscriptionCards.push({
+            addressElement: el,
+            cardContainer: cardContainer,
+            buttonId: buttonId
+          });
         }
       });
       
@@ -5856,41 +5867,8 @@
         }
         
         // Find the address element's parent to add button next to it
-        let addressContainer = addressElement.parentElement;
-        
-        // Try to find a flex container or suitable parent for the address
-        let targetParent = addressElement;
-        let current = addressElement;
-        let attempts = 0;
-        const maxAttempts = 5; // Increased from 3 to 5 for better detection
-        
-        while (current && attempts < maxAttempts) {
-          const style = window.getComputedStyle(current);
-          const tagName = current.tagName.toLowerCase();
-          
-          // Check if this is a flex container
-          if (style.display === 'flex') {
-            targetParent = current;
-            break;
-          }
-          
-          // Check if this element has edit buttons or similar controls (good insertion point)
-          if (current.querySelector('a[href*="edit"], button, [data-testid*="edit"]')) {
-            targetParent = current;
-            break;
-          }
-          
-          // Check if this is a suitable container (div, section, article, etc.)
-          if ((tagName === 'div' || tagName === 'section' || tagName === 'article') && 
-              current !== cardContainer && 
-              current.textContent.trim().length < 500) {
-            // This might be a good container, but continue searching for flex
-            targetParent = current;
-          }
-          
-          current = current.parentElement;
-          attempts++;
-        }
+        // Strategy: Insert button right after the address element, or wrap in flex container
+        let targetParent = addressElement.parentElement;
         
         // Create redeem button with unique ID
         const redeemButton = document.createElement('button');
@@ -6020,53 +5998,37 @@
           }
         }
         
-        // Try to insert button next to address
-        // Strategy 1: If address element's parent is flex, append button
-        const parentStyle = window.getComputedStyle(targetParent);
-        if (parentStyle.display === 'flex') {
-          // Double-check no button already in this flex container
-          if (!targetParent.querySelector(`[id^="et-redeem-subscription-btn"]`)) {
-            // For flex containers, push button to the right
-            redeemButton.style.marginLeft = 'auto';
-            targetParent.appendChild(redeemButton);
-          } else {
-            console.log('[ET] Button already in flex container, skipping');
+        // Insert button right after the address element
+        // Strategy: Wrap address and button in a flex container to position them side by side
+        if (addressElement.parentElement) {
+          // Check if button already exists as a sibling
+          const nextSibling = addressElement.nextSibling;
+          if (nextSibling && nextSibling.id && nextSibling.id.startsWith('et-redeem-subscription-btn')) {
+            console.log('[ET] Button already exists as sibling, skipping duplicate');
             return;
           }
-        } else {
-          // Strategy 2: Insert button as sibling after address element (safest approach)
-          // This preserves the DOM structure without wrapping
-          if (addressElement.parentElement) {
-            // Check if button already exists as a sibling
-            const nextSibling = addressElement.nextSibling;
-            if (nextSibling && nextSibling.id && nextSibling.id.startsWith('et-redeem-subscription-btn')) {
-              console.log('[ET] Button already exists as sibling, skipping duplicate');
-              return;
-            }
-            
-            // Check if address element is a block-level element (likely means button should be below)
-            const addressStyle = window.getComputedStyle(addressElement);
-            const isBlockLevel = addressStyle.display === 'block' || 
-                                addressStyle.display === 'flex' ||
-                                addressElement.tagName.toLowerCase() === 'h1' ||
-                                addressElement.tagName.toLowerCase() === 'h2' ||
-                                addressElement.tagName.toLowerCase() === 'h3' ||
-                                addressElement.tagName.toLowerCase() === 'div';
-            
-            if (isBlockLevel) {
-              // Address is block-level, so button should appear below it with proper spacing
-              redeemButton.style.display = 'block';
-              redeemButton.style.marginTop = '12px';
-              redeemButton.style.marginLeft = '0';
-              redeemButton.style.width = 'fit-content';
-            } else {
-              // Address is inline, button can be next to it
-              redeemButton.style.marginLeft = '12px';
-              redeemButton.style.display = 'inline-block';
-            }
-            
-            // Insert button after address element
+          
+          // Check if parent is already a flex container
+          const parentStyle = window.getComputedStyle(addressElement.parentElement);
+          const isParentFlex = parentStyle.display === 'flex' && parentStyle.flexDirection !== 'column';
+          
+          if (isParentFlex) {
+            // Parent is flex row, insert button after address and use margin-left: auto to push it right
+            redeemButton.style.marginLeft = 'auto';
             addressElement.parentElement.insertBefore(redeemButton, addressElement.nextSibling);
+          } else {
+            // Wrap address and button in a flex container
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+            
+            // Insert wrapper before address element
+            addressElement.parentElement.insertBefore(wrapper, addressElement);
+            
+            // Move address into wrapper
+            wrapper.appendChild(addressElement);
+            
+            // Add button to wrapper (will appear on the right)
+            wrapper.appendChild(redeemButton);
           }
         }
       });
