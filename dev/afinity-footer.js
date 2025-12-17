@@ -5737,6 +5737,85 @@
       // not as a badge next to the Redeem Rewards button
       return; // Exit early - no badge creation
     }
+    // Wait for subscription cards to be fully loaded and DOM to be stable
+    function waitForStableSubscriptionCards(callback, maxWaitTime = 15000, stabilityDelay = 500) {
+      let stabilityTimeout = null;
+      let lastMutationTime = Date.now();
+      let checkAttempts = 0;
+      const maxAttempts = 30; // Maximum number of stability checks
+      
+      // Monitor DOM mutations to detect when it becomes stable
+      const mutationObserver = new MutationObserver(() => {
+        lastMutationTime = Date.now();
+      });
+      
+      mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: false,
+        characterData: false
+      });
+      
+      const checkStability = () => {
+        checkAttempts++;
+        const now = Date.now();
+        const timeSinceLastMutation = now - lastMutationTime;
+        
+        // Check if subscription cards exist
+        const allElements = Array.from(document.querySelectorAll('*'));
+        let foundCards = false;
+        
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim();
+          if (text.includes('Deliver to') && text.length < 500) {
+            // Verify it's actually a subscription card
+            let parent = el.parentElement;
+            let depth = 0;
+            
+            while (parent && depth < 5) {
+              const parentText = (parent.textContent || '').trim();
+              if (parentText.includes('Subscription') || 
+                  parentText.includes('Every week') || 
+                  parentText.includes('Bundle contents') ||
+                  parentText.includes('Charge to')) {
+                foundCards = true;
+                break;
+              }
+              parent = parent.parentElement;
+              depth++;
+            }
+            if (foundCards) break;
+          }
+        }
+        
+        // If we found cards and DOM has been stable for the required delay, proceed
+        if (foundCards && timeSinceLastMutation >= stabilityDelay) {
+          console.log('[ET] Subscription cards are stable, adding buttons');
+          clearTimeout(stabilityTimeout);
+          mutationObserver.disconnect();
+          callback();
+          return;
+        }
+        
+        // If we've exceeded max attempts or time, proceed anyway
+        if (checkAttempts >= maxAttempts || (now - lastMutationTime) > maxWaitTime) {
+          console.log('[ET] Proceeding with button addition after stability check');
+          clearTimeout(stabilityTimeout);
+          mutationObserver.disconnect();
+          callback();
+          return;
+        }
+        
+        // Continue checking
+        stabilityTimeout = setTimeout(checkStability, Math.min(stabilityDelay, 200));
+      };
+      
+      // Start checking after initial delay
+      setTimeout(() => {
+        checkStability();
+      }, 300);
+    }
+    
     // Function to add redeem button to each subscription card
     function addRedeemButtonsToSubscriptions() {
       // FIRST: Clean up any duplicate buttons that might have been created
@@ -5996,6 +6075,22 @@
               levels++;
             }
           }
+        }
+        
+        // Verify address element is still connected and stable before inserting
+        if (!addressElement.isConnected || !cardContainer.isConnected) {
+          console.log('[ET] Address element or card container disconnected, skipping');
+          return;
+        }
+        
+        // Verify address element hasn't been moved into a wrapper we created
+        const addressParent = addressElement.parentElement;
+        if (addressParent && addressParent.style && 
+            addressParent.style.display === 'flex' && 
+            addressParent.style.justifyContent === 'space-between' &&
+            addressParent.querySelector(`[id^="et-redeem-subscription-btn"]`)) {
+          console.log('[ET] Address already wrapped with button, skipping');
+          return;
         }
         
         // Insert button right after the address element
@@ -6427,15 +6522,22 @@
     }
     
     // Initialize redeem buttons on subscriptions
-    // Wait for subscription cards to actually exist before adding buttons
+    // Wait for subscription cards to be fully loaded and stable before adding buttons
     waitForSubscriptionCards(() => {
-      console.log('[ET] Initializing redeem buttons after subscription cards detected');
-      addRedeemButtonsToSubscriptions();
+      console.log('[ET] Subscription cards detected, waiting for DOM stability');
+      waitForStableSubscriptionCards(() => {
+        console.log('[ET] DOM is stable, adding redeem buttons');
+        addRedeemButtonsToSubscriptions();
+      }, 10000, 500);
     }, 15000, 300);
     
     // Debounced MutationObserver to handle dynamic content changes
     let redeemButtonObserverTimeout = null;
+    let isProcessingButtons = false; // Prevent concurrent processing
     const redeemButtonObserver = new MutationObserver(() => {
+      // Skip if already processing
+      if (isProcessingButtons) return;
+      
       // Debounce to avoid excessive calls
       if (redeemButtonObserverTimeout) {
         clearTimeout(redeemButtonObserverTimeout);
@@ -6463,9 +6565,14 @@
         });
         
         if (hasSubscriptionCards) {
-          addRedeemButtonsToSubscriptions();
+          isProcessingButtons = true;
+          waitForStableSubscriptionCards(() => {
+            console.log('[ET] DOM stable after mutation, adding/updating redeem buttons');
+            addRedeemButtonsToSubscriptions();
+            isProcessingButtons = false;
+          }, 5000, 300);
         }
-      }, 500); // Debounce delay
+      }, 800); // Increased debounce delay
     });
     redeemButtonObserver.observe(document.body, {
       childList: true,
