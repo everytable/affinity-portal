@@ -5739,6 +5739,47 @@
     }
     // Function to add redeem button to each subscription card
     function addRedeemButtonsToSubscriptions() {
+      // FIRST: Clean up any duplicate buttons that might have been created
+      // Find all existing buttons and group by their card container
+      const allExistingButtons = Array.from(document.querySelectorAll(`[id^="et-redeem-subscription-btn"]`));
+      const buttonsByCard = new Map();
+      
+      allExistingButtons.forEach(btn => {
+        // Find which subscription card this button belongs to
+        let cardContainer = btn.closest('[class*="subscription"], [class*="order"], [class*="card"]');
+        if (!cardContainer) {
+          // Walk up to find a reasonable container
+          let parent = btn.parentElement;
+          let depth = 0;
+          while (parent && depth < 5) {
+            const text = (parent.textContent || '').trim();
+            if (text.includes('Subscription') || text.includes('Bundle contents') || text.includes('Charge to')) {
+              cardContainer = parent;
+              break;
+            }
+            parent = parent.parentElement;
+            depth++;
+          }
+        }
+        
+        const cardKey = cardContainer ? cardContainer.textContent.substring(0, 100) : 'unknown';
+        if (!buttonsByCard.has(cardKey)) {
+          buttonsByCard.set(cardKey, []);
+        }
+        buttonsByCard.get(cardKey).push({ btn, cardContainer });
+      });
+      
+      // Remove duplicates - keep only the first button per card
+      buttonsByCard.forEach((buttons, cardKey) => {
+        if (buttons.length > 1) {
+          console.log(`[ET] Found ${buttons.length} buttons for same card, removing duplicates`);
+          // Keep the first one, remove the rest
+          for (let i = 1; i < buttons.length; i++) {
+            buttons[i].btn.remove();
+          }
+        }
+      });
+      
       // Find all subscription cards by looking for "Deliver to" text
       const allElements = Array.from(document.querySelectorAll('*'));
       const subscriptionCards = [];
@@ -5821,15 +5862,32 @@
         let targetParent = addressElement;
         let current = addressElement;
         let attempts = 0;
+        const maxAttempts = 5; // Increased from 3 to 5 for better detection
         
-        while (current && attempts < 3) {
+        while (current && attempts < maxAttempts) {
           const style = window.getComputedStyle(current);
-          if (style.display === 'flex' || 
-              current.querySelector('a[href*="edit"], button') ||
-              current.textContent.includes('Edit')) {
+          const tagName = current.tagName.toLowerCase();
+          
+          // Check if this is a flex container
+          if (style.display === 'flex') {
             targetParent = current;
             break;
           }
+          
+          // Check if this element has edit buttons or similar controls (good insertion point)
+          if (current.querySelector('a[href*="edit"], button, [data-testid*="edit"]')) {
+            targetParent = current;
+            break;
+          }
+          
+          // Check if this is a suitable container (div, section, article, etc.)
+          if ((tagName === 'div' || tagName === 'section' || tagName === 'article') && 
+              current !== cardContainer && 
+              current.textContent.trim().length < 500) {
+            // This might be a good container, but continue searching for flex
+            targetParent = current;
+          }
+          
           current = current.parentElement;
           attempts++;
         }
@@ -5846,8 +5904,8 @@
         redeemButton.dataset.etSubscriptionKey = subscriptionKey;
         redeemButton.dataset.etSubscriptionAddress = addressText;
         redeemButton.textContent = 'Redeem Rewards';
+        // Base button styles
         redeemButton.style.cssText = `
-          margin-left: auto;
           padding: 8px 16px;
           background: #0d3c3a;
           color: #fff;
@@ -5858,6 +5916,8 @@
           cursor: pointer;
           white-space: nowrap;
           transition: background 0.2s;
+          display: inline-block;
+          text-align: center;
         `;
         
         // Add hover effect
@@ -5929,25 +5989,84 @@
           showRedeemRewardsModal();
         });
         
+        // CRITICAL: Check if button already exists near this address before inserting
+        // Check in the card container first
+        const existingButtonInCard = cardContainer.querySelector(`[id^="et-redeem-subscription-btn"]`);
+        if (existingButtonInCard) {
+          console.log('[ET] Button already exists in card, skipping duplicate');
+          return; // Don't add another button
+        }
+        
+        // Check if there's already a button near this address element
+        const nearbyButtons = Array.from(document.querySelectorAll(`[id^="et-redeem-subscription-btn"]`));
+        for (const btn of nearbyButtons) {
+          // Check if this button is in the same card or very close to our address
+          if (cardContainer.contains(btn) || 
+              (addressElement.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING) ||
+              (addressElement.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_PRECEDING)) {
+            // Check if they're close (within 5 parent levels)
+            let btnParent = btn.parentElement;
+            let addrParent = addressElement.parentElement;
+            let levels = 0;
+            while (btnParent && addrParent && levels < 5) {
+              if (btnParent === addrParent) {
+                console.log('[ET] Button already exists near address, skipping duplicate');
+                return; // Don't add another button
+              }
+              btnParent = btnParent.parentElement;
+              addrParent = addrParent.parentElement;
+              levels++;
+            }
+          }
+        }
+        
         // Try to insert button next to address
         // Strategy 1: If address element's parent is flex, append button
         const parentStyle = window.getComputedStyle(targetParent);
         if (parentStyle.display === 'flex') {
-          targetParent.appendChild(redeemButton);
+          // Double-check no button already in this flex container
+          if (!targetParent.querySelector(`[id^="et-redeem-subscription-btn"]`)) {
+            // For flex containers, push button to the right
+            redeemButton.style.marginLeft = 'auto';
+            targetParent.appendChild(redeemButton);
+          } else {
+            console.log('[ET] Button already in flex container, skipping');
+            return;
+          }
         } else {
-          // Strategy 2: Wrap address and button in a flex container
-          const flexWrapper = document.createElement('div');
-          flexWrapper.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px;';
-          
-          // Move address element into wrapper
-          const addressClone = addressElement.cloneNode(true);
-          flexWrapper.appendChild(addressClone);
-          flexWrapper.appendChild(redeemButton);
-          
-          // Replace address element with wrapper
+          // Strategy 2: Insert button as sibling after address element (safest approach)
+          // This preserves the DOM structure without wrapping
           if (addressElement.parentElement) {
-            addressElement.parentElement.insertBefore(flexWrapper, addressElement);
-            addressElement.remove();
+            // Check if button already exists as a sibling
+            const nextSibling = addressElement.nextSibling;
+            if (nextSibling && nextSibling.id && nextSibling.id.startsWith('et-redeem-subscription-btn')) {
+              console.log('[ET] Button already exists as sibling, skipping duplicate');
+              return;
+            }
+            
+            // Check if address element is a block-level element (likely means button should be below)
+            const addressStyle = window.getComputedStyle(addressElement);
+            const isBlockLevel = addressStyle.display === 'block' || 
+                                addressStyle.display === 'flex' ||
+                                addressElement.tagName.toLowerCase() === 'h1' ||
+                                addressElement.tagName.toLowerCase() === 'h2' ||
+                                addressElement.tagName.toLowerCase() === 'h3' ||
+                                addressElement.tagName.toLowerCase() === 'div';
+            
+            if (isBlockLevel) {
+              // Address is block-level, so button should appear below it with proper spacing
+              redeemButton.style.display = 'block';
+              redeemButton.style.marginTop = '12px';
+              redeemButton.style.marginLeft = '0';
+              redeemButton.style.width = 'fit-content';
+            } else {
+              // Address is inline, button can be next to it
+              redeemButton.style.marginLeft = '12px';
+              redeemButton.style.display = 'inline-block';
+            }
+            
+            // Insert button after address element
+            addressElement.parentElement.insertBefore(redeemButton, addressElement.nextSibling);
           }
         }
       });
