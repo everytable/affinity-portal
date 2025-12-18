@@ -2182,7 +2182,133 @@
         });
       }
       
+    // Helper function to check if a discount code is already applied
+    async function checkIfDiscountAlreadyApplied(context = null) {
+      // Method 1: Check subscription card from context for discount indicators
+      const activeContext = context || etLastSubscriptionContext || null;
+      if (activeContext && activeContext.subscriptionCard) {
+        const cardText = (activeContext.subscriptionCard.textContent || '').toLowerCase();
+        // Look for discount indicators in the card
+        if ((cardText.includes('discount') && cardText.includes('$')) ||
+            cardText.includes('promo') ||
+            cardText.includes('coupon')) {
+          // But exclude if it's just the "add discount" button
+          if (!cardText.includes('add discount') && !cardText.includes('apply discount')) {
+            console.log('[ET] Discount detected in subscription card');
+            return true;
+          }
+        }
+        
+        // Check for remove discount button in the card
+        const removeBtn = activeContext.subscriptionCard.querySelector('button[class*="remove"], a[class*="remove"]');
+        if (removeBtn) {
+          const btnText = (removeBtn.textContent || '').toLowerCase();
+          if (btnText.includes('remove') && (btnText.includes('discount') || btnText.includes('code'))) {
+            console.log('[ET] Discount removal button detected in subscription card');
+            return true;
+          }
+        }
+      }
+      
+      // Method 2: Check order summary for existing discount in DOM
+      const orderSummary = document.querySelector('[class*="order"], [class*="summary"], [id*="order"]');
+      if (orderSummary) {
+        const hasDiscount = Array.from(orderSummary.querySelectorAll('*')).some(el => {
+          const text = (el.textContent || '').toLowerCase();
+          return text.includes('discount') && text.includes('$') && 
+                 !text.includes('apply') && !text.includes('redeem') &&
+                 !text.includes('add discount');
+        });
+        if (hasDiscount) {
+          console.log('[ET] Discount detected in order summary');
+          return true;
+        }
+      }
+      
+      // Method 3: Check for discount input fields that might have a value
+      const discountInputs = document.querySelectorAll('input[type="text"][placeholder*="discount"], input[type="text"][placeholder*="code"], input[type="text"][id*="discount"], input[type="text"][name*="discount"]');
+      for (const input of discountInputs) {
+        if (input.value && input.value.trim() !== '') {
+          console.log('[ET] Discount detected in input field:', input.value);
+          return true;
+        }
+      }
+      
+      // Method 4: Check for discount removal buttons/links (indicates discount is applied)
+      const removeDiscountButtons = document.querySelectorAll('button[class*="remove"], a[class*="remove"], button[onclick*="remove"], a[onclick*="remove"]');
+      for (const btn of removeDiscountButtons) {
+        const text = (btn.textContent || '').toLowerCase();
+        if (text.includes('remove') && (text.includes('discount') || text.includes('code'))) {
+          console.log('[ET] Discount removal button detected');
+          return true;
+        }
+      }
+      
+      // Method 5: Check via API if we have addressId (most reliable)
+      if (activeContext && activeContext.addressId) {
+        try {
+          const urlMatch = window.location.pathname.match(/\/portal\/(\d+)/);
+          const tokenMatch = new URLSearchParams(window.location.search).get('token');
+          
+          if (urlMatch && tokenMatch) {
+            const portalId = urlMatch[1];
+            const token = tokenMatch;
+            // Try to get address info to check for discount_code
+            const addressUrl = `${window.location.origin}/tools/recurring/portal/${portalId}/addresses/${activeContext.addressId}?client=affinity&token=${token}`;
+            
+            const response = await fetch(addressUrl, {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const addressData = await response.json();
+              // Check if discount_code exists in the address data
+              if (addressData.address && addressData.address.discount_code) {
+                const discountCode = addressData.address.discount_code;
+                if (discountCode && discountCode.trim() !== '') {
+                  console.log('[ET] Discount code detected via API:', discountCode);
+                  return true;
+                }
+              }
+              // Also check in other possible locations
+              if (addressData.discount_code || (addressData.data && addressData.data.discount_code)) {
+                console.log('[ET] Discount code detected via API (alternative location)');
+                return true;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[ET] Error checking discount via API:', e);
+          // Continue with other checks if API fails
+        }
+      }
+      
+      return false;
+    }
+
     window.etRedeemReward = async function(rewardId, pointsRequired, name) {
+        // Check if a discount code is already applied BEFORE redeeming
+        // This prevents points from being deducted if the code cannot be applied
+        // Get the redemption context early for the check
+        const redemptionContext = etLastSubscriptionContext || null;
+        
+        console.log('[ET] ===== Checking for existing discount BEFORE redemption =====');
+        const hasExistingDiscount = await checkIfDiscountAlreadyApplied(redemptionContext);
+        
+        if (hasExistingDiscount) {
+          console.warn('[ET] ⚠️ Discount code already applied - CANNOT redeem loyalty code');
+          console.warn('[ET] ⚠️ Preventing redemption to avoid point deduction');
+          showDiscountError('You already applied a discount code. Please remove it before redeeming a loyalty code.', 'error');
+          return; // Exit early - do NOT redeem the reward, do NOT deduct points
+        }
+        
+        console.log('[ET] ✓ No existing discount found - proceeding with redemption');
+        
         // Don't check points before redemption - let the API handle it
         // The API will return an error if points are insufficient, and we'll handle that
         
@@ -2259,6 +2385,15 @@
           return;
         }
         
+        // Final check right before redemption - double safety check
+        console.log('[ET] ===== Final check before redemption API call =====');
+        const finalCheck = await checkIfDiscountAlreadyApplied(redemptionContext);
+        if (finalCheck) {
+          console.error('[ET] ✗✗✗ FINAL CHECK: Discount detected - ABORTING redemption');
+          showDiscountError('You already applied a discount code. Please remove it before redeeming a loyalty code.', 'error');
+          return; // Exit immediately - do NOT proceed with redemption
+        }
+        
         // Show loading state
         const redeemButton = event?.target || document.querySelector(`button[onclick*="etRedeemReward('${rewardId}'"]`);
         const originalText = redeemButton?.textContent;
@@ -2269,6 +2404,7 @@
         
         try {
           // Redeem the reward using LoyaltyLion API
+          console.log('[ET] ===== Proceeding with LoyaltyLion API redemption =====');
           const redeemUrl = `${LOYALTYLION_API_BASE}/customers/${merchantId}/claimed_rewards`;
           const response = await fetch(redeemUrl, {
             method: 'POST',
@@ -2336,6 +2472,17 @@
               console.log('[ET] Context addressId:', redemptionContext?.addressId);
               console.log('[ET] Context subscriptionCard:', redemptionContext?.subscriptionCard ? 'present' : 'missing');
               
+              // CRITICAL: Check one more time right before applying - discount might have been applied between checks
+              console.log('[ET] ===== Final check before applying redeemed code =====');
+              const preApplyCheck = await checkIfDiscountAlreadyApplied(redemptionContext);
+              if (preApplyCheck) {
+                console.error('[ET] ✗✗✗ PRE-APPLY CHECK: Discount detected - CANNOT apply redeemed code');
+                console.error('[ET] ⚠️ WARNING: Points were already deducted, but code cannot be applied!');
+                showDiscountError('You already applied a discount code. The loyalty code was redeemed but cannot be applied. Please remove the existing discount code first, then redeem again.', 'error');
+                // Don't try to apply - it will fail anyway
+                return;
+              }
+              
               // Automatically apply the discount code immediately
               // No need to show voucher code modal - apply directly
               if (typeof window.etApplyCode === 'function') {
@@ -2355,10 +2502,23 @@
                       console.log('[ET] ✓✓✓✓✓ Discount code applied successfully!');
                     } else {
                       console.warn('[ET] ⚠️ etApplyCode returned false - discount may not have been applied');
+                      // Check if it failed because discount already exists
+                      const postApplyCheck = await checkIfDiscountAlreadyApplied(redemptionContext);
+                      if (postApplyCheck) {
+                        console.error('[ET] ✗✗✗ POST-APPLY CHECK: Discount exists - code application likely failed');
+                        showDiscountError('You already applied a discount code. The loyalty code was redeemed but cannot be applied. Please remove the existing discount code first.', 'error');
+                      }
                     }
                   } catch (error) {
                     console.error('[ET] ✗✗✗ Error applying discount code:', error);
                     console.error('[ET] Error stack:', error.stack);
+                    // Check if error is due to existing discount
+                    const errorMessage = error.message || error.toString() || '';
+                    if (errorMessage.toLowerCase().includes('already applied') || 
+                        errorMessage.toLowerCase().includes('already have') ||
+                        errorMessage.toLowerCase().includes('discount already')) {
+                      showDiscountError('You already applied a discount code. The loyalty code was redeemed but cannot be applied. Please remove the existing discount code first.', 'error');
+                    }
                   }
                 })();
               } else {
