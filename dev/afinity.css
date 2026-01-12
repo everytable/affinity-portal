@@ -1884,6 +1884,25 @@
     font-size: 15px !important;
     font-weight: 500;
 }
+.afinity-meals-filter-items button {
+  background: #0f3c3a;
+  color: #fff;
+  text-transform: capitalize;
+  padding: 8px 12px;
+  border-radius: 5px;
+  margin: 10px 5px 10px 0px;
+}
+button#afinity-remove-all-filters {
+  background: #dc3545;
+  color: #fff;
+  padding: 8px 12px;
+  border: #dc3545;
+  border-radius: 6px;
+}
+span.afinity-meals-filter-chip {
+  font-size: 15px;
+}
+
 /* Mobile Responsive */
 @media (max-width: 765px) {
 
