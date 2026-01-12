@@ -1314,6 +1314,8 @@
   // Menu data for meals page
   let menuData = null;
   let selectedMenuCategory = null;
+  let filterCollections = [];  // Filter collections (separated from categories)
+  let activeFilters = [];     // Currently active filter collection IDs
 
   // Track meals page mode: 'update' for editing subscription meals, 'onetime' for adding one-time meals
   let mealsPageMode = 'onetime';
@@ -1636,17 +1638,56 @@
       console.error('Error fetching frequencies:', error);
       availableFrequencies = [];
     }
-  }
+  } 
 
   async function fetchMenuData() {
+    // Use new subscription-menu endpoint with filter support
+    const menuUrl = `${API_URL}/subscription-menu`;
+    const startTime = performance.now();
+    
+    
     try {
       showModalLoading();
 
-      const response = await fetch(`${API_URL}/menu`);
+      console.log('[MENU] Sending fetch request...');
+      const response = await fetch(menuUrl);
+      
+      const endTime = performance.now();      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Menu fetch failed: ${response.status} ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log('[MENU] Response parsed successfully');
+      console.log('[MENU] Response structure:', {
+        hasSuccess: !!data.success,
+        hasMenu: !!data.menu,
+        hasItems: !!(data.menu?.items),
+        hasFilters: !!(data.menu?.filters),
+        hasProductCollections: !!(data.menu?.productCollections)
+      });
 
       if (data.success && data.menu) {
         menuData = data.menu;
+        
+        // Store filters separately (from backend)
+        filterCollections = menuData.filters || [];   
+        // Verify productCollections is available
+        if (menuData.productCollections) {
+          console.log('[MENU] productCollections mapping loaded:', Object.keys(menuData.productCollections).length, 'products');
+        } else {
+          console.warn('[MENU] WARNING: productCollections not found in response');
+        }
+        
+        // Log category and filter names for debugging
+        if (menuData.items && menuData.items.length > 0) {
+          console.log('[MENU] Category names:', menuData.items.map(item => item.title).join(', '));
+        }
+        if (filterCollections.length > 0) {
+          console.log('[MENU] Filter names:', filterCollections.map(filter => filter.title).join(', '));
+        }
+        
         // Set the first category as default if none selected
         if (
           !selectedMenuCategory &&
@@ -1654,19 +1695,26 @@
           menuData.items.length > 0
         ) {
           selectedMenuCategory = menuData.items[0].id;
+          console.log('[MENU] Default category selected:', selectedMenuCategory);
         }
 
         // Re-render the modal to show the menu data
         if (currentPage === 'meals') {
+          console.log('[MENU] Re-rendering modal with menu data');
           renderModal();
         }
-      } else {
-        console.error('Failed to fetch menu data:', data.error);
+              } else {
+
         menuData = null;
+        filterCollections = [];
       }
     } catch (error) {
-      console.error('Error fetching menu data:', error);
+           if (error.stack) {
+        console.error('[MENU] Error stack:', error.stack);
+      }
       menuData = null;
+      filterCollections = [];
+      showToast('Failed to load menu data', 'error');
     } finally {
       hideModalLoading();
     }
@@ -3623,6 +3671,7 @@
             ${
               menuData
                 ? `
+              <!-- Category Tabs (Core Categories) -->
               <div class="afinity-meals-categories">
                 <h2 class="afinity-meals-section-title">Menu Categories</h2>
                 <div class="afinity-meals-category-tabs">
@@ -3640,6 +3689,55 @@
                     .join('')}
                 </div>
               </div>
+
+              <!-- Filter Buttons (Dietary Filters) -->
+              ${filterCollections && filterCollections.length > 0 ? `
+                <div class="afinity-meals-filters">
+                  <h2 class="afinity-meals-section-title">Dietary Filters</h2>
+                  
+                  <!-- Active Filters Display (only filter collections, not core categories) -->
+                  ${activeFilters.length > 0 ? `
+                    <div class="afinity-meals-active-filters">
+                      <button class="afinity-meals-remove-all" id="afinity-remove-all-filters">
+                        Remove all
+                      </button>
+                      <div class="afinity-meals-active-filter-chips">
+                        ${activeFilters.map(filterId => {
+                          const filter = filterCollections.find(f => 
+                            f.resourceId.replace('gid://shopify/Collection/', '') === filterId
+                          );
+                          return filter ? `
+                            <span class="afinity-meals-filter-chip">
+                              Filters: ${filter.title}
+                              <span class="afinity-meals-filter-chip-remove" data-remove-filter="${filterId}">×</span>
+                            </span>
+                          ` : '';
+                        }).join('')}
+                      </div>
+                    </div>
+                  ` : ''}
+                  
+                  <div class="afinity-meals-filter-items">
+                    ${filterCollections
+                      .map(
+                        filter => {
+                          const filterId = filter.resourceId.replace('gid://shopify/Collection/', '');
+                          const isActive = activeFilters.includes(filterId);
+                          return `
+                        <button class="afinity-meals-filter-item ${
+                          isActive ? 'active' : ''
+                        }" 
+                                data-filter-id="${filterId}"
+                                data-filter-title="${filter.title}">
+                          <span class="afinity-meals-filter-title">${filter.title}</span>
+                        </button>
+                      `;
+                        }
+                      )
+                      .join('')}
+                  </div>
+                </div>
+              ` : ''}
             `
                 : `
               <div class="afinity-meals-loading">
@@ -4094,19 +4192,14 @@
     ) {
       return '<div class="afinity-meals-grid-loading">Loading meal details…</div>';
     }
-    // If a specific category is selected, show only that collection
-    if (selectedMenuCategory) {
-      const selectedCategory = menuData.items.find(
-        cat => cat.id === selectedMenuCategory
-      );
 
-      if (selectedCategory && selectedCategory.collection) {
-        return renderCollectionMealsWithVariants(
-          selectedCategory.collection,
-          selectedCategory.title
-        );
-      }
+    // NEW BEHAVIOR: Category and filters work together (AND logic)
+    // If category OR filters are selected, use combined filtering
+    if (selectedMenuCategory || activeFilters.length > 0) {
+      return renderFilteredProducts(activeFilters, selectedMenuCategory);
     }
+
+    // If nothing selected, show all categories
     const collectionsWithProducts = menuData.items.filter(
       item => item.collection && item.collection.products
     );
@@ -4118,6 +4211,81 @@
       .join('');
 
     return allCollectionsHtml;
+  }
+
+  function renderFilteredProducts(filterCollectionIds, categoryId) {
+    if (!menuData.productCollections) {
+      // Fallback: if productCollections not available, show all
+      return renderMealsGrid();
+    }
+
+    // Build list of required collection IDs (category + filters)
+    const requiredCollectionIds = [];
+    
+    // Add selected category collection ID if category is selected
+    if (categoryId) {
+      const selectedCategory = menuData.items.find(
+        cat => cat.id === categoryId
+      );
+      if (selectedCategory && selectedCategory.resourceId) {
+        const categoryCollectionId = selectedCategory.resourceId.replace('gid://shopify/Collection/', '');
+        requiredCollectionIds.push(categoryCollectionId);
+      }
+    }
+    
+    // Add filter collection IDs
+    if (filterCollectionIds && filterCollectionIds.length > 0) {
+      requiredCollectionIds.push(...filterCollectionIds);
+    }
+
+    // If no filters or category selected, show all
+    if (requiredCollectionIds.length === 0) {
+      return renderMealsGrid();
+    }
+
+    // Find all products that belong to ALL required collections (AND logic)
+    // Product must be in selected category AND in all selected filters
+    const matchingProductIds = Object.keys(menuData.productCollections).filter(productId => {
+      const productCollections = menuData.productCollections[productId];
+      // Product must be in ALL required collections (category + all filters)
+      return requiredCollectionIds.every(collectionId => 
+        productCollections.includes(collectionId)
+      );
+    });
+
+    if (matchingProductIds.length === 0) {
+      return '<div class="afinity-meals-grid-empty">No products match the selected category and filters.</div>';
+    }
+
+    // Get product data for matching products
+    // Use a Set to track already added product IDs to prevent duplicates
+    const addedProductIds = new Set();
+    const matchingProducts = [];
+    const allCollections = [...menuData.items, ...(filterCollections || [])];
+    
+    allCollections.forEach(item => {
+      if (item.collection && item.collection.products) {
+        item.collection.products.edges.forEach(edge => {
+          const productId = edge.node.id.replace('gid://shopify/Product/', '');
+          if (matchingProductIds.includes(productId) && !addedProductIds.has(productId)) {
+            // Add to Set to track and prevent duplicates
+            addedProductIds.add(productId);
+            matchingProducts.push(edge.node);
+          }
+        });
+      }
+    });
+
+    // Render matching products in grid layout (same as other rendering functions)
+    const productMealsHtml = matchingProducts
+      .map(product => renderProductMealsWithVariants(product))
+      .join('');
+
+    return `
+      <div class="afinity-meals-grid">
+        ${productMealsHtml}
+      </div>
+    `;
   }
 
   function renderCollectionSectionWithVariants(collection, collectionTitle) {
@@ -4978,15 +5146,24 @@
       .forEach(tab => {
         tab.onclick = e => {
           const categoryId = e.target.getAttribute('data-category-id');
-          selectedMenuCategory = categoryId;
+          
+          // Toggle category selection (don't clear filters)
+          if (selectedMenuCategory === categoryId) {
+            // If clicking the same category, deselect it
+            selectedMenuCategory = null;
+            e.target.classList.remove('active');
+          } else {
+            // Select new category (keep filters active)
+            selectedMenuCategory = categoryId;
+            
+            // Update active tab
+            modalOverlay
+              .querySelectorAll('.afinity-meals-category-tab')
+              .forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+          }
 
-          // Update active tab
-          modalOverlay
-            .querySelectorAll('.afinity-meals-category-tab')
-            .forEach(t => t.classList.remove('active'));
-          e.target.classList.add('active');
-
-          // Re-render the meals grid
+          // Re-render the meals grid (filters remain active if selected)
           const mealsGrid = modalOverlay.querySelector(
             '.afinity-meals-content'
           );
@@ -4995,6 +5172,88 @@
           }
 
           // Re-attach meal card events
+          attachMealCardEvents();
+        };
+      });
+
+    // Filter buttons (NEW - work together with category)
+    modalOverlay
+      .querySelectorAll('.afinity-meals-filter-item')
+      .forEach(btn => {
+        btn.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Get filter ID from button (not e.target, in case of nested content)
+          const filterId = btn.getAttribute('data-filter-id');
+          
+          if (!filterId) {
+            console.warn('[FILTER] No filter ID found on button');
+            return;
+          }
+          
+          // Toggle filter (don't clear category)
+          if (activeFilters.includes(filterId)) {
+            // Remove filter
+            activeFilters = activeFilters.filter(id => id !== filterId);
+            btn.classList.remove('active');
+            console.log('[FILTER] Removed filter:', filterId, 'Active filters:', activeFilters);
+          } else {
+            // Add filter
+            activeFilters.push(filterId);
+            btn.classList.add('active');
+            console.log('[FILTER] Added filter:', filterId, 'Active filters:', activeFilters);
+          }
+          
+          // Category and filters work together (AND logic)
+
+          // Re-render the entire modal to update active states properly
+          renderModal().then(() => {
+            // Re-attach meal card events after modal is rendered
+            attachMealCardEvents();
+          });
+        };
+      });
+
+    // Remove all filters button (only clears filter collections, keeps category if selected)
+    const removeAllBtn = modalOverlay.querySelector('#afinity-remove-all-filters');
+    if (removeAllBtn) {
+      removeAllBtn.onclick = () => {
+        // Only clear filter collections (not category)
+        // Category remains selected in category tabs
+        activeFilters = [];
+        modalOverlay
+          .querySelectorAll('.afinity-meals-filter-item')
+          .forEach(btn => btn.classList.remove('active'));
+        
+        // Re-render
+        renderModal(); // Re-render to update active filters display
+        attachMealCardEvents();
+      };
+    }
+
+    // Remove individual filter chips (only filter collections, not categories)
+    modalOverlay
+      .querySelectorAll('.afinity-meals-filter-chip-remove')
+      .forEach(removeBtn => {
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          
+          // Remove filter (categories are handled by category tabs, not filter chips)
+          const filterId = removeBtn.getAttribute('data-remove-filter');
+          if (filterId) {
+            activeFilters = activeFilters.filter(id => id !== filterId);
+            modalOverlay
+              .querySelectorAll('.afinity-meals-filter-item')
+              .forEach(btn => {
+                if (btn.getAttribute('data-filter-id') === filterId) {
+                  btn.classList.remove('active');
+                }
+              });
+          }
+          
+          // Re-render
+          renderModal(); // Re-render to update active filters display
           attachMealCardEvents();
         };
       });
@@ -5051,9 +5310,13 @@
                 let collectionId = null;
                 let externalProductId = null;
                 let price = 0;
+                let allCollectionIds = [];
 
-                if (menuData && menuData.items) {
-                  for (const category of menuData.items) {
+                // Search through all collections (categories + filters)
+                const allCollections = [...(menuData.items || []), ...(filterCollections || [])];
+
+                if (menuData && allCollections.length > 0) {
+                  for (const category of allCollections) {
                     if (category.collection && category.collection.products) {
                       const productNode =
                         category.collection.products.edges.find(edge => {
@@ -5079,44 +5342,66 @@
                         });
 
                       if (productNode) {
-                        // Extract the numeric ID from the Shopify GID format using resourceId
-                        collectionId = category.resourceId.replace(
+                        const foundCollectionId = category.resourceId.replace(
                           'gid://shopify/Collection/',
                           ''
                         );
-                        externalProductId = productNode.node.id.replace(
-                          'gid://shopify/Product/',
-                          ''
-                        );
+                        
+                        // Use first match as primary collection
+                        if (!collectionId) {
+                          collectionId = foundCollectionId;
+                          externalProductId = productNode.node.id.replace(
+                            'gid://shopify/Product/',
+                            ''
+                          );
 
-                        // Get price from variant
-                        const variant = productNode.node.variants.edges.find(
-                          variantEdge =>
-                            String(
-                              variantEdge.node.id.replace(
-                                'gid://shopify/ProductVariant/',
-                                ''
+                          // Get price from variant (only once)
+                          const variant = productNode.node.variants.edges.find(
+                            variantEdge =>
+                              String(
+                                variantEdge.node.id.replace(
+                                  'gid://shopify/ProductVariant/',
+                                  ''
+                                )
+                              ) ===
+                              String(
+                                meal.id.replace(
+                                  'gid://shopify/ProductVariant/',
+                                  ''
+                                )
                               )
-                            ) ===
-                            String(
-                              meal.id.replace(
-                                'gid://shopify/ProductVariant/',
-                                ''
-                              )
-                            )
-                        )?.node;
+                          )?.node;
 
-                        if (variant && variant.price) {
-                          if (typeof variant.price === 'string') {
-                            price = parseFloat(variant.price);
-                          } else if (variant.price.amount) {
-                            price = parseFloat(variant.price.amount);
-                          } else if (typeof variant.price === 'number') {
-                            price = variant.price;
+                          if (variant && variant.price) {
+                            if (typeof variant.price === 'string') {
+                              price = parseFloat(variant.price);
+                            } else if (variant.price.amount) {
+                              price = parseFloat(variant.price.amount);
+                            } else if (typeof variant.price === 'number') {
+                              price = variant.price;
+                            }
                           }
                         }
-                        break;
+                        
+                        // Collect all collection IDs (avoid duplicates)
+                        if (!allCollectionIds.includes(foundCollectionId)) {
+                          allCollectionIds.push(foundCollectionId);
+                        }
+                        
+                        // Don't break - continue to find all collections
                       }
+                    }
+                  }
+                }
+
+                // Use productCollections mapping if available (more reliable)
+                if (menuData.productCollections && externalProductId) {
+                  const mappedCollections = menuData.productCollections[externalProductId];
+                  if (mappedCollections && mappedCollections.length > 0) {
+                    allCollectionIds = mappedCollections;
+                    // Use first collection from mapping as primary (or keep first match)
+                    if (!collectionId) {
+                      collectionId = mappedCollections[0];
                     }
                   }
                 }
@@ -5126,8 +5411,11 @@
                   price = meal.price || 0;
                 }
 
+                // Use primary collection or fallback
+                const finalCollectionId = collectionId || ID_CONFIG.collectionId;
+
                 return {
-                  collection_id: ID_CONFIG.collectionId,
+                  collection_id: finalCollectionId,
                   external_product_id: externalProductId,
                   external_variant_id: meal.id.replace(
                     'gid://shopify/ProductVariant/',
@@ -5290,9 +5578,13 @@
               let productTitle = null;
               let variantTitle = null;
               let price = null;
+              let allCollectionIds = [];
 
-              if (menuData && menuData.items) {
-                for (const category of menuData.items) {
+              // Search through all collections (categories + filters)
+              const allCollections = [...(menuData.items || []), ...(filterCollections || [])];
+
+              if (menuData && allCollections.length > 0) {
+                for (const category of allCollections) {
                   if (category.collection && category.collection.products) {
                     const productNode = category.collection.products.edges.find(
                       edge => {
@@ -5319,60 +5611,85 @@
                     );
 
                     if (productNode) {
-                      // Extract the numeric ID from the Shopify GID format using resourceId
-                      collectionId = category.resourceId.replace(
+                      const foundCollectionId = category.resourceId.replace(
                         'gid://shopify/Collection/',
                         ''
                       );
-                      externalProductId = productNode.node.id.replace(
-                        'gid://shopify/Product/',
-                        ''
-                      );
+                      
+                      // Use first match as primary collection
+                      if (!collectionId) {
+                        collectionId = foundCollectionId;
+                        externalProductId = productNode.node.id.replace(
+                          'gid://shopify/Product/',
+                          ''
+                        );
 
-                      // Get product and variant details
-                      const product = productNode.node;
-                      const variant = product.variants.edges.find(
-                        variantEdge =>
-                          String(
-                            variantEdge.node.id.replace(
-                              'gid://shopify/ProductVariant/',
-                              ''
+                        // Get product and variant details (only once)
+                        const product = productNode.node;
+                        const variant = product.variants.edges.find(
+                          variantEdge =>
+                            String(
+                              variantEdge.node.id.replace(
+                                'gid://shopify/ProductVariant/',
+                                ''
+                              )
+                            ) ===
+                            String(
+                              meal.id.replace('gid://shopify/ProductVariant/', '')
                             )
-                          ) ===
-                          String(
-                            meal.id.replace('gid://shopify/ProductVariant/', '')
-                          )
-                      )?.node;
+                        )?.node;
 
-                      if (product) {
-                        productTitle = product.title;
-                      }
+                        if (product) {
+                          productTitle = product.title;
+                        }
 
-                      if (variant) {
-                        variantTitle = variant.title;
-                        // Get price from variant
-                        if (variant.price) {
-                          if (typeof variant.price === 'string') {
-                            price = parseFloat(variant.price);
-                          } else if (variant.price.amount) {
-                            price = parseFloat(variant.price.amount);
-                          } else if (typeof variant.price === 'number') {
-                            price = variant.price;
+                        if (variant) {
+                          variantTitle = variant.title;
+                          // Get price from variant
+                          if (variant.price) {
+                            if (typeof variant.price === 'string') {
+                              price = parseFloat(variant.price);
+                            } else if (variant.price.amount) {
+                              price = parseFloat(variant.price.amount);
+                            } else if (typeof variant.price === 'number') {
+                              price = variant.price;
+                            }
+                          }
+                          // Apply 10% discount to the price
+                          if (price && !isNaN(price)) {
+                            price = getDiscountedPrice(price);
                           }
                         }
-                        // Apply 10% discount to the price
-                        if (price && !isNaN(price)) {
-                          price = getDiscountedPrice(price);
-                        }
                       }
-                      break;
+                      
+                      // Collect all collection IDs (avoid duplicates)
+                      if (!allCollectionIds.includes(foundCollectionId)) {
+                        allCollectionIds.push(foundCollectionId);
+                      }
+                      
+                      // Don't break - continue to find all collections
                     }
                   }
                 }
               }
 
+              // Use productCollections mapping if available (more reliable)
+              if (menuData.productCollections && externalProductId) {
+                const mappedCollections = menuData.productCollections[externalProductId];
+                if (mappedCollections && mappedCollections.length > 0) {
+                  allCollectionIds = mappedCollections;
+                  // Use first collection from mapping as primary (or keep first match)
+                  if (!collectionId) {
+                    collectionId = mappedCollections[0];
+                  }
+                }
+              }
+
+              // Use primary collection or fallback
+              const finalCollectionId = collectionId || ID_CONFIG.collectionId;
+
               return {
-                collection_id: ID_CONFIG.collectionId,
+                collection_id: finalCollectionId,
                 external_product_id: externalProductId,
                 external_variant_id: meal.id.replace(
                   'gid://shopify/ProductVariant/',
@@ -6944,9 +7261,12 @@
                   // Find the collection ID from menuData
                   let collectionId = null;
                   let externalProductId = null;
+                  let allCollectionIds = [];
 
-                  if (menuData && menuData.items) {
-                    for (const category of menuData.items) {
+                  const allCollections = [...(menuData.items || []), ...(filterCollections || [])];
+
+                  if (menuData && allCollections.length > 0) {
+                    for (const category of allCollections) {
                       if (category.collection && category.collection.products) {
                         const productNode =
                           category.collection.products.edges.find(edge => {
@@ -6972,23 +7292,48 @@
                           });
 
                         if (productNode) {
-                          // Extract the numeric ID from the Shopify GID format using resourceId
-                          collectionId = category.resourceId.replace(
+                          const foundCollectionId = category.resourceId.replace(
                             'gid://shopify/Collection/',
                             ''
                           );
-                          externalProductId = productNode.node.id.replace(
-                            'gid://shopify/Product/',
-                            ''
-                          );
-                          break;
+                          
+                          // Use first match as primary collection
+                          if (!collectionId) {
+                            collectionId = foundCollectionId;
+                            externalProductId = productNode.node.id.replace(
+                              'gid://shopify/Product/',
+                              ''
+                            );
+                          }
+                          
+                          // Collect all collection IDs (avoid duplicates)
+                          if (!allCollectionIds.includes(foundCollectionId)) {
+                            allCollectionIds.push(foundCollectionId);
+                          }
+                          
+                          // Don't break - continue to find all collections
                         }
                       }
                     }
                   }
 
+                  // Use productCollections mapping if available (more reliable)
+                  if (menuData.productCollections && externalProductId) {
+                    const mappedCollections = menuData.productCollections[externalProductId];
+                    if (mappedCollections && mappedCollections.length > 0) {
+                      allCollectionIds = mappedCollections;
+                      // Use first collection from mapping as primary (or keep first match)
+                      if (!collectionId) {
+                        collectionId = mappedCollections[0];
+                      }
+                    }
+                  }
+
+                  // Use primary collection or fallback
+                  const finalCollectionId = collectionId || ID_CONFIG.collectionId;
+
                   return {
-                    collection_id: ID_CONFIG.collectionId,
+                    collection_id: finalCollectionId,
                     external_product_id: externalProductId,
                     external_variant_id: meal.id.replace(
                       'gid://shopify/ProductVariant/',
@@ -7174,8 +7519,11 @@
                 let variantTitle = null;
                 let price = null;
 
-                if (menuData && menuData.items) {
-                  for (const category of menuData.items) {
+                // Search through all collections (categories + filters)
+                const allCollections = [...(menuData.items || []), ...(filterCollections || [])];
+
+                if (menuData && allCollections.length > 0) {
+                  for (const category of allCollections) {
                     if (category.collection && category.collection.products) {
                       const productNode =
                         category.collection.products.edges.find(edge => {
@@ -7366,9 +7714,10 @@
 
               if (mealCard) {
                 const productId = mealCard.getAttribute('data-product-id');
-                // Try to find product information from menuData
-                if (menuData && menuData.items) {
-                  for (const category of menuData.items) {
+                // Try to find product information from menuData (search both categories and filters)
+                const allCollections = [...(menuData.items || []), ...(filterCollections || [])];
+                if (menuData && allCollections.length > 0) {
+                  for (const category of allCollections) {
                     if (category.collection && category.collection.products) {
                       const productNode =
                         category.collection.products.edges.find(
@@ -8077,9 +8426,10 @@
     }
 
     return selectedMealsArray.filter(meal => {
-      // Find the product data for this meal
-      if (menuData && menuData.items) {
-        for (const collectionItem of menuData.items) {
+      // Find the product data for this meal (search both categories and filters)
+      const allCollections = [...(menuData.items || []), ...(filterCollections || [])];
+      if (menuData && allCollections.length > 0) {
+        for (const collectionItem of allCollections) {
           if (collectionItem.collection && collectionItem.collection.products) {
             const product = collectionItem.collection.products.edges.find(
               edge => {
