@@ -1126,10 +1126,7 @@
 
           const bundleResult = await bundleResponse.json();
           if (!bundleResult.success) {
-            console.warn(
-              'Failed to update bundle with conditional fees:',
-              bundleResult.error
-            );
+            // Failed to update bundle with conditional fees, continue with original payload
           }
 
           // Remove bundle_selections from the main update payload since we handled it separately
@@ -1642,15 +1639,11 @@
   async function fetchMenuData() {
     // Use new subscription-menu endpoint with filter support
     const menuUrl = `${API_URL}/subscription-menu`;
-    const startTime = performance.now();
-    
     
     try {
       showModalLoading();
 
-      const response = await fetch(menuUrl);
-      
-      const endTime = performance.now();      
+      const response = await fetch(menuUrl);      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Menu fetch failed: ${response.status} ${response.statusText}`);
@@ -6231,7 +6224,6 @@
       });
 
       if (!resp.ok) {
-        console.warn('Uber check-deliverable returned non-200');
         showToast('This address is not deliverable by courier.', 'error');
         return false;
       }
