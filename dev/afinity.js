@@ -1126,6 +1126,10 @@
 
           const bundleResult = await bundleResponse.json();
           if (!bundleResult.success) {
+            console.warn(
+              'Failed to update bundle with conditional fees:',
+              bundleResult.error
+            );
             // Failed to update bundle with conditional fees, continue with original payload
           }
 
