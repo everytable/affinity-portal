@@ -1130,6 +1130,7 @@
               'Failed to update bundle with conditional fees:',
               bundleResult.error
             );
+            // Failed to update bundle with conditional fees, continue with original payload
           }
 
           // Remove bundle_selections from the main update payload since we handled it separately
@@ -1605,7 +1606,6 @@
     // Ensure the display value is formatted correctly on initial load
     if (currentDate && input._flatpickr) {
       input.value = formatDeliveryDate(currentDate);
-      console.log('Set formatted display value:', formatDeliveryDate(currentDate));
     }
   }
 
@@ -1643,50 +1643,23 @@
   async function fetchMenuData() {
     // Use new subscription-menu endpoint with filter support
     const menuUrl = `${API_URL}/subscription-menu`;
-    const startTime = performance.now();
-    
     
     try {
       showModalLoading();
 
-      console.log('[MENU] Sending fetch request...');
-      const response = await fetch(menuUrl);
-      
-      const endTime = performance.now();      
+      const response = await fetch(menuUrl);      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Menu fetch failed: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('[MENU] Response parsed successfully');
-      console.log('[MENU] Response structure:', {
-        hasSuccess: !!data.success,
-        hasMenu: !!data.menu,
-        hasItems: !!(data.menu?.items),
-        hasFilters: !!(data.menu?.filters),
-        hasProductCollections: !!(data.menu?.productCollections)
-      });
 
       if (data.success && data.menu) {
         menuData = data.menu;
         
         // Store filters separately (from backend)
         filterCollections = menuData.filters || [];   
-        // Verify productCollections is available
-        if (menuData.productCollections) {
-          console.log('[MENU] productCollections mapping loaded:', Object.keys(menuData.productCollections).length, 'products');
-        } else {
-          console.warn('[MENU] WARNING: productCollections not found in response');
-        }
-        
-        // Log category and filter names for debugging
-        if (menuData.items && menuData.items.length > 0) {
-          console.log('[MENU] Category names:', menuData.items.map(item => item.title).join(', '));
-        }
-        if (filterCollections.length > 0) {
-          console.log('[MENU] Filter names:', filterCollections.map(filter => filter.title).join(', '));
-        }
         
         // Set the first category as default if none selected
         if (
@@ -1695,12 +1668,10 @@
           menuData.items.length > 0
         ) {
           selectedMenuCategory = menuData.items[0].id;
-          console.log('[MENU] Default category selected:', selectedMenuCategory);
         }
 
         // Re-render the modal to show the menu data
         if (currentPage === 'meals') {
-          console.log('[MENU] Re-rendering modal with menu data');
           renderModal();
         }
               } else {
@@ -1709,9 +1680,6 @@
         filterCollections = [];
       }
     } catch (error) {
-           if (error.stack) {
-        console.error('[MENU] Error stack:', error.stack);
-      }
       menuData = null;
       filterCollections = [];
       showToast('Failed to load menu data', 'error');
@@ -2872,9 +2840,6 @@
           }
         } catch (error) {
           // Silently fall through to next priority if access fails
-          if (console && typeof console.warn === 'function') {
-            console.warn('[ID_CONFIG] Error reading rechargeGridSettings:', error);
-          }
         }
       }
 
@@ -2891,9 +2856,6 @@
           }
         } catch (error) {
           // Silently fall through to default if access fails
-          if (console && typeof console.warn === 'function') {
-            console.warn('[ID_CONFIG] Error reading bundleConfig:', error);
-          }
         }
       }
 
@@ -2914,59 +2876,9 @@
       _initialized: false
     };
 
-    // Log initial configuration status
-    const logConfigStatus = function() {
-      if (console && typeof console.log === 'function') {
-        const sources = {
-          exposed: {
-            bundleConfig: typeof window !== 'undefined' ? window.bundleConfig : null,
-            rechargeGridSettings: typeof window !== 'undefined' ? window.rechargeGridSettings : null
-          },
-          resolved: {},
-          defaults: DEFAULTS
-        };
-
-        // Track which source each ID came from
-        Object.keys(DEFAULTS).forEach(key => {
-          if (key === 'defaultCollectionId') return; // Skip this one
-          
-          const settingKey = key === 'collectionId' ? 'fees_collection_id' : 
-                            key.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^./, str => str.toLowerCase());
-          
-          let source = 'DEFAULT';
-          if (typeof window !== 'undefined' && window.rechargeGridSettings && window.rechargeGridSettings[settingKey]) {
-            const normalized = normalizeId(window.rechargeGridSettings[settingKey]);
-            if (normalized !== null) {
-              source = 'rechargeGridSettings';
-            }
-          } else if (typeof window !== 'undefined' && window.bundleConfig) {
-            const bundleKey = BUNDLE_CONFIG_MAPPING[settingKey] || key;
-            if (window.bundleConfig[bundleKey]) {
-              const normalized = normalizeId(window.bundleConfig[bundleKey]);
-              if (normalized !== null) {
-                source = 'bundleConfig';
-              }
-            }
-          }
-          
-          sources.resolved[key] = {
-            value: config[key],
-            source: source
-          };
-        });
-      }
-    };
-
     // Validate all required IDs are present
     const requiredKeys = Object.keys(DEFAULTS);
     const missingKeys = requiredKeys.filter(key => !config[key] || config[key] === '');
-    
-    if (missingKeys.length > 0 && console && typeof console.warn === 'function') {
-      console.warn('[ID_CONFIG] Missing required IDs, using defaults:', missingKeys);
-    }
-
-    // Log initial status
-    logConfigStatus();
 
     // Return mutable configuration object (can be updated from API)
     return config;
@@ -2984,19 +2896,12 @@
                          Object.values(window.rechargeGridSettings).some(val => val && String(val).trim() !== '');
       
       if (hasThemeIds) {
-        if (console && typeof console.log === 'function') {
-          console.log('[ID_CONFIG] Theme settings found, skipping API fetch');
-        }
         return; // Don't fetch from API if theme settings are available
       }
 
       const response = await fetch(`${API_URL}/settings`);
       if (response.ok) {
         const settings = await response.json();
-        
-        if (console && typeof console.log === 'function') {
-          console.log('[ID_CONFIG] API settings received:', settings);
-        }
         
         // Map API settings to ID_CONFIG
         const apiMapping = {
@@ -3025,20 +2930,10 @@
 
         if (updated) {
           ID_CONFIG._initialized = true;
-        } else {
-          if (console && typeof console.warn === 'function') {
-            console.warn('[ID_CONFIG] No updates from API. Settings may be empty or already match.');
-          }
-        }
-      } else {
-        if (console && typeof console.error === 'function') {
-          console.error('[ID_CONFIG] API fetch failed with status:', response.status);
         }
       }
     } catch (error) {
-      if (console && typeof console.error === 'function') {
-        console.error('[ID_CONFIG] Error fetching IDs from API:', error);
-      }
+      // Silently handle errors
     }
   }
 
@@ -3261,10 +3156,8 @@
 
       // helper: generic accordion wrapper
       function renderAccordion(title, content, isOpen = false) {
-        console.log(isOpen);
         const openClass = isOpen ? "open" : "";
         const iconSymbol = isOpen ? "×" : "+";
-        console.log(iconSymbol)
 
         return `
           <div class="afinity-accordion-section ${openClass}">
@@ -4925,13 +4818,7 @@
           currentTimeZone
         );
       } catch (e) {
-        console.error('saveDate - Error creating ISO string:', e);
-        console.error('saveDate - Error details:', {
-          timeToUse,
-          timeStr: toAmPm(timeToUse),
-          deliveryDate: modalChanges.deliveryDate,
-          currentTimeZone,
-        });
+        console.error('Error creating ISO string:', e);
         showToast('Invalid date or time format', 'error');
 
         return;
@@ -5188,7 +5075,6 @@
           const filterId = btn.getAttribute('data-filter-id');
           
           if (!filterId) {
-            console.warn('[FILTER] No filter ID found on button');
             return;
           }
           
@@ -5197,12 +5083,10 @@
             // Remove filter
             activeFilters = activeFilters.filter(id => id !== filterId);
             btn.classList.remove('active');
-            console.log('[FILTER] Removed filter:', filterId, 'Active filters:', activeFilters);
           } else {
             // Add filter
             activeFilters.push(filterId);
             btn.classList.add('active');
-            console.log('[FILTER] Added filter:', filterId, 'Active filters:', activeFilters);
           }
           
           // Category and filters work together (AND logic)
@@ -5434,7 +5318,6 @@
                 !item.external_variant_id
             );
             if (invalidItems.length > 0) {
-              console.error('Invalid subscription items found:', invalidItems);
               showToast(
                 'Some meals could not be mapped to collections. Please try again.',
                 'error'
@@ -5445,8 +5328,6 @@
 
             // Validate collection_id is not empty
             if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
-              console.error('[ID_CONFIG] Invalid collection_id:', ID_CONFIG.collectionId);
-              console.error('[ID_CONFIG] Current config:', ID_CONFIG);
               // Try fetching from API one more time
               await fetchIdsFromAPI();
               if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
@@ -5490,8 +5371,6 @@
                 !item.external_variant_id
             );
             if (finalInvalidItems.length > 0) {
-              console.error('[ID_CONFIG] Invalid items before API call:', finalInvalidItems);
-              console.error('[ID_CONFIG] ID_CONFIG state:', ID_CONFIG);
               showToast(
                 'Configuration error: Missing required IDs. Please check settings and try again.',
                 'error'
@@ -5710,7 +5589,6 @@
                 !item.external_variant_id
             );
             if (invalidItems.length > 0) {
-              console.error('Invalid one-time items found:', invalidItems);
               showToast(
                 'Some one-time meals could not be mapped to collections. Please try again.',
                 'error'
@@ -6350,7 +6228,6 @@
       });
 
       if (!resp.ok) {
-        console.warn('Uber check-deliverable returned non-200');
         showToast('This address is not deliverable by courier.', 'error');
         return false;
       }
@@ -7352,10 +7229,6 @@
                   !item.external_variant_id
               );
               if (invalidItems.length > 0) {
-                console.error(
-                  'Invalid subscription items found:',
-                  invalidItems
-                );
                 showToast(
                   'Some meals could not be mapped to collections. Please try again.',
                   'error'
@@ -7366,8 +7239,6 @@
 
               // Validate collection_id is not empty
               if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
-                console.error('[ID_CONFIG] Invalid collection_id:', ID_CONFIG.collectionId);
-                console.error('[ID_CONFIG] Current config:', ID_CONFIG);
                 // Try fetching from API one more time
                 await fetchIdsFromAPI();
                 if (!ID_CONFIG.collectionId || ID_CONFIG.collectionId.trim() === '') {
@@ -7411,8 +7282,6 @@
                   !item.external_variant_id
               );
               if (finalInvalidItems.length > 0) {
-                console.error('[ID_CONFIG] Invalid items before API call:', finalInvalidItems);
-                console.error('[ID_CONFIG] ID_CONFIG state:', ID_CONFIG);
                 showToast(
                   'Configuration error: Missing required IDs. Please check settings and try again.',
                   'error'
@@ -7616,7 +7485,6 @@
                   !item.external_variant_id
               );
               if (invalidItems.length > 0) {
-                console.error('Invalid one-time items found:', invalidItems);
                 showToast(
                   'Some one-time meals could not be mapped to collections. Please try again.',
                   'error'
