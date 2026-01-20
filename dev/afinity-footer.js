@@ -1319,7 +1319,6 @@
       if (!rechargeObj) {
         return [];
       }
-      // Check if subscription API is available
       if (!rechargeObj.subscription || !rechargeObj.subscription.listSubscriptions) {
         return [];
       }
@@ -1423,9 +1422,7 @@
         });
       };
       attachHandlers();
-      
-      // Watch for dynamically added Manage buttons
-      const observer = new MutationObserver(() => {
+            const observer = new MutationObserver(() => {
         attachHandlers();
       });
       
@@ -1442,7 +1439,6 @@
       });
     }
     
-    // Initialize Manage button interception
     safeDelayedRun(interceptManageButtonClicks, 1000, 'Manage button interception');
     safeDelayedRun(interceptManageButtonClicks, 3000, 'Manage button interception (retry)');
     safeDelayedRun(interceptManageButtonClicks, 5000, 'Manage button interception (retry 2)');
