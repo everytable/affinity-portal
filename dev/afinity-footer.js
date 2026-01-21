@@ -913,7 +913,6 @@
         );
   
         document.dispatchEvent(manageEvent);
-  
         // open Edit Contents(affinity.js) after modal renders
         setTimeout(() => {
           const modal = document.querySelector(
@@ -929,12 +928,9 @@
     }
     function interceptManageButtonClicks() {
       const selectors = [
-        'a[data-testid*="recharge-internal-manage"]',
-        'a[data-testid*="recharge-internal-subscriptions"]',
         'a[href*="/subscriptions"]',
         'a[href*="/manage"]',
       ];
-  
       selectors.forEach(selector => {
         document.querySelectorAll(selector).forEach(el => {
           if (el.dataset.etManageIntercepted === 'true') return;
@@ -943,14 +939,15 @@
           el.addEventListener(
             'click',
             handleManageButtonClick,
-            true // capture phase
+            true
           );
         });
       });
     }
   
     //dynamic Recharge UI changes
-    observer.observe(document.body, {
+    const observer_manage = new MutationObserver(interceptManageButtonClicks);
+    observer_manage.observe(document.body, {
       childList: true,
       subtree: true,
     });
@@ -965,9 +962,5 @@
   
       setTimeout(interceptManageButtonClicks, 500);
     });
-  
-
-    setTimeout(interceptManageButtonClicks, 1000);
-    setTimeout(interceptManageButtonClicks, 3000);
-    setTimeout(interceptManageButtonClicks, 5000);
+  setTimeout(interceptManageButtonClicks, 1000);
 })();
