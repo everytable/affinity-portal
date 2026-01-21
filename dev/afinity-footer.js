@@ -847,4 +847,120 @@
         cleanupContactUsPage();
       }
     }, true);
+    // Manage tab re-direct directly
+    async function fetchActiveSubscriptions() {
+      const rechargeObj =
+        window.recharge || window.ReCharge || window.Recharge;
+  
+      if (
+        !rechargeObj ||
+        !rechargeObj.subscription ||
+        !rechargeObj.subscription.listSubscriptions
+      ) {
+        return [];
+      }
+  
+      let session = rechargeObj.session;
+  
+      // customer session 
+      if (!session && rechargeObj.auth?.loginCustomerPortal) {
+        try {
+          session = await rechargeObj.auth.loginCustomerPortal();
+        } catch (e) {
+          return [];
+        }
+      }
+  
+      if (!session) return [];
+  
+      try {
+        const response = await rechargeObj.subscription.listSubscriptions(
+          session,
+          { limit: 100, status: 'Active' }
+        );
+  
+        return response.subscriptions || response || [];
+      } catch (e) {
+        return [];
+      }
+    }
+  
+    // Nav Manage click
+    async function handleManageButtonClick(event) {
+      try {
+        const subscriptions = await fetchActiveSubscriptions();
+        // default behavior
+        if (!subscriptions || subscriptions.length !== 1) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+  
+        const subscription = subscriptions[0];
+        const subscriptionId =
+          subscription.id || subscription.subscription_id;
+  
+        // Triggered to Recharge/Affinity .js
+        const manageEvent = new CustomEvent(
+          'Recharge::click::manageSubscription',
+          {
+            bubbles: true,
+            cancelable: true,
+            detail: {
+              payload: { subscriptionId },
+            },
+          }
+        );
+  
+        document.dispatchEvent(manageEvent);
+        // open Edit Contents(affinity.js) after modal renders
+        setTimeout(() => {
+          const modal = document.querySelector(
+            '.afinity-modal-overlay, [class*="modal-overlay"]'
+          );
+          const editBtn = modal?.querySelector(
+            '.afinity-modal-update-meals'
+          );
+          editBtn?.click();
+        }, 1000);
+      } catch (e) {
+      }
+    }
+    function interceptManageButtonClicks() {
+      const selectors = [
+        'a[href*="/subscriptions"]',
+        'a[href*="/manage"]',
+      ];
+      selectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          if (el.dataset.etManageIntercepted === 'true') return;
+  
+          el.dataset.etManageIntercepted = 'true';
+          el.addEventListener(
+            'click',
+            handleManageButtonClick,
+            true
+          );
+        });
+      });
+    }
+  
+    //dynamic Recharge UI changes
+    const observer_manage = new MutationObserver(interceptManageButtonClicks);
+    observer_manage.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  
+    // Reattach on internal Recharge route changes
+    document.addEventListener('Recharge::location::change', () => {
+      document
+        .querySelectorAll('[data-et-manage-intercepted]')
+        .forEach(el => {
+          el.dataset.etManageIntercepted = 'false';
+        });
+  
+      setTimeout(interceptManageButtonClicks, 500);
+    });
+  setTimeout(interceptManageButtonClicks, 1000);
 })();
