@@ -1315,8 +1315,8 @@
   let menuData = null;
   let selectedMenuCategory = null;
 
-  // Track meals page mode: 'update' for editing subscription meals, 'onetime' for adding one-time meals
-  let mealsPageMode = 'onetime';
+  // Track meals page mode
+  let mealsPageMode = 'update';
 
   // Add global variable for current time zone
   let currentTimeZone = 'America/Los_Angeles'; // default fallback
@@ -3385,7 +3385,6 @@
           </div>
           ${renderInstructionsSection()}
           ${renderUpcomingSection()}
-          ${renderOnetimeSection()}
           ${renderDateTimeSection()}
         `;
       }
@@ -3498,23 +3497,6 @@
           ${renderAccordion("Update Meals", renderFrequencySection(), true)}
 
 
-          
-          ${renderAccordion("Add Extra Meals", `
-            <div class="afinity-modal-card">
-              <div class="afinity-modal-card-title">Add Extra Meals</div>
-              <div class="afinity-modal-row">
-                <p style="margin: 0; color: #666; font-size: 14px;">
-                  Add additional one-time meals to your next subscription delivery.
-                  Browse the available menu and include extra meals as desired.
-                </p>
-              </div>
-              <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-                <button class="afinity-modal-save-btn afinity-modal-add-extra" type="button">
-                  Add Extra Meals
-                </button>
-              </div>
-            </div>
-          `)}
           ${renderAccordion("Update Subscription", renderFulfillmentSection())}
           
         
@@ -3558,21 +3540,6 @@
         return;
       }
 
-       if (e.target && e.target.id === "afinity-add-extra-meals-btn") {
-        const modalContent = document.querySelector(".afinity-modal");
-          if (!modalContent) return;
-            modalContent.innerHTML = `
-              <div class="afinity-meals-loading" style="text-align:center;padding:40px;">
-                <div class="afinity-meals-loading-spinner"></div>
-                <p>Loading meals...</p>
-              </div>
-            `;
-            // Load meals page and replace modal content
-            const mealsHTML = await renderMealsPage();
-            modalContent.innerHTML = mealsHTML;
-
-            return;
-        }
     });
 
 
@@ -4880,7 +4847,7 @@
           window.location.reload();
         }
       };
-    // Edit contents or add extra meal
+    // Edit meal contents
     const editBtn = modalOverlay.querySelector('.afinity-modal-update-meals');
     if (editBtn)
       editBtn.onclick = async () => {
@@ -4909,33 +4876,6 @@
 
         // Header total is set when page initially renders and stays static
       };
-    const addExtraMeal = modalOverlay.querySelector('.afinity-modal-add-extra');
-    if (addExtraMeal)
-      addExtraMeal.onclick = async e => {
-        e.preventDefault();
-        mealsPageMode = 'onetime'; // Set mode to add one-time meals
-
-        currentPage = 'meals';
-        renderModal();
-
-        // Fetch fresh subscription data to get updated one-time meals
-        const subscriptionId = currentSubscription?.id;
-        if (subscriptionId) {
-          await refreshSubscriptionData(subscriptionId);
-
-          // Clear one-time meals when switching to one-time mode
-          selectedMeals = [];
-
-          // Re-render the modal with fresh data
-          renderModal();
-        }
-
-        // Fetch menu data when switching to meals page
-        await fetchMenuData();
-
-        // Header total is set when page initially renders and stays static
-      };
-
     const saveBtn = modalOverlay.querySelector(
       '.afinity-modal-footer-save-btn'
     );
